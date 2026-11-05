@@ -1,0 +1,14 @@
+{
+  "name": "factory",
+  "description": "Marketplace fabryki oprogramowania gibkigonzo/factory",
+  "owner": {
+    "name": "gibkigonzo"
+  },
+  "plugins": [
+    {
+      "name": "factory",
+      "source": "./",
+      "description": "Skille, subagenci i hooki fabryki oprogramowania"
+    }
+  ]
+}

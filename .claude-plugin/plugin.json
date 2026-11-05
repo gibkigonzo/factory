@@ -1,0 +1,13 @@
+{
+  "name": "factory",
+  "displayName": "Factory",
+  "version": "0.0.1",
+  "description": "Generyczna fabryka oprogramowania: spec, planer, implementer, panel recenzentów i ocena ryzyka dla automerge.",
+  "author": {
+    "name": "gibkigonzo",
+    "url": "https://github.com/gibkigonzo"
+  },
+  "homepage": "https://github.com/gibkigonzo/factory",
+  "repository": "https://github.com/gibkigonzo/factory",
+  "keywords": ["factory", "automerge", "review", "risk", "godot", "web"]
+}
