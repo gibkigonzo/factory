@@ -1,0 +1,41 @@
+# Kontrakt projektu z fabryką: jak zbudować, sprawdzić i pokazać projekt
+# oraz które ścieżki należą do której strefy ryzyka.
+# Zmiana tego pliku jest zawsze High, więc decyduje o niej właściciel.
+# Opis pól: README fabryki, sekcja „Kontrakt projektu”.
+
+project: moja-strona
+extends: [base, typescript, web]   # base zawsze pierwsza, potem presety języka i frameworka
+
+commands:                          # wymagane: test i build
+  setup: npm ci
+  lint: npm run lint
+  typecheck: npm run typecheck
+  test: npm test
+  e2e: npx playwright test
+  build: npm run build
+
+evidence:
+  screenshots: npx playwright test --project=screenshots
+  preview_deploy: true             # link do podglądu w każdym PR
+
+zones:                             # dopisuje ścieżki do stref z base i presetów
+  data: ["migrations/**", "src/db/schema/**"]
+  security: ["src/payments/**"]
+  shared: ["src/lib/**", "src/store/**"]
+
+risk:
+  medium_veto_hours: 24            # 0 = Medium traktowane jak High
+
+reviewers:
+  extra: [accessibility, performance]
+
+protected_files: ["backup/**"]     # dopisuje do listy z base
+
+wip_limit: 4
+
+# Wyjątek od bramki jakości dla konkretnej ścieżki, zawsze z powodem:
+# exceptions:
+#   - path: src/legacy/old-module.ts
+#     gate: file_lines
+#     max: 800
+#     reason: stary moduł, podział w osobnym issue

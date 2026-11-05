@@ -1,0 +1,48 @@
+# Preset strony i aplikacji webowej. Typowe strefy; projekt dopisuje własne w factory.yml.
+
+zones:
+  security:
+    - "src/auth/**"
+    - "**/middleware.*"
+    - "**/_headers"
+  release:
+    - "vercel.json"
+    - "netlify.toml"
+    - "wrangler.toml"
+    - "wrangler.json"
+    - "wrangler.jsonc"
+    - "firebase.json"
+    - "**/Dockerfile"
+  shared:
+    - "src/lib/**"
+    - "src/store/**"
+    - "src/stores/**"
+    - "src/router/**"
+    - "src/main.*"
+    - "src/app.*"
+    - "**/vite.config.*"
+    - "**/next.config.*"
+    - "**/nuxt.config.*"
+    - "**/astro.config.*"
+    - "**/svelte.config.*"
+  code:
+    - "src/components/**"
+    - "src/pages/**"
+    - "src/styles/**"
+    - "src/assets/**"
+    - "public/**"
+    - "locales/**"
+    - "src/locales/**"
+
+files:
+  translations:
+    - "locales/**"
+    - "src/locales/**"
+    - "**/i18n/**"
+    - "**/*.po"
+  generated:
+    - ".next/**"
+    - ".nuxt/**"
+    - ".output/**"
+    - ".astro/**"
+    - ".svelte-kit/**"

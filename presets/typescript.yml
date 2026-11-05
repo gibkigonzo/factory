@@ -1,0 +1,60 @@
+# Preset TypeScript i JavaScript (npm, pnpm, yarn, bun).
+
+zones:
+  factory:
+    - "**/tsconfig*.json"
+    - "**/eslint.config.*"
+    - "**/.eslintrc*"
+    - "**/.prettierrc*"
+    - "**/prettier.config.*"
+    - "**/biome.json"
+    - "**/vitest.config.*"
+    - "**/jest.config.*"
+    - "**/playwright.config.*"
+    - ".husky/**"
+  dependencies:
+    - "**/package.json"
+    - "**/.npmrc"
+    - "patches/**"
+  shared:
+    - "**/package-lock.json"
+    - "**/pnpm-lock.yaml"
+    - "**/yarn.lock"
+    - "**/bun.lock"
+    - "**/bun.lockb"
+
+files:
+  tests:
+    - "**/*.test.ts"
+    - "**/*.test.tsx"
+    - "**/*.test.js"
+    - "**/*.test.jsx"
+    - "**/*.spec.ts"
+    - "**/*.spec.tsx"
+    - "**/*.spec.js"
+    - "**/*.spec.jsx"
+    - "**/__tests__/**"
+    - "test/**"
+    - "tests/**"
+    - "e2e/**"
+  lockfiles:
+    - "**/package-lock.json"
+    - "**/pnpm-lock.yaml"
+    - "**/yarn.lock"
+    - "**/bun.lock"
+    - "**/bun.lockb"
+  generated:
+    - "dist/**"
+    - "build/**"
+    - "coverage/**"
+    - "**/*.tsbuildinfo"
+    - "**/*.generated.ts"
+
+# Nowe wyłączenia linta, typów lub testów odbierają zmianie poziom Low.
+disable_markers:
+  - "eslint-disable"
+  - "@ts-ignore"
+  - "@ts-nocheck"
+  - "@ts-expect-error"
+  - ".skip("
+  - ".only("

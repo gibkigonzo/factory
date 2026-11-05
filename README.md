@@ -2,7 +2,7 @@
 
 Generyczna fabryka oprogramowania oparta na Claude Code. Zamienia rozmowę o pomyśle w scalony, zweryfikowany kod. Działa dla stron WWW i dla gier w Godot.
 
-> **Status:** Etap 0 (tryb cienia) w przygotowaniu. Na razie jest tu tylko szkielet.
+> **Status:** Etap 0 (tryb cienia) w przygotowaniu. Gotowy jest kontrakt projektu: schemat `factory.yml`, presety i walidacja.
 
 ## Jak działa
 
@@ -52,6 +52,39 @@ Reguły mają trzy warstwy: wspólne `base`, presety języka i frameworka oraz `
 - **Workflowy.** Wspólne workflowy działają przez `workflow_call`:
   `uses: gibkigonzo/factory/.github/workflows/<name>.yml@v1`. Mogą je wywoływać także repozytoria prywatne.
 - **Kontrakt.** Projekt dodaje `factory.yml` z `extends: [base, <język>, <framework>]`. Wersje presetów przypina tagami.
+
+## Kontrakt projektu (`factory.yml`)
+
+Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy składają się w kolejności `base` → presety z `extends` → `factory.yml`. Listy z warstw się sumują, więc projekt może dopisać strefę albo chroniony plik, ale nie może usunąć tych z `base`. Pojedyncze wartości z późniejszej warstwy nadpisują wcześniejsze.
+
+| Pole | Kto ustawia | Co znaczy |
+| --- | --- | --- |
+| `project`, `extends` | projekt | nazwa projektu; presety, `base` zawsze pierwszy |
+| `commands` | projekt | komendy CI; wymagane `test` i `build`, reszta dowolna (`lint`, `e2e`, `scene_check`…) |
+| `evidence` | projekt | `screenshots` (komenda) i `preview_deploy` (podgląd w PR) |
+| `zones` | wszystkie warstwy | ścieżki w strefach: `data`, `security`, `release`, `dependencies`, `factory`, `shared`, `code` |
+| `files` | wszystkie warstwy | klasy plików: `tests`, `lockfiles`, `generated`, `translations` (reguły 3 i 4) |
+| `disable_markers` | wszystkie warstwy | znaczniki wyłączeń (`eslint-disable`, `@ts-ignore`…), których nowe wystąpienia odbierają Low |
+| `protected_files` | wszystkie warstwy | pliki, których agenci nie zapisują |
+| `risk.zone_levels`, `risk.unassigned`, `risk.size`, `risk.min_confidence` | tylko `base` | poziomy stref i progi reguł ryzyka |
+| `risk.medium_veto_hours` | `base`, projekt | okno weta dla Medium; `0` = Medium jak High |
+| `gates` | tylko `base` | progi bramek jakości |
+| `exceptions` | projekt | wyjątek od bramki jakości dla ścieżki: `path`, `gate`, `max`, `reason` |
+| `reviewers` | `base` (`perspectives`), projekt (`extra`) | perspektywy recenzji |
+| `human_gates` | projekt | etykiety kierujące PR do człowieka, np. `playtest: [feel]` |
+| `wip_limit`, `daily_runs` | `base`, projekt | równoległe zadania i dzienne uruchomienia taśmy |
+| `schedules` | projekt | agenci cykliczni: `nightly`, `weekly` albo `off` |
+
+Wzorce ścieżek są względne od korzenia repo i znają tylko `*` (w obrębie katalogu), `**` (dowolna głębokość, także zero katalogów) i `?`. Wzorzec zaczynający się od `*` trzeba w YAML-u ująć w cudzysłów.
+
+Walidacja (Node 22.18+):
+
+```bash
+npm ci
+npm run validate -- ścieżka/do/factory.yml
+```
+
+Błąd wskazuje plik i pole, np. `factory.yml: zones.data[1]: nieprawidłowy wzorzec "/abs/**": …`. Z `--json` skrypt wypisuje konfigurację złożoną z warstw.
 
 ## Struktura repo
 
