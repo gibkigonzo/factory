@@ -63,10 +63,11 @@ Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy skła
 | `commands` | projekt | komendy CI; wymagane `test` i `build`, reszta dowolna (`lint`, `e2e`, `scene_check`…) |
 | `evidence` | projekt | `screenshots` (komenda) i `preview_deploy` (podgląd w PR) |
 | `zones` | wszystkie warstwy | ścieżki w strefach: `data`, `security`, `release`, `dependencies`, `factory`, `shared`, `code` |
-| `files` | wszystkie warstwy | klasy plików: `tests`, `lockfiles`, `generated`, `translations` (reguły 3 i 4) |
+| `files` | wszystkie warstwy | klasy plików: `source` (kod), `tests`, `lockfiles`, `generated`, `translations` (reguły 3, 4 i bramki) |
 | `disable_markers` | wszystkie warstwy | znaczniki wyłączeń (`eslint-disable`, `@ts-ignore`…), których nowe wystąpienia odbierają Low |
+| `assertion_markers` | wszystkie warstwy | znaczniki asercji w testach (`expect(`, `assert`); ich ubytek daje High |
 | `protected_files` | wszystkie warstwy | pliki, których agenci nie zapisują |
-| `risk.zone_levels`, `risk.unassigned`, `risk.size`, `risk.min_confidence` | tylko `base` | poziomy stref i progi reguł ryzyka |
+| `risk.zone_levels`, `risk.unassigned`, `risk.size`, `risk.min_confidence`, `risk.max_review_rounds`, `risk.min_diff_coverage` | tylko `base` | poziomy stref i progi reguł ryzyka |
 | `risk.medium_veto_hours` | `base`, projekt | okno weta dla Medium; `0` = Medium jak High |
 | `gates` | tylko `base` | progi bramek jakości |
 | `exceptions` | projekt | wyjątek od bramki jakości dla ścieżki: `path`, `gate`, `max`, `reason` |
@@ -85,6 +86,50 @@ npm run validate -- ścieżka/do/factory.yml
 ```
 
 Błąd wskazuje plik i pole, np. `factory.yml: zones.data[1]: nieprawidłowy wzorzec "/abs/**": …`. Z `--json` skrypt wypisuje konfigurację złożoną z warstw.
+
+## Skrypt reguł ryzyka
+
+`scripts/risk-rules.ts` ocenia zmianę między dwiema wersjami repo projektu i zwraca poziom z uzasadnieniem każdej reguły oraz wynik bramek jakości. Ten sam diff daje zawsze ten sam wynik.
+
+```bash
+node scripts/risk-rules.ts --repo ścieżka/do/projektu --base origin/main --head HEAD \
+  --evidence evidence.json --eslint eslint.json --json
+```
+
+- `factory.yml` jest czytany z punktu rozgałęzienia, a nie z samej zmiany. Zmiana `factory.yml` i tak jest High.
+- **Reguła 1:** każdy zmieniony plik (przy zmianie nazwy stara i nowa ścieżka) trafia do najwyższej pasującej strefy.
+- **Reguła 2:** poziom przychodzi od oceniacza ryzyka w `evidence.json`. Bez tej oceny zmiana nie dostanie Low.
+- **Reguła 3:** dotyczy kodu (`files.source`) w przypisanej strefie. Strefa ma testy, gdy w repo jest plik z `files.tests` pasujący do jej wzorców. Testy w osobnym katalogu trzeba przypisać do strefy w `factory.yml`, np. `code: ["e2e/**"]`.
+- **Reguła 4:** liczy dodane i usunięte linie oraz pliki bez testów, lockfile'ów, plików generowanych i tłumaczeń. Zmiana ponad progi Medium dostaje High (bezpieczna wartość domyślna) i znacznik podziału: wraca do planera, a do właściciela trafia dopiero, gdy planer stwierdzi, że podziału nie da się zrobić (`split_impossible`).
+- **Reguła 5:** Low wymaga zielonego CI, dowodu dla każdego kryterium akceptacji, testu regresji przy poprawce błędu, `approve` każdej perspektywy z pewnością co najmniej `min_confidence` i braku nowych znaczników wyłączeń w kodzie. Każdy brak daje Medium, także cytat recenzenta, którego nie ma w diffie. `approve` z uwagą o wadze `high` liczy się jak `request_changes`. High dają: usunięty plik testów, gdy testowany kod został (usunięcie testów razem z kodem to Medium), ubytek asercji, pokrycie zmienionych linii poniżej `min_diff_coverage` (gdy CI je liczy) i uwagi nierozstrzygnięte po `max_review_rounds` rundach poprawek.
+- **Bramki:** długość pliku liczy skrypt (linie bez pustych i komentarzy). Długość funkcji, złożoność i zagnieżdżenie bierze z raportu `eslint --format json`. Liczą się tylko zmienione pliki.
+
+`evidence.json` składają workflowy:
+
+```json
+{
+  "ci": "success",
+  "acceptance": [{ "criterion": "przycisk jest niebieski", "evidence": "zrzut: button.png" }],
+  "bugfix": false,
+  "reviews": [
+    {
+      "perspective": "security",
+      "verdict": "request_changes",
+      "confidence": 0.85,
+      "summary": "Sprawdzony przepływ tokenu w kliencie API i logowanie błędów.",
+      "findings": [
+        { "severity": "high", "file": "src/api/client.ts", "line": 42, "issue": "Token trafia do logu", "evidence": "console.log(authHeader)" }
+      ],
+      "risk_signals": ["touches-auth"]
+    }
+  ],
+  "review_rounds": 1,
+  "diff_coverage": 92.5,
+  "behavior": { "level": "Low", "reason": "zmiana wyglądu, cofa ją jeden revert" }
+}
+```
+
+Werdykt recenzenta (`reviews[]`) ma stały format: perspektywa, `verdict` (`approve` albo `request_changes`), pewność 0–1, `summary` (co sprawdzone i dlaczego taki werdykt), uwagi z wagą i cytatem z diffu w `evidence` oraz sygnały ryzyka dla oceniacza.
 
 ## Struktura repo
 

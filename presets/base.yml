@@ -17,6 +17,8 @@ risk:
     medium: { lines: 400, files: 15 }
   min_confidence: 0.8   # Low wymaga approve każdej perspektywy z co najmniej taką pewnością
   medium_veto_hours: 24 # okno weta dla Medium; 0 oznacza, że Medium = High
+  max_review_rounds: 3  # uwagi recenzentów nierozstrzygnięte po tylu rundach poprawek dają High
+  min_diff_coverage: 80 # pokrycie zmienionych linii poniżej progu daje High; działa, gdy CI je liczy
 
 gates:
   file_lines: { warn: 300, block: 500 }  # linie bez pustych i komentarzy; większe pliki nie mogą rosnąć

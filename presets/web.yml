@@ -35,6 +35,12 @@ zones:
     - "src/locales/**"
 
 files:
+  source:
+    - "**/*.vue"
+    - "**/*.svelte"
+    - "**/*.astro"
+    - "**/*.css"
+    - "**/*.scss"
   translations:
     - "locales/**"
     - "src/locales/**"
