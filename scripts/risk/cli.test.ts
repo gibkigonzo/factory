@@ -52,7 +52,7 @@ describe('risk-rules.ts na repo git', () => {
   });
 
   it('z kompletem dowodów zmiana komponentu jest Low', () => {
-    const reviews = ['correctness', 'tests', 'security', 'maintainability', 'spec', 'accessibility', 'performance'].map((perspective) => ({
+    const reviews = ['correctness', 'tests', 'security', 'maintainability', 'spec'].map((perspective) => ({
       perspective,
       verdict: 'approve',
       confidence: 0.9,

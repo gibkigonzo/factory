@@ -41,13 +41,15 @@ export function zonesRule(files: readonly ChangedFile[], config: FactoryConfig):
   return { rule: 'zones', name: 'Strefy', level, reasons };
 }
 
-/** Reguła 2: zachowanie i odwracalność. Ocenia LLM (oceniacz ryzyka); brak oceny nie pozwala na Low. */
+/** Reguła 2: zachowanie i odwracalność. Ocenia LLM (oceniacz ryzyka); brak oceny nie pozwala na Low.
+ * Wysokie ryzyko produktowe ze specu daje High bez względu na ocenę. */
 export function behaviorRule(evidence: Evidence): RuleResult {
   const name = 'Zachowanie i odwracalność';
-  if (!evidence.behavior) {
-    return { rule: 'behavior', name, level: 'Medium', reasons: ['brak oceny oceniacza ryzyka'] };
-  }
-  return { rule: 'behavior', name, level: evidence.behavior.level, reasons: [evidence.behavior.reason] };
+  const assessed: RuleResult = evidence.behavior
+    ? { rule: 'behavior', name, level: evidence.behavior.level, reasons: [evidence.behavior.reason] }
+    : { rule: 'behavior', name, level: 'Medium', reasons: ['brak oceny oceniacza ryzyka'] };
+  if (evidence.product_risk !== 'high') return assessed;
+  return { ...assessed, level: 'High', reasons: ['ryzyko produktowe w specu: wysokie', ...assessed.reasons] };
 }
 
 /** Reguła 3: kod w strefie bez testów jest o poziom wyżej. Testy strefy to pliki testów pasujące do jej wzorców. */

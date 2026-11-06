@@ -67,9 +67,22 @@ describe('reguła 5: werdykty recenzentów', () => {
   const withFinding = (f: Finding) => [{ ...reviews[0]!, findings: [f] }, ...reviews.slice(1)];
   const component = changed('src/components/A.vue', { addedLines: ['<img src="a.png">'], contextLines: ['<template>'] });
 
-  it('approve z uwagą o wadze high liczy się jak request_changes', () => {
-    const reasons = result({ reviews: withFinding({ ...finding, severity: 'high' }) }, [component]).reasons;
-    assert.deepEqual(reasons, ['recenzent correctness: approve z uwagą o wadze high liczy się jak request_changes']);
+  it('nierozstrzygnięta uwaga high lub critical daje High, a approve z nią liczy się jak request_changes', () => {
+    for (const severity of ['high', 'critical'] as const) {
+      const outcome = result({ reviews: withFinding({ ...finding, severity }) }, [component]);
+      assert.deepEqual([outcome.level, outcome.reasons], [
+        'High',
+        [
+          `High: nierozstrzygnięta uwaga ${severity} recenzenta correctness: brak alt (src/components/A.vue:1)`,
+          'recenzent correctness: approve z uwagą high lub critical liczy się jak request_changes',
+        ],
+      ]);
+    }
+  });
+
+  it('uwagi low i medium nie odbierają Low', () => {
+    assert.equal(result({ reviews: withFinding({ ...finding, severity: 'low' }) }, [component]).level, 'Low');
+    assert.equal(result({ reviews: withFinding(finding) }, [component]).level, 'Low');
   });
 
   it('cytat z uwagi musi występować w diffie', () => {
