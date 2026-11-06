@@ -9,7 +9,7 @@ export type Gate = (typeof GATES)[number];
 export const SCHEDULES = ['nightly', 'weekly', 'off'] as const;
 export type Schedule = (typeof SCHEDULES)[number];
 
-export const FILE_CLASSES = ['tests', 'lockfiles', 'generated', 'translations'] as const;
+export const FILE_CLASSES = ['source', 'tests', 'lockfiles', 'generated', 'translations'] as const;
 export type FileClass = (typeof FILE_CLASSES)[number];
 
 export type Spec =
@@ -51,6 +51,8 @@ const risk: Spec = {
     size: { kind: 'object', fields: { low: sizeLimit, medium: sizeLimit }, required: ['low', 'medium'] },
     min_confidence: { kind: 'number', min: 0, max: 1 },
     medium_veto_hours: { kind: 'integer', min: 0 },
+    max_review_rounds: positive,
+    min_diff_coverage: { kind: 'number', min: 0, max: 100 },
   },
 };
 
@@ -86,6 +88,7 @@ export const SCHEMA: Extract<Spec, { kind: 'object' }> = {
     zones: namedMap(globs),
     files,
     disable_markers: { kind: 'list', item: text },
+    assertion_markers: { kind: 'list', item: text },
     protected_files: globs,
     risk,
     gates,
@@ -119,11 +122,13 @@ export const BASE_ONLY: Record<string, string> = {
   'risk.unassigned': 'poziom ścieżek spoza mapy stref ustala warstwa base',
   'risk.size': 'progi rozmiaru ustala warstwa base',
   'risk.min_confidence': 'próg pewności recenzentów ustala warstwa base',
+  'risk.max_review_rounds': 'limit rund poprawek ustala warstwa base',
+  'risk.min_diff_coverage': 'próg pokrycia zmienionych linii ustala warstwa base',
   'reviewers.perspectives': 'podstawowe perspektywy ustala warstwa base; dodatkowe wpisz w reviewers.extra',
 };
 
 /** Pola presetu języka lub frameworka. */
-export const PRESET_FIELDS = ['zones', 'files', 'disable_markers', 'protected_files'] as const;
+export const PRESET_FIELDS = ['zones', 'files', 'disable_markers', 'assertion_markers', 'protected_files'] as const;
 
 export const REQUIRED: Record<LayerKind, readonly string[]> = {
   base: [
@@ -132,6 +137,8 @@ export const REQUIRED: Record<LayerKind, readonly string[]> = {
     'risk.size',
     'risk.min_confidence',
     'risk.medium_veto_hours',
+    'risk.max_review_rounds',
+    'risk.min_diff_coverage',
     'gates.file_lines',
     'gates.function_lines',
     'gates.complexity',
@@ -165,6 +172,7 @@ export interface FactoryConfig {
   zones: Record<string, string[]>;
   files: Record<FileClass, string[]>;
   disable_markers: string[];
+  assertion_markers: string[];
   protected_files: string[];
   risk: {
     zone_levels: Record<string, Level>;
@@ -172,6 +180,8 @@ export interface FactoryConfig {
     size: { low: SizeLimit; medium: SizeLimit };
     min_confidence: number;
     medium_veto_hours: number;
+    max_review_rounds: number;
+    min_diff_coverage: number;
   };
   gates: {
     file_lines: { warn: number; block: number };

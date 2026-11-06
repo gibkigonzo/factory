@@ -24,6 +24,15 @@ zones:
     - "**/bun.lockb"
 
 files:
+  source:          # kod: reguła „brak testów”, bramki jakości, znaczniki wyłączeń
+    - "**/*.ts"
+    - "**/*.tsx"
+    - "**/*.mts"
+    - "**/*.cts"
+    - "**/*.js"
+    - "**/*.jsx"
+    - "**/*.mjs"
+    - "**/*.cjs"
   tests:
     - "**/*.test.ts"
     - "**/*.test.tsx"
@@ -58,3 +67,8 @@ disable_markers:
   - "@ts-expect-error"
   - ".skip("
   - ".only("
+
+# Usunięcie asercji z testów daje High.
+assertion_markers:
+  - "expect("
+  - "assert"

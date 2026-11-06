@@ -3,7 +3,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { LineCounter, parseDocument, visit } from 'yaml';
-import { BASE_ONLY, PRESET_FIELDS, PROJECT_ONLY, REQUIRED, SCHEMA } from './spec.ts';
+import { BASE_ONLY, FILE_CLASSES, PRESET_FIELDS, PROJECT_ONLY, REQUIRED, SCHEMA } from './spec.ts';
 import type { FactoryConfig, LayerKind } from './spec.ts';
 import { check, describe, isObject, joinPath } from './validate.ts';
 import type { Issue } from './validate.ts';
@@ -211,8 +211,9 @@ function withDefaults(merged: Obj): FactoryConfig {
   const defaults = {
     evidence: { preview_deploy: false },
     zones: {},
-    files: { tests: [], lockfiles: [], generated: [], translations: [] },
+    files: Object.fromEntries(FILE_CLASSES.map((c) => [c, []])),
     disable_markers: [],
+    assertion_markers: [],
     protected_files: [],
     reviewers: { extra: [] },
     human_gates: {},
