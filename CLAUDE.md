@@ -46,12 +46,24 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 
 - Wymaganie: każdy krok użytkownika (akceptacja propozycji, rozmowa o specu, decyzja przy High, playtest) musi dać się zrobić z telefonu, bez komputera.
 - Taśma działa na GitHub Actions, więc komputer nie jest potrzebny. Komendy `/approve`, `/veto` i inne działają z aplikacji GitHub Mobile.
-- Do zakładania issue z aplikacji Claude służy oficjalny serwer MCP GitHuba podłączony jako konektor claude.ai. Konektory claude.ai działają też w aplikacji mobilnej. Założenie issue z telefonu trzeba jeszcze sprawdzić.
+- Do zakładania issue z aplikacji Claude służy oficjalny serwer MCP GitHuba podłączony jako konektor claude.ai. Zwykły czat w aplikacji mobilnej zakłada issue (sprawdzone w #3), więc `spec-writer` może działać w zwykłym czacie.
+- Konektor łączy się przez inną aplikację GitHub niż Claude Code. Ta aplikacja musi mieć repo w swojej instalacji, inaczej zapis kończy się 403 `Resource not accessible by integration`.
+
+### Kontrakt projektu (6 listopada 2026)
+
+- Warstwy składają się w kolejności `base` → presety z `extends` → `factory.yml`. Listy się sumują, pojedyncze wartości nadpisuje późniejsza warstwa.
+- Projekt nie zmienia progów z `base` (rozmiar, poziomy stref, pewność recenzentów, bramki jakości). Może dodać wyjątek od bramki jakości dla ścieżki, zawsze z powodem.
+- „Koszt” to dzienny limit uruchomień taśmy (`daily_runs`).
+- Schemat jest w `scripts/config/spec.ts`, opis pól w README.
+
+### Logowanie i pilot (6 listopada 2026)
+
+- `claude-code-action` loguje się przez subskrypcję: sekret `CLAUDE_CODE_OAUTH_TOKEN`, który dodaje właściciel.
+- Pilot to strona WWW: fabryka odtwarza w Nuxt istniejącą stronę osoby trzeciej. Odtwarza układ i wygląd; teksty to lorem ipsum, zdjęcia to placeholdery.
+- Pilot rusza dopiero po pierwszej wersji taśmy. Godot włączamy jako drugi projekt.
 
 ## Otwarte pytania
 
-- Czy konektor GitHub w aplikacji Claude na telefonie zakłada issue? Plan B: sesja Claude Code w chmurze z aplikacji mobilnej.
 - Czy routines Claude Code reagują na zdarzenia issues i jakie mają limity?
-- Na którym projekcie pilotujemy pierwszą wersję: stronie WWW czy aplikacji webowej z danymi użytkownika? Godot włączamy jako drugi projekt.
 - Gdzie trafia digest: zbiorcze issue, e-mail czy powiadomienie push?
 - Licencja publicznego repo.
