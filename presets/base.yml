@@ -1,0 +1,54 @@
+# Warstwa wspólna dla wszystkich projektów: reguły ryzyka, progi i bramki fabryki.
+# Projekt jej nie zmienia. Wszystkie progi to wartości startowe do kalibracji w trybie cienia.
+
+risk:
+  # Minimalny poziom zmiany w każdej strefie. Plik w dwóch strefach należy do wyższej.
+  zone_levels:
+    data: High          # dane trwałe: schematy, migracje, format zapisu i eksportu
+    security: High      # autoryzacja, tokeny, uprawnienia aplikacji
+    release: High       # konfiguracja wydania i podpisywania
+    dependencies: High  # nowa zależność, aktualizacja major, łatki na zależności
+    factory: High       # bramki fabryki: CI, konfiguracja Claude, factory.yml, hooki, lint, typy, testy
+    shared: Medium      # logika współdzielona: dane, start aplikacji, routing, stan globalny, lockfile
+    code: Low           # zwykły kod i treść: ekrany, komponenty, teksty, dokumentacja
+  unassigned: Medium    # ścieżka spoza mapy stref
+  size:                 # linie i pliki kodu produkcyjnego; testy, lockfile, pliki generowane i tłumaczenia się nie liczą
+    low: { lines: 100, files: 5 }
+    medium: { lines: 400, files: 15 }
+  min_confidence: 0.8   # Low wymaga approve każdej perspektywy z co najmniej taką pewnością
+  medium_veto_hours: 24 # okno weta dla Medium; 0 oznacza, że Medium = High
+
+gates:
+  file_lines: { warn: 300, block: 500 }  # linie bez pustych i komentarzy; większe pliki nie mogą rosnąć
+  function_lines: 50
+  complexity: 15
+  nesting: 4
+
+reviewers:
+  perspectives: [correctness, tests, security, maintainability, spec]
+
+wip_limit: 3     # równoległe zadania
+daily_runs: 20   # dzienne uruchomienia taśmy; po przekroczeniu taśma czeka do następnego dnia
+
+zones:
+  factory:
+    - ".github/**"
+    - ".claude/**"
+    - ".mcp.json"
+    - "factory.yml"
+    - "**/CLAUDE.md"
+    - "CODEOWNERS"
+    - "docs/CODEOWNERS"
+    - ".githooks/**"
+  code:
+    - "docs/**"
+    - "**/*.md"
+
+protected_files:
+  - "**/.env"
+  - "**/.env.*"
+  - "**/*.pem"
+  - "**/*.key"
+  - "**/*.keystore"
+  - "**/*.jks"
+  - "**/*.p12"

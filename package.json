@@ -1,0 +1,22 @@
+{
+  "name": "factory",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Generyczna fabryka oprogramowania oparta na Claude Code",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test \"scripts/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit",
+    "validate": "node scripts/config/cli.ts"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2"
+  }
+}
