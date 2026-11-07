@@ -71,7 +71,8 @@ Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy skła
 | `risk.medium_veto_hours` | `base`, projekt | okno weta dla Medium; `0` = Medium jak High |
 | `gates` | tylko `base` | progi bramek jakości |
 | `exceptions` | projekt | wyjątek od bramki jakości dla ścieżki: `path`, `gate`, `max`, `reason` |
-| `reviewers` | `base` (`perspectives`), projekt (`extra`) | perspektywy recenzji |
+| `reviewers` | `base` (`perspectives`), projekt (`extra`) | perspektywy recenzji: podstawowe zawsze, dodatkowe z katalogu albo z `.factory/perspectives/` |
+| `models` | `base`, projekt | model na etapie: `planner`, `implementer`, `risk_assessor`, `reviewers.default` i wybrane perspektywy |
 | `human_gates` | projekt | etykiety kierujące PR do człowieka, np. `playtest: [feel]` |
 | `wip_limit`, `daily_runs` | `base`, projekt | równoległe zadania i dzienne uruchomienia taśmy |
 | `schedules` | projekt | agenci cykliczni: `nightly`, `weekly` albo `off` |
@@ -101,7 +102,7 @@ node scripts/risk-rules.ts --repo ścieżka/do/projektu --base origin/main --hea
 - **Reguła 2:** poziom przychodzi od oceniacza ryzyka w `evidence.json`. Bez tej oceny zmiana nie dostanie Low. Ryzyko produktowe „wysokie” ze specu (`product_risk`) daje High bez względu na ocenę.
 - **Reguła 3:** dotyczy kodu (`files.source`) w przypisanej strefie. Strefa ma testy, gdy w repo jest plik z `files.tests` pasujący do jej wzorców. Testy w osobnym katalogu trzeba przypisać do strefy w `factory.yml`, np. `code: ["e2e/**"]`.
 - **Reguła 4:** liczy dodane i usunięte linie oraz pliki bez testów, lockfile'ów, plików generowanych i tłumaczeń. Zmiana ponad progi Medium dostaje High (bezpieczna wartość domyślna) i znacznik podziału: wraca do planera, a do właściciela trafia dopiero, gdy planer stwierdzi, że podziału nie da się zrobić (`split_impossible`).
-- **Reguła 5:** Low wymaga zielonego CI, dowodu dla każdego kryterium akceptacji, testu regresji przy poprawce błędu, `approve` każdej perspektywy z pewnością co najmniej `min_confidence` i braku nowych znaczników wyłączeń w kodzie. Każdy brak daje Medium, także cytat recenzenta, którego nie ma w diffie. `approve` z uwagą o wadze `high` lub `critical` liczy się jak `request_changes`. High dają: nierozstrzygnięta uwaga `high` lub `critical`, usunięty plik testów, gdy testowany kod został (usunięcie testów razem z kodem to Medium), ubytek asercji, pokrycie zmienionych linii poniżej `min_diff_coverage` (gdy CI je liczy) i uwagi nierozstrzygnięte po `max_review_rounds` rundach poprawek.
+- **Reguła 5:** Low wymaga zielonego CI, dowodu dla każdego kryterium akceptacji, testu regresji przy poprawce błędu, `approve` każdej perspektywy z panelu z pewnością co najmniej `min_confidence` i braku nowych znaczników wyłączeń w kodzie. Każdy brak daje Medium, także cytat recenzenta, którego nie ma w diffie. `approve` z uwagą o wadze `high` lub `critical` liczy się jak `request_changes`. High dają: nierozstrzygnięta uwaga `high` lub `critical`, usunięty plik testów, gdy testowany kod został (usunięcie testów razem z kodem to Medium), ubytek asercji, pokrycie zmienionych linii poniżej `min_diff_coverage` (gdy CI je liczy) i uwagi nierozstrzygnięte po `max_review_rounds` rundach poprawek.
 - **Bramki:** długość pliku liczy skrypt (linie bez pustych i komentarzy). Długość funkcji, złożoność i zagnieżdżenie bierze z raportu `eslint --format json`. Liczą się tylko zmienione pliki.
 
 `evidence.json` składają workflowy:
@@ -147,7 +148,51 @@ Agenci nie ustawiają etykiet ani checków. Zwracają blok JSON, a workflowy dzi
 node scripts/agents/output.ts <plan|implementation|verdict|behavior> odpowiedź-agenta.md
 ```
 
-Recenzenci mają jedno źródło: wspólny protokół `skills/review/protocol.md` i kryteria w `skills/review/perspectives/<perspektywa>.md`. Pliki `agents/review-*.md` generuje `npm run agents`, a test pilnuje, żeby były aktualne. Nowa perspektywa to nowy plik w `perspectives/`.
+Recenzenci mają jedno źródło: wspólny protokół `skills/review/protocol.md` i kryteria w `skills/review/perspectives/<perspektywa>.md`. Pliki `agents/review-*.md` generuje `npm run agents`, a test pilnuje, żeby były aktualne.
+
+### Perspektywy
+
+Pięć perspektyw z `base` ocenia każdy PR: `correctness`, `tests`, `security`, `maintainability` i `spec`. Projekt dopisuje kolejne w `reviewers.extra` wtedy, gdy ich potrzebuje:
+
+| Perspektywa z katalogu | Ocenia | Kiedy działa |
+| --- | --- | --- |
+| `ux-visual` | zrzuty i podgląd względem specu albo wzorca | diff dotyka plików widoku, stylów albo zasobów |
+| `accessibility-web` | semantyka, teksty alternatywne, etykiety, kontrast, klawiatura | diff dotyka plików widoku albo stylów |
+| `web-performance` | obrazy, rozmiar paczki, ładowanie, przesunięcia układu | diff dotyka kodu, stylów, zasobów albo konfiguracji builda |
+| `devils-advocate` | szuka wejścia, które wywróci zmianę | diff dotyka stref `data`, `security`, `release` albo `dependencies` |
+
+**Własna perspektywa projektu** to plik `.factory/perspectives/<nazwa>.md` w repo projektu i jedna linia w `reviewers.extra`. Ocenia ją ogólny recenzent `review-project` według tego samego protokołu:
+
+```markdown
+---
+name: brand
+title: Zgodność z marką
+description: Sprawdza kolory i typografię marki.
+paths: ["src/components/**", "**/*.css"]   # opcjonalnie; albo zones: [shared]
+---
+
+Kryteria: na co recenzent patrzy i czego nie ocenia.
+```
+
+Bez `paths` i `zones` perspektywa ocenia każdy PR. Skład panelu dla zmiany podaje `node scripts/review/panel.ts --base origin/main`, a reguły ryzyka wymagają werdyktu dokładnie od tych perspektyw. Pliki `.factory/` są w strefie `factory` (High) i są czytane z wersji bazowej, więc zmiana nie poluzuje własnej recenzji. Katalog roboczy panelu `.factory/review/` dopisz do `.gitignore` projektu.
+
+**Najpierw tanie strażniki.** Recenzent LLM kosztuje przy każdym PR. Gdzie się da, lepiej od początku mieć deterministyczny test w CI, a jego wynik dołączyć do artefaktów jako dowód. Przykłady: limit rozmiaru paczki, próg Lighthouse, test dostępności axe w testach e2e. Recenzent z perspektywy korzysta z tych raportów, a sama perspektywa przydaje się, gdy projekt dojrzeje.
+
+### Modele
+
+Każdy etap może używać innego modelu, także po to, żeby oszczędzać limity. Wartości startowe są w `base`:
+
+```yaml
+models:
+  planner: opus          # mało wywołań, a od planu zależy reszta
+  implementer: sonnet    # najwięcej tokenów
+  risk_assessor: sonnet
+  reviewers:
+    default: sonnet      # kilka wywołań na każdy PR
+    security: opus       # najwyższa stawka
+```
+
+Projekt nadpisuje w `factory.yml` tylko to, co chce zmienić, np. `models.reviewers.ux-visual: haiku`. Wartość to alias (`opus`, `sonnet`, `haiku`) albo pełny identyfikator modelu. Model można ustawić tylko dla włączonej perspektywy. Workflowy podają model każdemu jobowi.
 
 ## Struktura repo
 
@@ -156,7 +201,7 @@ Recenzenci mają jedno źródło: wspólny protokół `skills/review/protocol.md
 skills/               skille: planner, implementer, review, risk-assessor; później spec-writer, po-scout, factory-init
 agents/               recenzenci review-<perspektywa>, generowani z skills/review, tylko do odczytu
 hooks/                hooks.json: blokada chronionych plików, Stop dopiero po zielonych testach
-scripts/              deterministyczne skrypty: reguły ryzyka, merger
+scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, skład panelu, wyjście agentów, merger
 presets/              warstwy reguł: base, typescript, web, gdscript, godot
 templates/            szablony dla projektów: wywołujące workflowy, przykładowy factory.yml
 .github/workflows/    wspólne workflowy typu workflow_call

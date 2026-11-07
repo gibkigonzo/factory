@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { loadConfig } from '../config/load.ts';
 import { buildAgents, parseFrontmatter, REVIEWER_TOOLS, ROOT, staleAgents } from './build.ts';
+import { loadCatalog } from '../review/perspectives.ts';
 import { parseOutput } from './output.ts';
 import type { OutputKind } from './output.ts';
 
@@ -50,9 +51,10 @@ describe('recenzenci', () => {
     assert.deepEqual(staleAgents(agents), []);
   });
 
-  it('każda perspektywa z base ma recenzenta', () => {
+  it('każda perspektywa z katalogu ma recenzenta, a perspektywy projektu mają recenzenta ogólnego', () => {
     const names = [...agents.keys()].map((path) => path.replace(/^agents\/review-|\.md$/g, ''));
-    assert.deepEqual(names, [...base.config.reviewers.perspectives].sort());
+    assert.deepEqual(names, [...loadCatalog().map((d) => d.name), 'project']);
+    for (const name of base.config.reviewers.perspectives) assert.ok(names.includes(name), `brak recenzenta dla ${name}`);
   });
 
   for (const [path, content] of agents) {
@@ -67,7 +69,8 @@ describe('recenzenci', () => {
       const result = parseOutput('verdict', content, path);
       assert.ok(result.ok, result.ok ? '' : result.errors.join('\n'));
       const perspective = (result.value as { perspective: string }).perspective;
-      assert.equal(`agents/review-${perspective}.md`, path);
+      const expected = path === 'agents/review-project.md' ? 'nazwa-perspektywy' : path.replace(/^agents\/review-|\.md$/g, '');
+      assert.equal(perspective, expected);
     });
   }
 });

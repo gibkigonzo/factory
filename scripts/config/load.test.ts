@@ -134,6 +134,42 @@ describe('błędny kontrakt: komunikat wskazuje pole', () => {
   });
 });
 
+describe('modele na etapach', () => {
+  it('base ustawia modele startowe, a projekt może je nadpisać', () => {
+    const base = loadConfig(MINIMAL, 'factory.yml');
+    assert.ok(base.ok);
+    assert.deepEqual(base.config.models, {
+      planner: 'opus',
+      implementer: 'sonnet',
+      risk_assessor: 'sonnet',
+      reviewers: { default: 'sonnet', security: 'opus' },
+    });
+    const custom = loadConfig(`${MINIMAL}models:\n  implementer: opus\n  reviewers:\n    tests: haiku\n`, 'factory.yml');
+    assert.ok(custom.ok, custom.ok ? '' : custom.errors.join('\n'));
+    assert.equal(custom.config.models.implementer, 'opus');
+    assert.deepEqual(custom.config.models.reviewers, { default: 'sonnet', security: 'opus', tests: 'haiku' });
+  });
+
+  it('przyjmuje pełny identyfikator modelu', () => {
+    assert.ok(loadConfig(`${MINIMAL}models:\n  planner: claude-example-1-0\n`, 'factory.yml').ok);
+  });
+
+  it('błędny model jest odrzucany z komunikatem, który wskazuje pole', () => {
+    assertError(`${MINIMAL}models:\n  planner: gpt-5\n`, 'factory.yml: models.planner: niedozwolona wartość "gpt-5"; dozwolone: opus, sonnet, haiku albo pełny identyfikator modelu claude-…');
+  });
+
+  it('model tylko dla włączonej perspektywy', () => {
+    assertError(`${MINIMAL}models:\n  reviewers:\n    securty: opus\n`, 'factory.yml: models.reviewers.securty: perspektywa „securty” nie jest włączona');
+  });
+
+  it('preset języka nie ustawia modeli', () => {
+    const base = readFileSync(new URL('../../presets/base.yml', import.meta.url), 'utf8');
+    const presets: PresetSource = { list: () => ['base', 'x'], read: (name) => ({ base, x: 'models:\n  planner: haiku\n' })[name] };
+    const errors = errorsOf(MINIMAL.replace('[base]', '[base, x]'), presets);
+    assert.ok(errors.some((e) => e.startsWith('presets/x.yml: models: preset języka lub frameworka ustawia tylko')), errors.join('\n'));
+  });
+});
+
 describe('warstwy', () => {
   const base = readFileSync(new URL('../../presets/base.yml', import.meta.url), 'utf8');
   const source = (presets: Record<string, string>): PresetSource => ({
