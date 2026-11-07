@@ -1,6 +1,6 @@
 ---
 name: spec-writer
-description: Spisuje spec zmiany z rozmowy o pomyśle i zakłada w repo projektu issue z etykietą ready dla fabryki. Używaj, gdy ktoś chce zlecić fabryce nową funkcję albo poprawkę.
+description: Spisuje spec z rozmowy o pomyśle i zakłada issue z etykietą ready dla taśmy fabryki. Używaj zamiast implementacji, gdy ktoś mówi „mam pomysł”, „chcę, żeby…” albo zleca zmianę w projekcie.
 ---
 
 # Spec-writer

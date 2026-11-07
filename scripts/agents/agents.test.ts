@@ -65,14 +65,11 @@ describe('spec-writer i format specu', () => {
     assert.equal(spec.productRisk, 'low');
   });
 
-  it('szablon ustawień projektu włącza plugin fabryki z jej marketplace\'u', () => {
-    const marketplace = JSON.parse(readFileSync(join(ROOT, '.claude-plugin/marketplace.json'), 'utf8')) as { name: string; plugins: { name: string }[] };
-    const settings = JSON.parse(readFileSync(join(ROOT, 'templates/claude/settings.json'), 'utf8')) as {
-      extraKnownMarketplaces: Record<string, { source: { source: string; repo: string } }>;
-      enabledPlugins: Record<string, boolean>;
-    };
-    assert.deepEqual(settings.extraKnownMarketplaces[marketplace.name]?.source, { source: 'github', repo: 'gibkigonzo/factory' });
-    for (const plugin of marketplace.plugins) assert.equal(settings.enabledPlugins[`${plugin.name}@${marketplace.name}`], true);
+  it('reguła dla CLAUDE.md projektu kieruje pomysły do spec-writera i taśmy', () => {
+    const rule = readFileSync(join(ROOT, 'templates/claude/CLAUDE.md'), 'utf8');
+    assert.match(rule, /`spec-writer`/);
+    assert.match(rule, /`ready`/);
+    assert.match(rule, /Nie implementuj/);
   });
 
   it('planer zna te same sekcje', () => {

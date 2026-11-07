@@ -79,7 +79,8 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 
 ### Spec z telefonu (7 listopada 2026)
 
-- `spec-writer` dostarcza fabryka jako plugin: projekt ma `.claude/settings.json` z `templates/claude/settings.json`, a spec powstaje w sesji Claude Code (z telefonu: zakładka Code). Wgranie ZIP-a (`npm run skill:zip`) do zwykłego czatu aplikacji Claude to opcja; tam skille są przypisane do konta i fabryka ich nie wgra.
+- Spec powstaje w sesji Claude Code na repo projektu (z telefonu: zakładka Code). Sesje w chmurze nie instalują pluginów z `.claude/settings.json`, więc projekt trzyma kopię skilla w `.claude/skills/spec-writer/` i regułę z `templates/claude/CLAUDE.md` w swoim `CLAUDE.md`. Bez reguły sesja od razu implementuje.
+- Wgranie ZIP-a (`npm run skill:zip`) do zwykłego czatu aplikacji Claude to opcja; tam skille są przypisane do konta i fabryka ich nie wgra.
 - Sekcje specu są w `SPEC_SECTIONS`; test pilnuje szablonu, przykładu i planera.
 - Issue zakłada konto właściciela (konektor i sesja Claude Code), więc strażnik taśmy je przepuszcza.
 
