@@ -20,6 +20,8 @@ import { latestMarked, planComment, PLAN_MARKER, prBody, PR_MARKER } from './ren
 import { renderReport } from './report.ts';
 import type { PanelSummary } from './report.ts';
 import { parseSpec } from './spec.ts';
+import { isStage, parseUsageBlocks, parseUsageList, readUsage, sumUsage } from './usage.ts';
+import type { Usage } from './usage.ts';
 
 class UsageError extends Error {}
 
@@ -56,6 +58,11 @@ function options(args: string[]) {
       evidence: { type: 'string' },
       raw: { type: 'string' },
       owners: { type: 'string' },
+      usage: { type: 'string' },
+      previous: { type: 'string' },
+      file: { type: 'string' },
+      stage: { type: 'string' },
+      dir: { type: 'string' },
     },
   });
 }
@@ -93,6 +100,27 @@ function extract(kind: string | undefined, file: string | undefined): string {
   return JSON.stringify(result.value, null, 2);
 }
 
+/** Plik z listą rekordów zużycia; brak pliku albo zły format to pusta lista. */
+function usageFile(path: string | undefined): Usage[] {
+  if (!path || !existsSync(path)) return [];
+  try {
+    return parseUsageList(json(path));
+  } catch {
+    return [];
+  }
+}
+
+/** Zużycie jednej sesji z pliku przebiegu claude-code-action. Zapisuje plik tylko, gdy przebieg ma wynik. */
+function usage(v: Values): string {
+  const stage = required(v.stage, '--stage');
+  if (!isStage(stage)) throw new UsageError(`usage: etap ${['plan', 'implement', 'review', 'assess'].join('|')}`);
+  const file = required(v.file, '--file');
+  const record = existsSync(file) ? readUsage(json(file), stage) : undefined;
+  if (!record) return `zużycie: brak wyniku w ${file}`;
+  writeFileSync(required(v.out, '--out'), JSON.stringify([record]));
+  return `zużycie ${stage}: ${record.cost} USD, tury ${record.turns}, tokeny wyjścia ${record.output}`;
+}
+
 function marked(kind: 'plan' | 'implementation', v: Values): string {
   const source = JSON.parse(readFileSync(0, 'utf8')) as unknown;
   const comments = Array.isArray(source) ? source : [{ body: (source as { body?: string }).body, user: { login: 'github-actions[bot]' } }];
@@ -115,18 +143,28 @@ function run(command: string | undefined, rest: string[]): string {
       return JSON.stringify(parseSpec(readFileSync(required(p[0], 'plik'), 'utf8')), null, 2);
     case 'evidence':
       return evidence(v);
+    case 'usage':
+      return usage(v);
+    case 'usage-sum': {
+      const dir = required(v.dir, '--dir');
+      const files = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')) : [];
+      return JSON.stringify(sumUsage(files.flatMap((f) => usageFile(join(dir, f)))));
+    }
     case 'report':
       return renderReport(json(required(v.assessment, '--assessment')) as Assessment, v.panel ? (json(v.panel) as PanelSummary) : undefined);
     case 'plan-comment':
-      return planComment(json(required(v.plan, '--plan')) as Parameters<typeof planComment>[0], v.note);
-    case 'pr-body':
-      return prBody(json(required(v.implementation, '--implementation')) as Implementation);
+      return planComment(json(required(v.plan, '--plan')) as Parameters<typeof planComment>[0], v.note, usageFile(v.usage));
+    case 'pr-body': {
+      const previous = v.previous && existsSync(v.previous) ? parseUsageBlocks(readFileSync(v.previous, 'utf8')) : [];
+      return prBody(json(required(v.implementation, '--implementation')) as Implementation, [...previous, ...usageFile(v.usage)]);
+    }
     case 'shadow-comment':
       return shadowComment(
         shadowRecord(
           Number(required(v.pr, '--pr')),
           json(required(v.assessment, '--assessment')) as Assessment,
           json(required(v.evidence, '--evidence')) as Evidence,
+          usageFile(v.usage),
         ),
         config(v.config),
       );

@@ -47,9 +47,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          mkdir -p "$RAW/comments" "$RAW/reactions" "$RAW/events" "$RAW/issues"
+          mkdir -p "$RAW/comments" "$RAW/reactions" "$RAW/events" "$RAW/issues" "$RAW/plans"
           gh pr list --state all --limit 1000 \
-            --json number,title,state,createdAt,mergedAt,closedAt,headRefName,isCrossRepository,labels,mergeCommit,closingIssuesReferences \
+            --json number,title,body,state,createdAt,mergedAt,closedAt,headRefName,isCrossRepository,labels,mergeCommit,closingIssuesReferences \
             > "$RAW/prs.json"
           FACTORY='.[] | select((.headRefName | startswith("factory/")) and (.isCrossRepository | not))'
           for PR in $(jq -r "$FACTORY | .number" "$RAW/prs.json"); do
@@ -68,6 +68,9 @@ jobs:
               --jq '.[] | select(.event == "labeled") | {event, label: {name: .label.name}, created_at}' \
               | jq -s . > "$RAW/events/$ISSUE.json"
             gh api "repos/$GH_REPO/issues/$ISSUE" --jq '{created_at}' > "$RAW/issues/$ISSUE.json"
+            gh api --paginate "repos/$GH_REPO/issues/$ISSUE/comments" \
+              --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- factory:plan -->"))) | {body}' \
+              | jq -s . > "$RAW/plans/$ISSUE.json"
           done
           {
             echo "Dane dziennika: PR-y fabryki $(jq "[$FACTORY] | length" "$RAW/prs.json"), issue $(ls "$RAW/issues" | wc -l),"

@@ -3,6 +3,8 @@
 
 import { extractJson } from '../agents/output.ts';
 import type { Implementation } from './evidence.ts';
+import { usageBlock } from './usage.ts';
+import type { Usage } from './usage.ts';
 
 export const PLAN_MARKER = '<!-- factory:plan -->';
 export const PR_MARKER = '<!-- factory:implementation -->';
@@ -27,7 +29,7 @@ function jsonBlock(value: unknown): string {
   return ['<details><summary>JSON</summary>', '', '```json', JSON.stringify(value, null, 2), '```', '', '</details>'].join('\n');
 }
 
-export function planComment(plan: Plan, note?: string): string {
+export function planComment(plan: Plan, note?: string, usage: readonly Usage[] = []): string {
   const lines = [PLAN_MARKER, `## Plan fabryki: ${DECISIONS[plan.decision] ?? plan.decision}`, '', plan.summary, ''];
   lines.push(`Szacunek: ${plan.size.lines} linii, plików: ${plan.size.files}. Prognoza poziomu: ${plan.expected_level}.`);
   if (plan.questions?.length) lines.push('', '**Pytania do Ciebie:**', ...plan.questions.map((q) => `- ${q}`));
@@ -35,15 +37,18 @@ export function planComment(plan: Plan, note?: string): string {
   if (plan.details) lines.push('', plan.details.trim());
   if (note) lines.push('', `_${note}_`);
   lines.push('', jsonBlock(plan));
+  if (usage.length) lines.push('', usageBlock(usage));
   return lines.join('\n');
 }
 
-export function prBody(implementation: Implementation & { summary?: string }): string {
+/** usage: zużycie wszystkich rund implementacji, także poprzednich (z dotychczasowego opisu PR). */
+export function prBody(implementation: Implementation & { summary?: string }, usage: readonly Usage[] = []): string {
   const lines = [PR_MARKER, `Closes #${implementation.issue}`, ''];
   if (implementation.summary) lines.push(implementation.summary.trim(), '');
   lines.push('**Kryteria i dowody:**', ...implementation.acceptance.map((a) => `- ${a.criterion} → ${a.evidence}`));
   if (implementation.assumptions.length) lines.push('', '**Założenia:**', ...implementation.assumptions.map((a) => `- ${a}`));
   lines.push('', 'Zmianę przygotował implementer fabryki. Ocena ryzyka pojawi się po recenzji.', '', jsonBlock(implementation));
+  if (usage.length) lines.push('', usageBlock(usage));
   return lines.join('\n');
 }
 

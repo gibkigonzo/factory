@@ -77,6 +77,7 @@ Metryki liczy skrypt, nie model:
 - **fałszywe Low**: werdykt „scaliłaby”, który oceniłeś 👎, PR zamknięty bez merge'u albo merge cofnięty w ciągu `revert_days` dni;
 - **rundy poprawek** i **czas od `ready` do merge'u**;
 - **próg pewności recenzentów**: zakończone PR-y dzielone według najniższej pewności w panelu (≥ 0,8 i < 0,8) z odsetkiem przyjętych (scalonych i niecofniętych) w każdej grupie. Jeśli odsetek jest podobny, pewność nie przewiduje Twoich decyzji i próg zastąpią zgodność recenzentów oraz cytaty, które da się sprawdzić.
+- **koszt**: równowartość cen API na PR i na etap (plan, implementacja, recenzja, ocena ryzyka) oraz tokeny wyjścia. Przy subskrypcji pokazuje, ile taśma waży w limitach. Każdy etap z Claude zapisuje zużycie z pliku przebiegu `claude-code-action`: planer w komentarzu planu, implementer w opisie PR (wszystkie rundy), recenzenci i oceniacz w danych werdyktu.
 
 Bramka 1 przechodzi przy 20 ocenionych PR, zgodności co najmniej 90% i braku fałszywych Low (progi `shadow` w `base`). Dziennik pokazuje wtedy, że można przejść do Etapu 1, ale decyzja należy do Ciebie.
 

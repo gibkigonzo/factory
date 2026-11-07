@@ -1,13 +1,16 @@
 // Zbiera dane do dziennika trybu cienia z plików pobranych przez workflow (gh, git):
-//   prs.json                 gh pr list --state all --json number,title,state,createdAt,mergedAt,closedAt,headRefName,isCrossRepository,labels,mergeCommit,closingIssuesReferences
+//   prs.json                 gh pr list --state all --json number,title,body,state,createdAt,mergedAt,closedAt,headRefName,isCrossRepository,labels,mergeCommit,closingIssuesReferences
 //   comments/<pr>.json       komentarze PR (wystarczą te z werdyktem)
 //   reactions/<comment>.json reakcje na komentarz z werdyktem
 //   events/<issue>.json      zdarzenia issue (kiedy dostało etykietę ready)
 //   issues/<issue>.json      data założenia issue: { created_at }
+//   plans/<issue>.json       komentarze z planem: [{ body }] (zużycie planera)
 //   reverts.txt              git log gałęzi głównej: rekordy „\x1e<data ISO>\t<treść commita>”
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseUsageBlocks, sumUsage } from '../workflow/usage.ts';
+import type { Usage } from '../workflow/usage.ts';
 import { parseShadow } from './comment.ts';
 import type { ShadowRecord } from './comment.ts';
 
@@ -22,11 +25,14 @@ export interface PrRecord {
   rounds: number;
   reverted: boolean;
   shadow?: { record: ShadowRecord; at: string; reaction?: 'up' | 'down' };
+  /** Zużycie wszystkich etapów i rund dla tego PR, zsumowane na etap. */
+  usage?: Usage[];
 }
 
 interface RawPr {
   number: number;
   title: string;
+  body?: string;
   state: string;
   createdAt: string;
   mergedAt?: string | null;
@@ -109,6 +115,20 @@ function rounds(labels: readonly { name: string }[] = []): number {
   return numbers.length > 0 ? Math.max(...numbers) : 0;
 }
 
+/** Zużycie: plan (komentarze planu w issue), implementacja (opis PR), recenzja i ocena (wszystkie werdykty). */
+function usageOf(dir: string, pr: RawPr, issue: number | undefined): Usage[] {
+  const plans = issue ? read<{ body?: string }[]>(join(dir, 'plans', `${issue}.json`), []) : [];
+  const verdicts = read<RawComment[]>(join(dir, 'comments', `${pr.number}.json`), [])
+    .filter((c) => c.user?.login === 'github-actions[bot]')
+    .flatMap((c) => parseShadow(c.body ?? '')?.usage ?? []);
+  const records = [
+    ...plans.flatMap((p) => parseUsageBlocks(p.body ?? '').filter((u) => u.stage === 'plan')),
+    ...parseUsageBlocks(pr.body ?? '').filter((u) => u.stage === 'implement'),
+    ...verdicts.filter((u) => u.stage === 'review' || u.stage === 'assess'),
+  ];
+  return sumUsage(records);
+}
+
 const DAY = 24 * 60 * 60 * 1000;
 
 /** PR-y fabryki z tego repo: gałęzie factory/*, bez forków. */
@@ -136,8 +156,11 @@ export function collectRecords(dir: string, owners: readonly string[], revertDay
       const record: PrRecord = { number: pr.number, title: pr.title, state, createdAt: pr.createdAt, rounds: rounds(pr.labels), reverted };
       if (pr.mergedAt) record.mergedAt = pr.mergedAt;
       if (pr.closedAt) record.closedAt = pr.closedAt;
-      const ready = readyAt(dir, issueOf(pr));
+      const issue = issueOf(pr);
+      const ready = readyAt(dir, issue);
       if (ready) record.readyAt = ready;
+      const usage = usageOf(dir, pr, issue);
+      if (usage.length) record.usage = usage;
       const shadow = latestShadow(dir, pr.number, owners);
       if (shadow) record.shadow = shadow;
       return record;

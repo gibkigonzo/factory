@@ -7,6 +7,9 @@ import { computeMetrics, isFalseLow, MIN_GROUP, percent } from './metrics.ts';
 import type { Group } from './metrics.ts';
 
 const decimal = (value: number) => value.toFixed(1).replace('.', ',');
+const usd = (value: number) => `${value.toFixed(2).replace('.', ',')} USD`;
+const tokens = (value: number) => Math.round(value).toLocaleString('pl-PL');
+const STAGE_NAMES: Record<string, string> = { plan: 'plan', implement: 'implementacja', review: 'recenzja', assess: 'ocena ryzyka' };
 const STATE = { open: 'otwarty', merged: 'scalony', closed: "zamknięty bez merge'u" } as const;
 
 function groupLine(label: string, group: Group): string {
@@ -23,6 +26,7 @@ function prLine(record: PrRecord): string {
     parts.push('bez werdyktu');
   }
   parts.push(STATE[record.state] + (record.reverted ? ', cofnięty' : ''));
+  if (record.usage?.length) parts.push(usd(record.usage.reduce((sum, u) => sum + u.cost, 0)));
   if (isFalseLow(record)) parts.push('**fałszywe Low**');
   return `- ${parts.join(' · ')}`;
 }
@@ -51,6 +55,17 @@ export function renderJournal(records: readonly PrRecord[], config: FactoryConfi
     enoughData
       ? '- Jeśli odsetek przyjętych jest w obu grupach podobny, pewność nie przewiduje Twoich decyzji. Wtedy próg warto zastąpić zgodnością recenzentów i cytatami, które da się sprawdzić.'
       : `- Za mało danych, żeby ocenić próg: potrzeba co najmniej ${MIN_GROUP} zakończonych PR w każdej grupie.`,
+    '',
+    '## Koszt',
+    '',
+    'Równowartość cen API. Przy subskrypcji pokazuje, ile taśma waży w limitach.',
+    '',
+    ...(m.cost
+      ? [
+          `- PR z pomiarem: ${m.cost.prs}, średnio ${usd(m.cost.perPr)} i ${tokens(m.cost.outputPerPr)} tokenów wyjścia na PR`,
+          `- Etapy, średnio na PR: ${m.cost.stages.map((s) => `${STAGE_NAMES[s.stage]} ${usd(s.perPr)}`).join(' · ')}`,
+        ]
+      : ['- Brak pomiarów: zużycie zapisują etapy uruchomione po włączeniu pomiaru.']),
     '',
     '## PR-y fabryki',
     '',

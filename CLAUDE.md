@@ -84,6 +84,12 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Sekcje specu są w `SPEC_SECTIONS`; test pilnuje szablonu, przykładu i planera.
 - Issue zakłada konto właściciela (konektor i sesja Claude Code), więc strażnik taśmy je przepuszcza.
 
+### Koszt (7 listopada 2026)
+
+- Każdy etap z Claude zapisuje zużycie (równowartość cen API, tury, tokeny) z pliku przebiegu `claude-code-action`; dziennik pokazuje koszt na PR i na etap.
+- Agenci piszą zwięźle: podsumowanie werdyktu najwyżej 2 zdania, najwyżej 5 uwag po jednym zdaniu, plan i opis PR bez powtarzania specu. Teksty dla właściciela zostają po polsku.
+- O angielskich instrukcjach (skille, perspektywy, protokół) decydujemy po 5–10 PR pilota, na podstawie pomiaru.
+
 ### Logowanie i pilot (6 listopada 2026)
 
 - `claude-code-action` loguje się przez subskrypcję: sekret `CLAUDE_CODE_OAUTH_TOKEN`, który dodaje właściciel.
