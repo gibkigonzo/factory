@@ -16,6 +16,53 @@ Generyczna fabryka oprogramowania oparta na Claude Code. Zamienia rozmowę o pom
 
 Scala deterministyczny skrypt, a nie model. Fabryka nie może zmieniać własnych zabezpieczeń.
 
+### Przebieg
+
+Niebieskie kroki wykonuje człowiek, fioletowe agent (Claude, tylko odczyt, zwraca JSON albo patch), a zielone skrypt, czyli deterministyczny job w GitHub Actions.
+
+```mermaid
+flowchart TD
+  H1(["Rozmowa o pomyśle w aplikacji Claude, akceptacja specu"]):::human
+  A1("spec-writer: issue ze specem i etykietą ready"):::agent
+  S1["Strażnik: zaufane konto, dzienny limit"]:::script
+  A2("Planer: plan w JSON"):::agent
+  S2["Komentarz z planem, etykieta, uruchomienie implementacji"]:::script
+  H2(["Odpowiadasz na pytania albo dajesz ready mniejszym issue"]):::human
+  A3("Implementer: zmiany w plikach i dowody w JSON"):::agent
+  S3["Sprawdzenie ścieżek, gałąź factory/*, commit, push, PR"]:::script
+  S4["CI: komendy z factory.yml"]:::script
+  S5["Skład panelu: które perspektywy oceniają zmianę"]:::script
+  A4("Recenzenci, każdy w świeżym kontekście: werdykty w JSON"):::agent
+  A5("Oceniacz ryzyka: zachowanie i odwracalność"):::agent
+  S6["Reguły ryzyka: poziom, check factory/risk, etykieta risk:*, raport w PR"]:::script
+  H3(["Etap 0: decydujesz o każdym PR, oceniasz werdykt fabryki"]):::human
+  D{"Etap 1: poziom"}:::script
+  M1["Merger scala od razu"]:::script
+  M2["Merger scala po 24 h bez /veto"]:::script
+  H4(["Decydujesz Ty"]):::human
+  H5(["Komendy w komentarzu: /change, /veto, /reject, /split, /approve"]):::human
+
+  H1 --> A1 --> S1 --> A2 --> S2
+  S2 -->|"blocked albo split"| H2
+  H2 -->|"etykieta ready"| S1
+  S2 -->|"planned"| A3 --> S3
+  S3 --> S4 & S5
+  S5 --> A4 --> A5 --> S6
+  S4 --> S6
+  S6 --> H3
+  S6 --> D
+  D -->|"Low"| M1
+  D -->|"Medium"| M2
+  D -->|"High"| H4
+  H5 -->|"/change"| A3
+
+  classDef human fill:#dbeafe,stroke:#1d4ed8,color:#0b1f33
+  classDef agent fill:#ede9fe,stroke:#7c3aed,color:#1d1036
+  classDef script fill:#dcfce7,stroke:#15803d,color:#0f2e16
+```
+
+W Etapie 0 (tryb cienia) fabryka niczego nie scala. Przy każdym PR zapisuje, co by zrobiła, a decyduje właściciel. Merger włącza się w Etapie 1, po przejściu Bramki 1.
+
 ## Reguły ryzyka v1
 
 Poziom zmiany to najwyższy wynik z pięciu reguł. Reguły i oceniacz mogą go tylko podnieść.
@@ -196,7 +243,13 @@ Projekt nadpisuje w `factory.yml` tylko to, co chce zmienić, np. `models.review
 
 ## Taśma w GitHub Actions
 
-Projekt kopiuje [`templates/workflows/factory.yml`](templates/workflows/factory.yml) do `.github/workflows/factory.yml` i dodaje sekret `CLAUDE_CODE_OAUTH_TOKEN`. Dalej wszystko dzieje się w issue i PR, także z telefonu.
+Projekt podłącza taśmę w trzech krokach:
+
+1. kopiuje [`templates/workflows/factory.yml`](templates/workflows/factory.yml) do `.github/workflows/factory.yml`;
+2. dodaje sekret `CLAUDE_CODE_OAUTH_TOKEN` (Settings → Secrets and variables → Actions);
+3. w Settings → Actions → General → Workflow permissions zaznacza „Allow GitHub Actions to create and approve pull requests”, bez czego workflow nie otworzy PR.
+
+Dalej wszystko dzieje się w issue i PR, także z telefonu.
 
 | Etap | Uruchamia go | Co robi |
 | --- | --- | --- |
