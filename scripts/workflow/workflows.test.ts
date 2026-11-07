@@ -12,7 +12,7 @@ type Job = { permissions?: Record<string, string>; steps?: Step[]; uses?: string
 type Workflow = { permissions?: unknown; on: unknown; jobs: Record<string, Job> };
 
 const DIR = join(ROOT, '.github/workflows');
-const REUSABLE = ['plan', 'implement', 'review', 'risk', 'commands'];
+const REUSABLE = ['plan', 'implement', 'review', 'risk', 'merge', 'journal', 'commands'];
 const read = (path: string) => readFileSync(path, 'utf8');
 const workflows = Object.fromEntries(
   readdirSync(DIR)
@@ -63,6 +63,20 @@ describe('workflowy fabryki', () => {
       });
     }
   }
+
+  it('merger i dziennik działają bez Claude: decyduje i liczy skrypt', () => {
+    for (const name of ['merge', 'journal']) {
+      for (const [jobName, job] of Object.entries(workflows[name]!.data.jobs)) assert.ok(!usesClaude(job), `${name}/${jobName}`);
+    }
+  });
+
+  it('dziennik nie pobiera kodu z PR, bo projekt uruchamia go też z pull_request_target', () => {
+    for (const job of Object.values(workflows.journal!.data.jobs)) {
+      for (const step of job.steps ?? []) {
+        if (step.uses?.startsWith('actions/checkout@')) assert.doesNotMatch(String(step.with?.ref ?? ''), /pull|head/);
+      }
+    }
+  });
 
   it('strażnik zaufanych kont jest taki sam we wszystkich etapach', () => {
     const guards = ['plan', 'implement', 'review'].map((name) => JSON.stringify(workflows[name]!.data.jobs.guard));

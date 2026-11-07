@@ -6,7 +6,10 @@ import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isOutputKind, OUTPUTS, parseOutput } from '../agents/output.ts';
 import type { FactoryConfig } from '../config/spec.ts';
-import type { Assessment, Review } from '../risk/types.ts';
+import type { Assessment, Evidence, Review } from '../risk/types.ts';
+import { collectRecords } from '../shadow/collect.ts';
+import { shadowComment, shadowRecord } from '../shadow/comment.ts';
+import { renderJournal } from '../shadow/journal.ts';
 import { runCommands } from './ci.ts';
 import { buildEvidence } from './evidence.ts';
 import type { CiResult, Implementation } from './evidence.ts';
@@ -50,6 +53,9 @@ function options(args: string[]) {
       note: { type: 'string' },
       implementation: { type: 'string' },
       title: { type: 'string' },
+      evidence: { type: 'string' },
+      raw: { type: 'string' },
+      owners: { type: 'string' },
     },
   });
 }
@@ -115,6 +121,21 @@ function run(command: string | undefined, rest: string[]): string {
       return planComment(json(required(v.plan, '--plan')) as Parameters<typeof planComment>[0], v.note);
     case 'pr-body':
       return prBody(json(required(v.implementation, '--implementation')) as Implementation);
+    case 'shadow-comment':
+      return shadowComment(
+        shadowRecord(
+          Number(required(v.pr, '--pr')),
+          json(required(v.assessment, '--assessment')) as Assessment,
+          json(required(v.evidence, '--evidence')) as Evidence,
+        ),
+        config(v.config),
+      );
+    case 'journal': {
+      const cfg = config(v.config);
+      const owners = required(v.owners, '--owners').split(',').map((o) => o.trim()).filter(Boolean);
+      const updated = `${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+      return renderJournal(collectRecords(required(v.raw, '--raw'), owners, cfg.shadow.revert_days), cfg, updated);
+    }
     case 'find-plan':
       return marked('plan', v);
     case 'find-implementation':

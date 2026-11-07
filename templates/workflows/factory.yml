@@ -1,9 +1,11 @@
 # Taśma fabryki w repo projektu. Skopiuj do .github/workflows/factory.yml.
 # Wymaga sekretu CLAUDE_CODE_OAUTH_TOKEN (Settings → Secrets and variables → Actions).
 #
-# Przebieg: etykieta `ready` na issue → plan → implementacja (PR z gałęzi factory/*) → recenzja → ocena ryzyka.
-# Kolejne etapy uruchamiają się przez workflow_dispatch. Komendy w komentarzach: /approve, /veto, /reject, /change, /split.
-# W Etapie 0 fabryka niczego nie scala: o każdym PR decydujesz Ty.
+# Przebieg: etykieta `ready` na issue → plan → implementacja (PR z gałęzi factory/*) → recenzja → ocena ryzyka
+# → werdykt mergera. Kolejne etapy uruchamiają się przez workflow_dispatch.
+# Komendy w komentarzach: /approve, /veto, /reject, /change, /split.
+# W Etapie 0 (tryb cienia) fabryka niczego nie scala: o każdym PR decydujesz Ty, a werdykt fabryki oceniasz 👍 albo 👎.
+# Dziennik z metrykami prowadzi przypięte issue „Tryb cienia”.
 name: factory
 
 on:
@@ -11,11 +13,15 @@ on:
     types: [labeled]
   issue_comment:
     types: [created]
+  pull_request_target:
+    types: [closed]   # tylko dziennik; kodu z PR nie pobiera
+  schedule:
+    - cron: '17 4 * * *'   # dziennik raz dziennie, bo reakcje 👍/👎 nie uruchamiają workflowów
   workflow_dispatch:
     inputs:
       stage:
         type: choice
-        options: [plan, implement, review]
+        options: [plan, implement, review, journal]
         required: true
       issue: { type: string, default: '' }
       pr: { type: string, default: '' }
@@ -92,6 +98,32 @@ jobs:
       checks: write
       issues: write
       pull-requests: write
+
+  merge:
+    needs: risk
+    uses: gibkigonzo/factory/.github/workflows/merge.yml@main
+    with:
+      pr: ${{ inputs.pr }}
+    permissions:
+      pull-requests: write
+
+  journal:
+    needs: merge
+    if: >-
+      !cancelled() && (
+        needs.merge.result == 'success' ||
+        github.event_name == 'schedule' ||
+        (github.event_name == 'workflow_dispatch' && inputs.stage == 'journal') ||
+        (github.event_name == 'pull_request_target' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          startsWith(github.event.pull_request.head.ref, 'factory/')))
+    uses: gibkigonzo/factory/.github/workflows/journal.yml@main
+    with:
+      factory_ref: main
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
 
   commands:
     if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/')
