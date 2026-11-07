@@ -56,6 +56,7 @@ describe('workflowy fabryki', () => {
           if (step.uses?.startsWith('actions/checkout@')) assert.equal(step.with?.['persist-credentials'], false);
           if (step.uses?.startsWith(CLAUDE)) {
             assert.equal(step.with?.github_token, '${{ github.token }}', 'token joba zamiast tokenu aplikacji z prawem zapisu');
+            assert.equal(step.with?.allowed_bots, 'github-actions[bot]', 'dopuszczony tylko bot workflowów, nigdy *');
             assert.match(String(step.with?.claude_args), /--allowedTools/);
           }
         }

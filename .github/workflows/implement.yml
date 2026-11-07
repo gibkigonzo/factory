@@ -129,6 +129,7 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
+          allowed_bots: github-actions[bot]   # kolejne etapy uruchamia workflow_dispatch od github-actions
           prompt: ${{ steps.data.outputs.prompt }}
           claude_args: >-
             --model ${{ steps.data.outputs.model }}
