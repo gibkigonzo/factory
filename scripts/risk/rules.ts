@@ -90,7 +90,7 @@ export function sizeRule(
   const tooBig = !fits(medium);
   const level: Level = fits(low) ? 'Low' : fits(medium) ? 'Medium' : 'High';
   const reasons = [
-    `kod produkcyjny: ${lines} linii zmienionych, plików: ${counted.length}`,
+    `kod produkcyjny: zmienionych linii: ${lines}, plików: ${counted.length}`,
     `progi: Low do ${low.lines} linii i ${low.files} plików, Medium do ${medium.lines} linii i ${medium.files} plików`,
   ];
   const skipped = files.length - counted.length;
