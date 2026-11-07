@@ -1,0 +1,258 @@
+# Etap implementacji: zaplanowane issue → patch od implementera → PR z gałęzi factory/*.
+# Claude zmienia pliki z prawem odczytu repo i bez poświadczeń git. Patch sprawdza skrypt
+# (pliki chronione, .github/), a gałąź, commit, push i PR robi osobny job bez Claude.
+name: factory-implement
+
+on:
+  workflow_call:
+    inputs:
+      issue: { type: string, required: true }
+      pr: { type: string, default: '', description: 'Numer PR przy poprawce (/change)' }
+      note: { type: string, default: '', description: 'Id komentarza z opisem poprawki' }
+      factory_ref: { type: string, default: main }
+      runs_on: { type: string, default: ubuntu-latest }
+      node_version: { type: string, default: '22' }
+      trusted: { type: string, default: '' }
+      workflow: { type: string, default: factory.yml }
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: { required: true }
+
+permissions: {}
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      ok: ${{ steps.trust.outputs.ok }}
+    steps:
+      - id: trust
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+          EXTRA: ${{ inputs.trusted }}
+        run: |
+          if [[ ",$OWNER,github-actions[bot],$EXTRA," == *",$ACTOR,"* ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Konto $ACTOR nie jest na liście zaufanych; taśma pomija to zdarzenie."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  implement:
+    needs: guard
+    if: needs.guard.outputs.ok == 'true'
+    runs-on: ${{ fromJSON(startsWith(inputs.runs_on, '[') && inputs.runs_on || format('"{0}"', inputs.runs_on)) }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      actions: read
+    outputs:
+      implementation: ${{ steps.collect.outputs.implementation }}
+      branch: ${{ steps.collect.outputs.branch }}
+      title: ${{ steps.data.outputs.title }}
+      empty: ${{ steps.collect.outputs.empty }}
+      over_budget: ${{ steps.budget.outputs.skip }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.pr != '' && format('refs/pull/{0}/head', inputs.pr) || '' }}
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Narzędzia fabryki
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+          mkdir -p .factory/work && printf '.factory/work/\nnode_modules/\n' >> .git/info/exclude
+          echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
+          echo "W=.factory/work" >> "$GITHUB_ENV"
+          corepack enable || true
+
+      - name: Dane dla implementera
+        id: data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ inputs.issue }}
+          NOTE: ${{ inputs.note }}
+        run: |
+          node "$F/scripts/config/cli.ts" factory.yml --json > "$W/config.json"
+          gh issue view "$ISSUE" --json title,body --jq '"# " + .title + "\n\n" + .body' > "$W/issue.md"
+          gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$ISSUE/comments" | jq -s add \
+            | node "$F/scripts/workflow/cli.ts" find-plan --issue "$ISSUE" > "$W/plan.json"
+          CHANGE=""
+          if [ -n "$NOTE" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/issues/comments/$NOTE" --jq .body > "$W/change.md"
+            CHANGE="--change"
+          fi
+          node "$F/scripts/workflow/cli.ts" prompt implement --work "$W" --issue "$ISSUE" $CHANGE > "$W/prompt.md"
+          {
+            echo "title=$(gh issue view "$ISSUE" --json title --jq .title)"
+            echo "model=$(node "$F/scripts/workflow/cli.ts" model implementer --config "$W/config.json")"
+            echo "schema=$(node "$F/scripts/workflow/cli.ts" schema implementation)"
+            echo "tools=$(node "$F/scripts/workflow/cli.ts" tools implement --config "$W/config.json")"
+            echo "prompt<<FACTORY_EOF"; cat "$W/prompt.md"; echo "FACTORY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Budżet dzienny
+        id: budget
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW: ${{ inputs.workflow }}
+        run: |
+          LIMIT=$(jq .daily_runs "$W/config.json")
+          COUNT=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$WORKFLOW/runs?event=workflow_dispatch&created=>=$(date -u +%F)&per_page=1" --jq .total_count)
+          if [ "$COUNT" -gt "$LIMIT" ]; then
+            echo "::warning::Dzienny limit uruchomień ($LIMIT) wyczerpany; taśma czeka do jutra."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Komenda setup z factory.yml
+        if: steps.budget.outputs.skip != 'true'
+        run: |
+          SETUP=$(jq -r '.commands.setup // empty' "$W/config.json")
+          if [ -n "$SETUP" ]; then bash -c "$SETUP"; fi
+
+      - name: Implementer
+        id: claude
+        if: steps.budget.outputs.skip != 'true'
+        uses: anthropics/claude-code-action@402b5b79551e3ce6614c179fbccbfdb79291cead # v1.0.269
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: ${{ steps.data.outputs.prompt }}
+          claude_args: >-
+            --model ${{ steps.data.outputs.model }}
+            --allowedTools "${{ steps.data.outputs.tools }}"
+            --disallowedTools WebFetch,WebSearch
+            --json-schema '${{ steps.data.outputs.schema }}'
+
+      - name: Patch i sprawdzenie zmienionych ścieżek
+        id: collect
+        if: steps.budget.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OUTPUT: ${{ steps.claude.outputs.structured_output }}
+          ISSUE: ${{ inputs.issue }}
+          PR: ${{ inputs.pr }}
+          TITLE: ${{ steps.data.outputs.title }}
+        run: |
+          git add -A
+          git diff --cached --name-only > "$W/paths.txt"
+          node "$F/scripts/workflow/cli.ts" check-paths --config "$W/config.json" < "$W/paths.txt"
+          git diff --cached --binary > "$W/change.patch"
+          printf '%s' "$OUTPUT" > "$W/implementation.raw.json"
+          node "$F/scripts/workflow/cli.ts" extract implementation "$W/implementation.raw.json" > "$W/implementation.json"
+          if [ -n "$PR" ]; then
+            BRANCH=$(gh pr view "$PR" --json headRefName --jq .headRefName)
+          else
+            BRANCH=$(node "$F/scripts/workflow/cli.ts" branch --issue "$ISSUE" --title "$TITLE")
+          fi
+          {
+            echo "branch=$BRANCH"
+            echo "empty=$([ -s "$W/change.patch" ] && echo false || echo true)"
+            echo "implementation<<FACTORY_EOF"; cat "$W/implementation.json"; echo "FACTORY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: factory-change
+          path: .factory/work/change.patch
+          if-no-files-found: ignore
+
+  publish:
+    needs: implement
+    if: needs.implement.outputs.empty == 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.pr != '' && needs.implement.outputs.branch || '' }}
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: factory-change
+          path: ${{ runner.temp }}/change
+
+      - name: Gałąź, commit, push i PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.issue }}
+          PR: ${{ inputs.pr }}
+          BRANCH: ${{ needs.implement.outputs.branch }}
+          TITLE: ${{ needs.implement.outputs.title }}
+          IMPLEMENTATION: ${{ needs.implement.outputs.implementation }}
+          WORKFLOW: ${{ inputs.workflow }}
+        run: |
+          F="$RUNNER_TEMP/factory"
+          DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -z "$PR" ]; then git checkout -b "$BRANCH"; fi
+          git apply --index "$RUNNER_TEMP/change/change.patch"
+          git commit -m "factory: $TITLE (#$ISSUE)"
+          git push origin "HEAD:$BRANCH"
+
+          printf '%s' "$IMPLEMENTATION" > "$RUNNER_TEMP/implementation.json"
+          node "$F/scripts/workflow/cli.ts" pr-body --implementation "$RUNNER_TEMP/implementation.json" > "$RUNNER_TEMP/body.md"
+          if [ -z "$PR" ]; then
+            URL=$(gh pr create --base "$DEFAULT" --head "$BRANCH" --title "$TITLE" --body-file "$RUNNER_TEMP/body.md")
+            PR=${URL##*/}
+            gh issue comment "$ISSUE" --body "Implementer przygotował PR #$PR. Teraz recenzja i ocena ryzyka."
+          else
+            gh pr edit "$PR" --body-file "$RUNNER_TEMP/body.md"
+            ROUND=$(gh pr view "$PR" --json labels --jq '[.labels[].name | select(startswith("factory:round-")) | ltrimstr("factory:round-") | tonumber] | max // 0')
+            NEXT=$((ROUND + 1))
+            gh label create "factory:round-$NEXT" --force >/dev/null
+            gh pr edit "$PR" --add-label "factory:round-$NEXT"
+          fi
+          gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=review -f pr="$PR"
+
+  failed:
+    needs: [implement, publish]
+    if: failure() || needs.implement.outputs.over_budget == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.issue }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OVER: ${{ needs.implement.outputs.over_budget }}
+        run: |
+          if [ "$OVER" = true ]; then
+            gh issue comment "$ISSUE" --body "Dzienny limit uruchomień taśmy jest wyczerpany. Uruchom etap implement jutro albo ręcznie: $RUN"
+            exit 0
+          fi
+          gh label create blocked --force >/dev/null
+          gh issue edit "$ISSUE" --add-label blocked
+          gh issue comment "$ISSUE" --body "Implementer nie dokończył zadania. Szczegóły w logu: $RUN"

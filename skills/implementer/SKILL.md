@@ -41,6 +41,7 @@ PR z gałęzi `factory/*` do gałęzi głównej. Opis PR: `Closes #<numer>`, co 
 ```
 
 - `acceptance`: wszystkie kryteria ze specu, każde z dowodem: `test: <plik> › <nazwa>` albo `zrzut: <ścieżka artefaktu>`.
+- `summary`: opcjonalnie krótki opis zmian; workflow wstawia go do opisu PR.
 - `bugfix`: `true` przy poprawce błędu; wtedy wymagane jest pole `regression_test` z nazwą testu, który na bazie nie przechodzi.
 
 ## Czego nie robisz

@@ -194,6 +194,31 @@ models:
 
 Projekt nadpisuje w `factory.yml` tylko to, co chce zmienić, np. `models.reviewers.ux-visual: haiku`. Wartość to alias (`opus`, `sonnet`, `haiku`) albo pełny identyfikator modelu. Model można ustawić tylko dla włączonej perspektywy. Workflowy podają model każdemu jobowi.
 
+## Taśma w GitHub Actions
+
+Projekt kopiuje [`templates/workflows/factory.yml`](templates/workflows/factory.yml) do `.github/workflows/factory.yml` i dodaje sekret `CLAUDE_CODE_OAUTH_TOKEN`. Dalej wszystko dzieje się w issue i PR, także z telefonu.
+
+| Etap | Uruchamia go | Co robi |
+| --- | --- | --- |
+| `plan.yml` | etykieta `ready` na issue | plan w komentarzu, etykieta `planned`, `blocked` albo `split`; przy `planned` uruchamia implementację |
+| `implement.yml` | plan albo `/change` w PR | patch od implementera, sprawdzenie ścieżek, PR z gałęzi `factory/<numer>-<nazwa>`; uruchamia recenzję |
+| `review.yml` | implementacja | komendy z `factory.yml` (CI), skład panelu, recenzenci równolegle |
+| `risk.yml` | po recenzji, w tym samym uruchomieniu | oceniacz ryzyka, reguły, check `factory/risk`, etykieta `risk:*`, raport w PR |
+| `commands.yml` | komentarz od właściciela | `/approve`, `/veto`, `/reject`, `/change <opis>`, `/split` |
+
+**Bezpieczeństwo:**
+
+- Joby z Claude mają tylko prawo odczytu i repo bez poświadczeń git. Zwracają JSON (`--json-schema`) albo patch.
+- Komentarze, etykiety, gałąź, commit, push, PR i check robią osobne joby bez Claude, na podstawie sprawdzonego wyjścia.
+- Implementer nie zmieni plików z `protected_files` ani `.github/`: patch odrzuca skrypt, zanim trafi do repo.
+- Etapy łączy `workflow_dispatch`, bo zdarzenia z `GITHUB_TOKEN` nie uruchamiają innych workflowów. W Etapie 0 zmiany podpisuje `github-actions[bot]`; własna aplikacja GitHub fabryki przyjdzie w Etapie 1.
+- Na taśmę wchodzą tylko zdarzenia od właściciela repo, kont z wejścia `trusted` i workflowów fabryki. Komendy wydaje tylko człowiek.
+- `factory.yml` i perspektywy projektu w recenzji i ocenie pochodzą z gałęzi bazowej.
+
+**Ustawienia** (wejścia w szablonie): `factory_ref` (wersja fabryki; w Etapie 0 `main`), `runs_on` (np. `'["self-hosted", "vps"]'` dla własnego runnera w repo prywatnym), `trusted`, `max_parallel` (recenzenci naraz). Modele bierze z `models` w `factory.yml`, a dzienny limit z `daily_runs` (liczą się uruchomienia etapów przez `workflow_dispatch`).
+
+Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML: Claude bez prawa zapisu, akcje przypięte do commitów, żadnych wyrażeń wklejonych w skrypty, uprawnienia szablonu pokrywają uprawnienia jobów.
+
 ## Struktura repo
 
 ```
@@ -203,6 +228,6 @@ agents/               recenzenci review-<perspektywa>, generowani z skills/revie
 hooks/                hooks.json: blokada chronionych plików, Stop dopiero po zielonych testach
 scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, skład panelu, wyjście agentów, merger
 presets/              warstwy reguł: base, typescript, web, gdscript, godot
-templates/            szablony dla projektów: wywołujące workflowy, przykładowy factory.yml
+templates/            szablony dla projektów: workflow taśmy (templates/workflows/factory.yml), przykładowy factory.yml
 .github/workflows/    wspólne workflowy typu workflow_call
 ```

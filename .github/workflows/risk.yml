@@ -1,0 +1,199 @@
+# Etap oceny ryzyka po recenzji: oceniacz (reguła 2), reguły ryzyka, check factory/risk, etykieta risk:* i raport w PR.
+# W Etapie 0 check jest tylko informacyjny (neutral): fabryka niczego nie scala.
+# Wywołuj w tym samym uruchomieniu co review.yml (needs), bo korzysta z jego artefaktów.
+name: factory-risk
+
+on:
+  workflow_call:
+    inputs:
+      pr: { type: string, required: true }
+      factory_ref: { type: string, default: main }
+      runs_on: { type: string, default: ubuntu-latest }
+      node_version: { type: string, default: '22' }
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: { required: true }
+
+permissions: {}
+
+jobs:
+  assess:
+    runs-on: ${{ fromJSON(startsWith(inputs.runs_on, '[') && inputs.runs_on || format('"{0}"', inputs.runs_on)) }}
+    timeout-minutes: 30
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ inputs.pr }}/head
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Narzędzia fabryki
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+          printf '.factory/work/\n' >> .git/info/exclude
+          echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
+          echo "W=.factory/work" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: factory-review-input
+          path: .factory/work
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: factory-verdict-*
+          merge-multiple: true
+          path: .factory/work/verdicts
+
+      - name: Prompt oceniacza
+        id: data
+        run: |
+          node "$F/scripts/workflow/cli.ts" prompt assess --work "$W" > "$W/prompt.md"
+          {
+            echo "model=$(node "$F/scripts/workflow/cli.ts" model risk_assessor --config "$W/config.json")"
+            echo "schema=$(node "$F/scripts/workflow/cli.ts" schema behavior)"
+            echo "tools=$(node "$F/scripts/workflow/cli.ts" tools read)"
+            echo "denied=$(node "$F/scripts/workflow/cli.ts" denied-tools)"
+            echo "prompt<<FACTORY_EOF"; cat "$W/prompt.md"; echo "FACTORY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Oceniacz ryzyka
+        id: claude
+        uses: anthropics/claude-code-action@402b5b79551e3ce6614c179fbccbfdb79291cead # v1.0.269
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          prompt: ${{ steps.data.outputs.prompt }}
+          claude_args: >-
+            --model ${{ steps.data.outputs.model }}
+            --allowedTools ${{ steps.data.outputs.tools }}
+            --disallowedTools ${{ steps.data.outputs.denied }}
+            --json-schema '${{ steps.data.outputs.schema }}'
+
+      - name: Sprawdzenie oceny
+        env:
+          OUTPUT: ${{ steps.claude.outputs.structured_output }}
+        run: |
+          mkdir -p behavior
+          printf '%s' "$OUTPUT" > "$W/behavior.raw.json"
+          node "$F/scripts/workflow/cli.ts" extract behavior "$W/behavior.raw.json" > behavior/behavior.json
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: factory-behavior
+          path: behavior/
+
+  rules:
+    needs: assess
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ inputs.pr }}/head
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Narzędzia fabryki
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+          printf '.factory/work/\n' >> .git/info/exclude
+          echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
+          echo "W=.factory/work" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: factory-review-input
+          path: .factory/work
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: factory-verdict-*
+          merge-multiple: true
+          path: .factory/work/verdicts
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: factory-ci
+          merge-multiple: true
+          path: .factory/work
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: factory-behavior
+          merge-multiple: true
+          path: .factory/work
+
+      - name: Dowody i reguły ryzyka
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+        run: |
+          BASE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)
+          ROUNDS=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels \
+            --jq '[.labels[].name | select(startswith("factory:round-")) | ltrimstr("factory:round-") | tonumber] | max // 0')
+          node "$F/scripts/workflow/cli.ts" evidence --work "$W" --rounds "$ROUNDS" > "$W/evidence.json"
+          node "$F/scripts/risk-rules.ts" --base "origin/$BASE" --head HEAD --evidence "$W/evidence.json" --json > "$W/assessment.json"
+          node "$F/scripts/workflow/cli.ts" report --assessment "$W/assessment.json" --panel "$W/panel.json" > "$W/report.md"
+          mkdir -p risk && cp "$W/evidence.json" "$W/assessment.json" "$W/report.md" risk/
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: factory-risk
+          path: risk/
+
+  report:
+    needs: rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      checks: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: factory-risk
+          path: risk
+
+      - name: Check factory/risk, etykieta i raport
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ inputs.pr }}
+        run: |
+          SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+          LEVEL=$(jq -r .level risk/assessment.json)
+          LOWER=$(printf '%s' "$LEVEL" | tr '[:upper:]' '[:lower:]')
+          jq -n --arg sha "$SHA" --arg title "Poziom ryzyka: $LEVEL" --rawfile summary risk/report.md \
+            '{name: "factory/risk", head_sha: $sha, status: "completed", conclusion: "neutral", output: {title: $title, summary: $summary}}' \
+            | gh api "repos/$GH_REPO/check-runs" --input - >/dev/null
+          for label in risk:low risk:medium risk:high; do
+            gh label create "$label" --force >/dev/null
+            if [ "$label" != "risk:$LOWER" ]; then gh pr edit "$PR" --remove-label "$label" >/dev/null 2>&1 || true; fi
+          done
+          gh pr edit "$PR" --add-label "risk:$LOWER"
+          ID=$(gh api --paginate "repos/$GH_REPO/issues/$PR/comments" \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- factory:report -->"))) | .id' | tail -n 1)
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$ID" -F body=@risk/report.md >/dev/null
+          else
+            gh pr comment "$PR" --body-file risk/report.md
+          fi

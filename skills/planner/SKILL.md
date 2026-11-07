@@ -46,6 +46,7 @@ Komentarz w issue: krótki plan dla człowieka (podejście, pliki, testy, zało�
 ```
 
 - `decision`: `planned` (plan gotowy), `blocked` (wymaga decyzji właściciela; `questions` nie jest puste) albo `split` (za duże; `sub_issues` ma co najmniej dwa issue z polami `title` i `body`, gdzie `body` to pełny spec).
+- `details`: opcjonalnie plan dla człowieka w Markdown. Gdy taśma działa w GitHub Actions, workflow wstawia go do komentarza.
 - `size`: szacowane linie i pliki kodu produkcyjnego.
 - `expected_level`: `Low`, `Medium` albo `High`.
 

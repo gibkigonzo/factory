@@ -22,7 +22,7 @@ Factory to generyczna fabryka oprogramowania oparta na Claude Code, dla stron WW
 - O merge'u decyduje deterministyczny skrypt (check `factory/risk`), nigdy model. Zasady nie pilnuje posłuszeństwo modelu, tylko GitHub: ruleset na `main` bez wyjątków wymaga zielonego `factory/risk` od GitHub App fabryki. Bez niego nikt nie scali PR, także konto właściciela i model z jego tokenem.
 - Nie scalaj PR-ów, także przez `merge_pull_request` z konektora GitHub, nawet jeśli masz do tego uprawnienia.
 - Wszystkie progi to wartości startowe do kalibracji w trybie cienia.
-- Prywatne projekty właściciela służą tylko jako materiał do analizy. Niczego w nich nie zmieniaj; szczegóły są w `CLAUDE.local.md`.
+- Prywatne projekty właściciela wymienione w `CLAUDE.local.md` służą tylko jako materiał do analizy. Niczego w nich nie zmieniaj. Zakaz nie dotyczy repo testowego fabryki (piaskownicy) ani projektów, które właściciel podłączył do taśmy, np. pilota: w nich fabryka i Claude zakładają i zmieniają issue oraz PR-y.
 - `factory-init`: w dokumencie jest tylko idea. Przebieg sesji ustalamy razem z użytkownikiem. Nie projektuj go sam.
 
 ## Ustalenia
@@ -34,7 +34,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 ### Dystrybucja
 
 - Repo jest marketplace'em pluginu (`.claude-plugin/marketplace.json`, plugin `factory` ze źródłem `./`). Projekty instalują go przez wejścia `plugin_marketplaces` i `plugins` w `claude-code-action`.
-- Wspólne workflowy to `workflow_call`, wywoływane jako `gibkigonzo/factory/.github/workflows/<name>.yml@v1`.
+- Wspólne workflowy to `workflow_call`, wywoływane jako `gibkigonzo/factory/.github/workflows/<name>.yml@v1`. W Etapie 0 projekty używają `@main`; tag `v1` powstanie po Etapie 0.
 - Presety projekt dołącza przez `extends`, a wersje przypina tagami.
 
 ### Godot w CI
@@ -62,6 +62,13 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Dodatkowa perspektywa z `paths` albo `zones` ocenia tylko zmiany, których dotyczy. Skład panelu i reguły ryzyka liczą to tym samym kodem.
 - Najpierw tanie strażniki deterministyczne w CI (rozmiar paczki, Lighthouse, axe), a recenzent LLM dopiero wtedy, gdy projekt go potrzebuje.
 - Sekcja `models` w `factory.yml` ustawia model na każdym etapie; wartości startowe są w `base`.
+
+### Taśma w GitHub Actions (7 listopada 2026)
+
+- Claude działa w jobach tylko z prawem odczytu i zwraca JSON albo patch. Zapisy (komentarze, etykiety, gałąź, PR, check) robią osobne joby bez Claude.
+- Etapy łączy `workflow_dispatch`; w Etapie 0 zmiany podpisuje `github-actions[bot]`, własna aplikacja GitHub fabryki przychodzi w Etapie 1.
+- Taśma zostaje na GitHubie. `runs-on` jest ustawieniem: VPS właściciela podłączymy później jako self-hosted runner, tylko dla repo prywatnych.
+- Repo testowe jest prywatne. Ruleset na `main` w repo prywatnym wymaga GitHub Pro; decyzja przed Etapem 1.
 
 ### Logowanie i pilot (6 listopada 2026)
 
