@@ -1,0 +1,73 @@
+# Komendy właściciela w komentarzu: /approve, /veto, /reject, /change, /split.
+# Działają tylko od właściciela repo i kont z listy `trusted`; konto workflowów nie wydaje komend.
+# Treść komentarza trafia do skryptu wyłącznie przez zmienne środowiskowe.
+name: factory-commands
+
+on:
+  workflow_call:
+    inputs:
+      trusted: { type: string, default: '' }
+      workflow: { type: string, default: factory.yml }
+
+permissions: {}
+
+jobs:
+  command:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      actions: write
+    steps:
+      - name: Komenda
+        id: parse
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+          EXTRA: ${{ inputs.trusted }}
+          BODY: ${{ github.event.comment.body }}
+        run: |
+          if [[ ",$OWNER,$EXTRA," != *",$ACTOR,"* ]]; then
+            echo "::notice::Komendy przyjmuję tylko od właściciela i zaufanych kont; $ACTOR do nich nie należy."
+            exit 0
+          fi
+          FIRST=$(printf '%s\n' "$BODY" | head -n 1 | tr -d '\r')
+          COMMAND=$(sed -nE 's#^/(approve|veto|reject|change|split)([[:space:]].*)?$#\1#p' <<<"$FIRST")
+          echo "command=$COMMAND" >> "$GITHUB_OUTPUT"
+
+      - name: Wykonanie
+        if: steps.parse.outputs.command != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          COMMAND: ${{ steps.parse.outputs.command }}
+          NUMBER: ${{ github.event.issue.number }}
+          IS_PR: ${{ github.event.issue.pull_request != null }}
+          COMMENT: ${{ github.event.comment.id }}
+          WORKFLOW: ${{ inputs.workflow }}
+        run: |
+          DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
+          label() { gh label create "$1" --force >/dev/null; gh issue edit "$NUMBER" --add-label "$1"; }
+          unlabel() { gh issue edit "$NUMBER" --remove-label "$1" >/dev/null 2>&1 || true; }
+          case "$COMMAND" in
+            approve) label factory:approved; unlabel veto ;;
+            veto) label veto; unlabel factory:approved ;;
+            reject)
+              label rejected
+              if [ "$IS_PR" = true ]; then gh pr close "$NUMBER" --comment "Odrzucone komendą /reject."; fi
+              ;;
+            change)
+              if [ "$IS_PR" != true ]; then gh issue comment "$NUMBER" --body "/change działa tylko w PR."; exit 0; fi
+              ISSUE=$(gh pr view "$NUMBER" --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty')
+              if [ -z "$ISSUE" ]; then gh pr comment "$NUMBER" --body "Nie znalazłem issue, które ten PR zamyka."; exit 0; fi
+              gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=implement -f issue="$ISSUE" -f pr="$NUMBER" -f note="$COMMENT"
+              ;;
+            split)
+              if [ "$IS_PR" = true ]; then gh pr comment "$NUMBER" --body "/split działa w issue, nie w PR."; exit 0; fi
+              label split
+              gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=plan -f issue="$NUMBER" -f note=split
+              ;;
+          esac
+          gh api "repos/$GH_REPO/issues/comments/$COMMENT/reactions" -f content=eyes >/dev/null

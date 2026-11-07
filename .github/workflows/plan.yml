@@ -1,0 +1,182 @@
+# Etap planu: issue z etykietą `ready` → plan w komentarzu i etykieta `planned`, `blocked` albo `split`.
+# Claude działa tylko z prawem odczytu i zwraca JSON. Komentarz, etykiety i uruchomienie implementera
+# robi osobny job bez Claude, na podstawie sprawdzonego planu.
+name: factory-plan
+
+on:
+  workflow_call:
+    inputs:
+      issue: { type: string, required: true }
+      note: { type: string, default: '' }
+      factory_ref: { type: string, default: main }
+      runs_on: { type: string, default: ubuntu-latest }
+      node_version: { type: string, default: '22' }
+      trusted: { type: string, default: '', description: 'Dodatkowe zaufane konta, po przecinku' }
+      workflow: { type: string, default: factory.yml, description: 'Plik workflowu projektu, który wywołuje fabrykę' }
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: { required: true }
+
+permissions: {}
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      ok: ${{ steps.trust.outputs.ok }}
+    steps:
+      - id: trust
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+          EXTRA: ${{ inputs.trusted }}
+        run: |
+          if [[ ",$OWNER,github-actions[bot],$EXTRA," == *",$ACTOR,"* ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Konto $ACTOR nie jest na liście zaufanych; taśma pomija to zdarzenie."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  plan:
+    needs: guard
+    if: needs.guard.outputs.ok == 'true'
+    runs-on: ${{ fromJSON(startsWith(inputs.runs_on, '[') && inputs.runs_on || format('"{0}"', inputs.runs_on)) }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: read
+      actions: read
+    outputs:
+      plan: ${{ steps.result.outputs.plan }}
+      wip_limit: ${{ steps.data.outputs.wip_limit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Narzędzia fabryki
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+          mkdir -p .factory/work && echo ".factory/work/" >> .git/info/exclude
+          echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
+          echo "W=.factory/work" >> "$GITHUB_ENV"
+
+      - name: Dane dla planera
+        id: data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ inputs.issue }}
+          NOTE: ${{ inputs.note }}
+        run: |
+          node "$F/scripts/config/cli.ts" factory.yml --json > "$W/config.json"
+          gh issue view "$ISSUE" --json title,body --jq '"# " + .title + "\n\n" + .body' > "$W/issue.md"
+          node "$F/scripts/workflow/cli.ts" prompt plan --work "$W" --issue "$ISSUE" > "$W/prompt.md"
+          if [ "$NOTE" = split ]; then
+            printf '\nWłaściciel poprosił o podział tego zadania komendą /split. Zaproponuj decyzję split.\n' >> "$W/prompt.md"
+          fi
+          {
+            echo "wip_limit=$(jq .wip_limit "$W/config.json")"
+            echo "model=$(node "$F/scripts/workflow/cli.ts" model planner --config "$W/config.json")"
+            echo "schema=$(node "$F/scripts/workflow/cli.ts" schema plan)"
+            echo "tools=$(node "$F/scripts/workflow/cli.ts" tools read)"
+            echo "denied=$(node "$F/scripts/workflow/cli.ts" denied-tools)"
+            echo "prompt<<FACTORY_EOF"; cat "$W/prompt.md"; echo "FACTORY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Planer
+        id: claude
+        uses: anthropics/claude-code-action@402b5b79551e3ce6614c179fbccbfdb79291cead # v1.0.269
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          allowed_bots: github-actions[bot]   # kolejne etapy uruchamia workflow_dispatch od github-actions
+          prompt: ${{ steps.data.outputs.prompt }}
+          claude_args: >-
+            --model ${{ steps.data.outputs.model }}
+            --allowedTools ${{ steps.data.outputs.tools }}
+            --disallowedTools ${{ steps.data.outputs.denied }}
+            --json-schema '${{ steps.data.outputs.schema }}'
+
+      - name: Sprawdzenie planu
+        id: result
+        env:
+          OUTPUT: ${{ steps.claude.outputs.structured_output }}
+        run: |
+          printf '%s' "$OUTPUT" > "$W/plan.raw.json"
+          node "$F/scripts/workflow/cli.ts" extract plan "$W/plan.raw.json" > "$W/plan.json"
+          { echo "plan<<FACTORY_EOF"; cat "$W/plan.json"; echo "FACTORY_EOF"; } >> "$GITHUB_OUTPUT"
+
+  apply:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: factory
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - run: npm ci --prefix factory --omit=dev --no-audit --no-fund
+
+      - name: Komentarz, etykiety i następny etap
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.issue }}
+          PLAN: ${{ needs.plan.outputs.plan }}
+          LIMIT: ${{ needs.plan.outputs.wip_limit }}
+          WORKFLOW: ${{ inputs.workflow }}
+        run: |
+          printf '%s' "$PLAN" > plan.json
+          DECISION=$(jq -r .decision plan.json)
+          DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
+          for label in ready planned blocked split; do gh label create "$label" --force >/dev/null; done
+
+          NOTE=""
+          if [ "$DECISION" = planned ]; then
+            OPEN=$(gh pr list --state open --json headRefName --jq '[.[] | select(.headRefName | startswith("factory/"))] | length')
+            if [ "$OPEN" -ge "$LIMIT" ]; then
+              NOTE="Kolejka jest pełna ($OPEN z $LIMIT zadań w toku). Implementer ruszy, gdy uruchomisz etap implement ręcznie."
+            fi
+          fi
+          node factory/scripts/workflow/cli.ts plan-comment --plan plan.json --note "$NOTE" > comment.md
+          gh issue comment "$ISSUE" --body-file comment.md
+          gh issue edit "$ISSUE" --remove-label ready >/dev/null 2>&1 || true
+
+          case "$DECISION" in
+            planned)
+              gh issue edit "$ISSUE" --add-label planned
+              if [ -z "$NOTE" ]; then gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=implement -f issue="$ISSUE"; fi
+              ;;
+            blocked)
+              gh issue edit "$ISSUE" --add-label blocked
+              ;;
+            split)
+              gh issue edit "$ISSUE" --add-label split
+              jq -c '.sub_issues[]' plan.json | while read -r sub; do
+                jq -r .body <<<"$sub" > sub.md
+                URL=$(gh issue create --title "$(jq -r .title <<<"$sub")" --body-file sub.md)
+                ID=$(gh api "repos/$GH_REPO/issues/${URL##*/}" --jq .id)
+                gh api "repos/$GH_REPO/issues/$ISSUE/sub_issues" -F sub_issue_id="$ID" >/dev/null
+              done
+              ;;
+          esac

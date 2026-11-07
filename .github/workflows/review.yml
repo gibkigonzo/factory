@@ -1,0 +1,240 @@
+# Etap recenzji PR z gałęzi factory/*: komendy z factory.yml (CI), skład panelu i recenzenci równolegle.
+# Recenzenci mają tylko narzędzia do odczytu i repo bez poświadczeń. Werdykty trafiają do artefaktów,
+# a ocenę ryzyka liczy risk.yml w tym samym uruchomieniu.
+name: factory-review
+
+on:
+  workflow_call:
+    inputs:
+      pr: { type: string, required: true }
+      factory_ref: { type: string, default: main }
+      runs_on: { type: string, default: ubuntu-latest }
+      node_version: { type: string, default: '22' }
+      trusted: { type: string, default: '' }
+      max_parallel: { type: string, default: '3', description: 'Ilu recenzentów naraz' }
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: { required: true }
+    outputs:
+      ok:
+        value: ${{ jobs.guard.outputs.ok }}
+
+permissions: {}
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      ok: ${{ steps.trust.outputs.ok }}
+    steps:
+      - id: trust
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+          EXTRA: ${{ inputs.trusted }}
+        run: |
+          if [[ ",$OWNER,github-actions[bot],$EXTRA," == *",$ACTOR,"* ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Konto $ACTOR nie jest na liście zaufanych; taśma pomija to zdarzenie."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  ci:
+    needs: guard
+    if: needs.guard.outputs.ok == 'true'
+    runs-on: ${{ fromJSON(startsWith(inputs.runs_on, '[') && inputs.runs_on || format('"{0}"', inputs.runs_on)) }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ inputs.pr }}/head
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Narzędzia fabryki
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+          mkdir -p .factory/work && printf '.factory/work/\n' >> .git/info/exclude
+          echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
+          echo "W=.factory/work" >> "$GITHUB_ENV"
+          corepack enable || true
+
+      - name: factory.yml z bazy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+        run: |
+          BASE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)
+          mkdir -p "$RUNNER_TEMP/base"
+          git archive "origin/$BASE" factory.yml .factory/perspectives 2>/dev/null | tar -x -C "$RUNNER_TEMP/base" \
+            || git show "origin/$BASE:factory.yml" > "$RUNNER_TEMP/base/factory.yml"
+          node "$F/scripts/config/cli.ts" "$RUNNER_TEMP/base/factory.yml" --json > "$W/config.json"
+
+      - name: Komendy z factory.yml
+        run: node "$F/scripts/workflow/cli.ts" ci --config "$W/config.json" --out "$W/ci.json"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: factory-ci
+          path: .factory/work/ci.json
+          include-hidden-files: true
+
+  panel:
+    needs: guard
+    if: needs.guard.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    outputs:
+      matrix: ${{ steps.panel.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ inputs.pr }}/head
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Narzędzia fabryki
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+          mkdir -p .factory/work/artifacts && printf '.factory/work/\n' >> .git/info/exclude
+          echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
+          echo "W=.factory/work" >> "$GITHUB_ENV"
+
+      - name: Skład panelu i dane dla recenzentów
+        id: panel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+        run: |
+          BASE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)
+          mkdir -p "$RUNNER_TEMP/base"
+          git archive "origin/$BASE" factory.yml .factory/perspectives 2>/dev/null | tar -x -C "$RUNNER_TEMP/base" \
+            || git show "origin/$BASE:factory.yml" > "$RUNNER_TEMP/base/factory.yml"
+          node "$F/scripts/config/cli.ts" "$RUNNER_TEMP/base/factory.yml" --json > "$W/config.json"
+          node "$F/scripts/review/panel.ts" --base "origin/$BASE" --head HEAD --out "$W" > "$W/panel.json"
+          git diff --no-color -M "$(git merge-base "origin/$BASE" HEAD)" HEAD > "$W/diff.patch"
+          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$W/pr.md"
+          gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body \
+            | node "$F/scripts/workflow/cli.ts" find-implementation --pr "$PR" > "$W/implementation.json"
+          ISSUE=$(jq -r .issue "$W/implementation.json")
+          gh issue view "$ISSUE" --repo "$GITHUB_REPOSITORY" --json title,body --jq '"# " + .title + "\n\n" + .body' > "$W/spec.md"
+          echo "matrix=$(jq -c .run "$W/panel.json")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: factory-review-input
+          path: .factory/work
+          include-hidden-files: true
+
+  reviewer:
+    needs: panel
+    if: needs.panel.outputs.matrix != '' && needs.panel.outputs.matrix != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(inputs.max_parallel) }}
+      matrix:
+        member: ${{ fromJSON(needs.panel.outputs.matrix) }}
+    name: reviewer (${{ matrix.member.name }})
+    runs-on: ${{ fromJSON(startsWith(inputs.runs_on, '[') && inputs.runs_on || format('"{0}"', inputs.runs_on)) }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ inputs.pr }}/head
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Narzędzia fabryki
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+          printf '.factory/work/\n' >> .git/info/exclude
+          echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
+          echo "W=.factory/work" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: factory-review-input
+          path: .factory/work
+
+      - name: Prompt recenzenta
+        id: data
+        env:
+          AGENT: ${{ matrix.member.agent }}
+          CRITERIA: ${{ matrix.member.criteria }}
+        run: |
+          ARGS=(--work "$W" --agent "$AGENT")
+          if [ -n "$CRITERIA" ]; then ARGS+=(--criteria "$CRITERIA"); fi
+          node "$F/scripts/workflow/cli.ts" prompt review "${ARGS[@]}" > "$W/prompt.md"
+          {
+            echo "schema=$(node "$F/scripts/workflow/cli.ts" schema verdict)"
+            echo "tools=$(node "$F/scripts/workflow/cli.ts" tools read)"
+            echo "denied=$(node "$F/scripts/workflow/cli.ts" denied-tools)"
+            echo "prompt<<FACTORY_EOF"; cat "$W/prompt.md"; echo "FACTORY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Recenzent
+        id: claude
+        uses: anthropics/claude-code-action@402b5b79551e3ce6614c179fbccbfdb79291cead # v1.0.269
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          allowed_bots: github-actions[bot]   # kolejne etapy uruchamia workflow_dispatch od github-actions
+          prompt: ${{ steps.data.outputs.prompt }}
+          claude_args: >-
+            --model ${{ matrix.member.model }}
+            --allowedTools ${{ steps.data.outputs.tools }}
+            --disallowedTools ${{ steps.data.outputs.denied }}
+            --json-schema '${{ steps.data.outputs.schema }}'
+
+      - name: Sprawdzenie werdyktu
+        env:
+          OUTPUT: ${{ steps.claude.outputs.structured_output }}
+          NAME: ${{ matrix.member.name }}
+        run: |
+          mkdir -p verdict
+          printf '%s' "$OUTPUT" > "$W/verdict.raw.json"
+          node "$F/scripts/workflow/cli.ts" extract verdict "$W/verdict.raw.json" > "verdict/$NAME.json"
+          if [ "$(jq -r .perspective "verdict/$NAME.json")" != "$NAME" ]; then
+            echo "::error::Werdykt dotyczy innej perspektywy niż $NAME."
+            exit 1
+          fi
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: factory-verdict-${{ matrix.member.name }}
+          path: verdict/

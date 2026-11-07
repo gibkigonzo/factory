@@ -27,6 +27,7 @@ export const PLAN_SPEC: Spec = {
   fields: {
     decision: { kind: 'enum', values: ['planned', 'blocked', 'split'] },
     summary: text,
+    details: text,
     size: { kind: 'object', fields: { lines: count, files: count }, required: ['lines', 'files'] },
     files: texts,
     expected_level: { kind: 'enum', values: LEVELS },
@@ -47,6 +48,7 @@ export const IMPLEMENTATION_SPEC: Spec = {
   kind: 'object',
   fields: {
     issue: { kind: 'integer', min: 1 },
+    summary: text,
     bugfix: { kind: 'boolean' },
     regression_test: text,
     acceptance: { kind: 'list', item: CRITERION },
