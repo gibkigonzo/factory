@@ -71,6 +71,26 @@ describe('dowody dla reguł ryzyka', () => {
     assert.equal(evidence.review_rounds, 1);
   });
 
+  it('końcowy dopisek w nawiasie, np. „(test)”, nie gubi dowodu', () => {
+    const proof = (criterion: string) => ({ issue: 1, bugfix: false, acceptance: [{ criterion, evidence: 'test: a' }], assumptions: [] });
+    const spec = { acceptance: ['O 9:05 godzina ma postać „09:05” (test)', 'Build przechodzi'] };
+    assert.deepEqual(buildEvidence({ spec, implementation: proof('O 9:05 godzina ma postać „09:05”'), reviews: [], rounds: 0 }).acceptance, [
+      { criterion: 'O 9:05 godzina ma postać „09:05” (test)', evidence: 'test: a' },
+      { criterion: 'Build przechodzi' },
+    ]);
+    const plain = { acceptance: ['Build przechodzi'] };
+    assert.equal(buildEvidence({ spec: plain, implementation: proof('Build przechodzi (CI)'), reviews: [], rounds: 0 }).acceptance?.[0]?.evidence, 'test: a');
+  });
+
+  it('dwuznaczny dopisek niczego nie dopasowuje: jeden dowód nie zalicza dwóch kryteriów', () => {
+    const spec = { acceptance: ['Przycisk jest niebieski (desktop)', 'Przycisk jest niebieski (mobile)'] };
+    const implementation = { issue: 1, bugfix: false, acceptance: [{ criterion: 'Przycisk jest niebieski', evidence: 'zrzut: a.png' }], assumptions: [] };
+    assert.deepEqual(buildEvidence({ spec, implementation, reviews: [], rounds: 0 }).acceptance, [
+      { criterion: 'Przycisk jest niebieski (desktop)' },
+      { criterion: 'Przycisk jest niebieski (mobile)' },
+    ]);
+  });
+
   it('brak wyniku CI nie udaje sukcesu', () => {
     assert.equal(buildEvidence({ spec: parseSpec(SPEC), reviews: [], rounds: 0 }).ci, undefined);
   });

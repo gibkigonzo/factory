@@ -2,7 +2,7 @@
 // Kryteria akceptacji pochodzą ze specu w issue; implementer podaje tylko dowody do nich.
 
 import type { Evidence, Review } from '../risk/types.ts';
-import { normalizeCriterion } from './spec.ts';
+import { looseCriterion, normalizeCriterion } from './spec.ts';
 import type { IssueSpec } from './spec.ts';
 
 export interface CiResult {
@@ -27,10 +27,23 @@ export interface EvidenceInputs {
   rounds: number;
 }
 
+/** Mapa klucz → element tylko dla kluczy, które występują raz. Dwuznaczny klucz niczego nie dopasowuje. */
+function unique<T>(items: readonly T[], key: (item: T) => string): Map<string, T> {
+  const counts = new Map<string, number>();
+  for (const item of items) counts.set(key(item), (counts.get(key(item)) ?? 0) + 1);
+  return new Map(items.filter((item) => counts.get(key(item)) === 1).map((item) => [key(item), item]));
+}
+
 function acceptance(spec: IssueSpec, implementation?: Implementation): NonNullable<Evidence['acceptance']> {
-  const proofs = new Map((implementation?.acceptance ?? []).map((a) => [normalizeCriterion(a.criterion), a.evidence]));
+  const proofs = implementation?.acceptance ?? [];
+  const exact = new Map(proofs.map((a) => [normalizeCriterion(a.criterion), a.evidence]));
+  // Bez końcowego dopisku w nawiasie, np. „(test)”, ale tylko gdy dopasowanie jest jednoznaczne po obu stronach:
+  // „przycisk (desktop)” i „przycisk (mobile)” nadal wymagają osobnych dowodów.
+  const loose = unique(proofs, (a) => looseCriterion(a.criterion));
+  const specLoose = unique(spec.acceptance, looseCriterion);
   return spec.acceptance.map((criterion) => {
-    const evidence = proofs.get(normalizeCriterion(criterion));
+    const key = looseCriterion(criterion);
+    const evidence = exact.get(normalizeCriterion(criterion)) ?? (specLoose.has(key) ? loose.get(key)?.evidence : undefined);
     return evidence ? { criterion, evidence } : { criterion };
   });
 }

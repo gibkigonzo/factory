@@ -63,6 +63,7 @@ describe('spec-writer i format specu', () => {
     const spec = parseSpec(blocks[1]!);
     assert.ok(spec.acceptance.length >= 2 && spec.acceptance.length <= 6, `${spec.acceptance.length} kryteriów`);
     assert.equal(spec.productRisk, 'low');
+    for (const criterion of spec.acceptance) assert.doesNotMatch(criterion, /\)\s*$/, 'kryterium bez dopisku, czym je sprawdzić');
   });
 
   it('reguła dla CLAUDE.md projektu kieruje pomysły do spec-writera i taśmy', () => {
