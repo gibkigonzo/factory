@@ -112,7 +112,7 @@ Reguły mają trzy warstwy: wspólne `base`, presety języka i frameworka oraz `
   plugins: factory@factory
   ```
 
-  W sesjach Claude Code w repo projektu, także z telefonu: [`templates/claude/settings.json`](templates/claude/settings.json) skopiowany do `.claude/settings.json`. Ręcznie: `/plugin marketplace add gibkigonzo/factory`, potem `/plugin install factory@factory`.
+  Lokalnie: `/plugin marketplace add gibkigonzo/factory`, potem `/plugin install factory@factory`. Sesje Claude Code w chmurze (także z telefonu) nie instalują pluginów z ustawień repo, więc skille potrzebne tam, jak `spec-writer`, projekt trzyma w `.claude/skills/`.
 - **Workflowy.** Wspólne workflowy działają przez `workflow_call`:
   `uses: gibkigonzo/factory/.github/workflows/<name>.yml@v1`. Mogą je wywoływać także repozytoria prywatne.
 - **Kontrakt.** Projekt dodaje `factory.yml` z `extends: [base, <język>, <framework>]`. Wersje presetów przypina tagami.
@@ -222,7 +222,12 @@ Spec pisze skill `spec-writer` w rozmowie z Claude. Zadaje najwyżej 5 pytań o 
 
 Spec ma sekcje: Cel, Scenariusz, Kryteria akceptacji (sprawdzalne maszynowo), Poza zakresem, Założenia, Ryzyko produktowe (`niskie` albo `wysokie`) i Projekt. Szablon i przykład są w [`skills/spec-writer/SKILL.md`](skills/spec-writer/SKILL.md). Test pilnuje, żeby szablon, przykład i planer znały te same sekcje (`SPEC_SECTIONS` w `scripts/workflow/spec.ts`).
 
-**Domyślnie: Claude Code.** Skill dostarcza fabryka jako plugin. Projekt kopiuje [`templates/claude/settings.json`](templates/claude/settings.json) do `.claude/settings.json`, a każda sesja Claude Code w repo projektu ma skille fabryki w wersji z `main`. Z telefonu: zakładka Code w aplikacji Claude, sesja na repo projektu i np. „Mam pomysł: …”.
+**Domyślnie: sesja Claude Code w repo projektu.** Z telefonu: zakładka Code w aplikacji Claude, nowa sesja na repo projektu i np. „Mam pomysł: …”. Projekt ma do tego dwie rzeczy:
+
+1. kopię skilla: katalog [`skills/spec-writer/`](skills/spec-writer/) jako `.claude/skills/spec-writer/`. Sesje w chmurze czytają skille z checkoutu repo, a pluginów z `.claude/settings.json` nie instalują (sprawdzone w repo testowym 7 listopada 2026);
+2. regułę z [`templates/claude/CLAUDE.md`](templates/claude/CLAUDE.md) w `CLAUDE.md` projektu: pomysł idzie do spec-writera i issue, a nie do implementacji w sesji. Bez niej sesja Code od razu koduje.
+
+Po zmianie skilla w fabryce kopię w projekcie trzeba podmienić. To zmiana w strefie `factory`, więc zatwierdzasz ją Ty.
 
 **Opcjonalnie: zwykły czat w aplikacji Claude.** Rozmowa startuje szybciej, ale skille w czacie są przypisane do konta, więc fabryka ich tam nie wgra. Robisz to sam, raz i ponownie po każdej zmianie skilla:
 
@@ -281,7 +286,7 @@ Projekt nadpisuje w `factory.yml` tylko to, co chce zmienić, np. `models.review
 Projekt podłącza taśmę w czterech krokach:
 
 1. kopiuje [`templates/workflows/factory.yml`](templates/workflows/factory.yml) do `.github/workflows/factory.yml`;
-2. kopiuje [`templates/claude/settings.json`](templates/claude/settings.json) do `.claude/settings.json`, żeby sesje Claude Code w projekcie miały skille fabryki, np. `spec-writer`;
+2. kopiuje [`skills/spec-writer/`](skills/spec-writer/) do `.claude/skills/spec-writer/` i dopisuje [`templates/claude/CLAUDE.md`](templates/claude/CLAUDE.md) do `CLAUDE.md` projektu, żeby spec powstawał w sesji Claude Code, także z telefonu;
 3. dodaje sekret `CLAUDE_CODE_OAUTH_TOKEN` (Settings → Secrets and variables → Actions);
 4. w Settings → Actions → General → Workflow permissions zaznacza „Allow GitHub Actions to create and approve pull requests”, bez czego workflow nie otworzy PR.
 
@@ -320,6 +325,6 @@ agents/               recenzenci review-<perspektywa>, generowani z skills/revie
 hooks/                hooks.json: blokada chronionych plików, Stop dopiero po zielonych testach
 scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, skład panelu, wyjście agentów, merger
 presets/              warstwy reguł: base, typescript, web, gdscript, godot
-templates/            szablony dla projektów: workflow taśmy (templates/workflows/factory.yml), ustawienia Claude Code z pluginem (templates/claude/settings.json), przykładowy factory.yml
+templates/            szablony dla projektów: workflow taśmy (templates/workflows/factory.yml), reguła dla CLAUDE.md projektu (templates/claude/CLAUDE.md), przykładowy factory.yml
 .github/workflows/    wspólne workflowy typu workflow_call
 ```
