@@ -7,7 +7,7 @@ import { parseArgs } from 'node:util';
 import { isOutputKind, OUTPUTS, parseOutput } from '../agents/output.ts';
 import type { FactoryConfig } from '../config/spec.ts';
 import type { Assessment, Evidence, Review } from '../risk/types.ts';
-import { collectRecords } from '../shadow/collect.ts';
+import { collectRecords, factoryIssues } from '../shadow/collect.ts';
 import { shadowComment, shadowRecord } from '../shadow/comment.ts';
 import { renderJournal } from '../shadow/journal.ts';
 import { runCommands } from './ci.ts';
@@ -136,6 +136,8 @@ function run(command: string | undefined, rest: string[]): string {
       const updated = `${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`;
       return renderJournal(collectRecords(required(v.raw, '--raw'), owners, cfg.shadow.revert_days), cfg, updated);
     }
+    case 'journal-issues':
+      return factoryIssues(required(v.raw, '--raw')).join('\n');
     case 'find-plan':
       return marked('plan', v);
     case 'find-implementation':

@@ -47,7 +47,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          mkdir -p "$RAW/comments" "$RAW/reactions" "$RAW/events"
+          mkdir -p "$RAW/comments" "$RAW/reactions" "$RAW/events" "$RAW/issues"
           gh pr list --state all --limit 1000 \
             --json number,title,state,createdAt,mergedAt,closedAt,headRefName,isCrossRepository,labels,mergeCommit,closingIssuesReferences \
             > "$RAW/prs.json"
@@ -62,11 +62,18 @@ jobs:
                 --jq '.[] | {content, user: {login: .user.login}, created_at}' | jq -s . > "$RAW/reactions/$ID.json"
             done
           done
-          for ISSUE in $(jq -r "$FACTORY | .closingIssuesReferences[0].number // empty" "$RAW/prs.json" | sort -u); do
+          # Numery issue liczy skrypt: z nazwy gałęzi factory/<numer>-…, a w zapasie z powiązań PR.
+          for ISSUE in $(node "$F/scripts/workflow/cli.ts" journal-issues --raw "$RAW"); do
             gh api --paginate "repos/$GH_REPO/issues/$ISSUE/events" \
               --jq '.[] | select(.event == "labeled") | {event, label: {name: .label.name}, created_at}' \
               | jq -s . > "$RAW/events/$ISSUE.json"
+            gh api "repos/$GH_REPO/issues/$ISSUE" --jq '{created_at}' > "$RAW/issues/$ISSUE.json"
           done
+          {
+            echo "Dane dziennika: PR-y fabryki $(jq "[$FACTORY] | length" "$RAW/prs.json"), issue $(ls "$RAW/issues" | wc -l),"
+            echo "zdarzenia ready $(cat "$RAW"/events/*.json 2>/dev/null | jq -s '[.[][] | select(.label.name == "ready")] | length')."
+            echo
+          } >> "$GITHUB_STEP_SUMMARY"
           git log --grep='This reverts commit' --format='%x1e%cI%x09%B' HEAD > "$RAW/reverts.txt"
 
       - name: Dziennik

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { configWith } from '../risk/fixtures.ts';
 import type { Assessment } from '../risk/types.ts';
-import { collectRecords, parseReverts } from './collect.ts';
+import { collectRecords, factoryIssues, issueOf, parseReverts } from './collect.ts';
 import type { PrRecord } from './collect.ts';
 import { parseShadow, shadowComment, shadowRecord, SHADOW_MARKER } from './comment.ts';
 import type { ShadowRecord } from './comment.ts';
@@ -114,7 +114,12 @@ describe('dane z GitHuba', () => {
     },
     { number: 12, title: 'nie z fabryki', state: 'OPEN', createdAt: '2026-11-01T09:00:00Z', headRefName: 'feature/x' },
     { number: 13, title: 'z forka', state: 'OPEN', createdAt: '2026-11-01T09:00:00Z', headRefName: 'factory/9-x', isCrossRepository: true },
+    {
+      number: 14, title: 'bez powiązań po merge', state: 'MERGED', createdAt: '2026-11-04T09:00:00Z',
+      mergedAt: '2026-11-04T12:00:00Z', headRefName: 'factory/7-bez-powiazan', closingIssuesReferences: [],
+    },
   ]);
+  write('issues/7.json', { created_at: '2026-11-04T08:00:00Z' });
   write('comments/10.json', [comment(1, { ...low, level: 'Medium', action: 'veto-window' }), comment(2, low), comment(3, high, 'mallory')]);
   write('comments/11.json', [comment(4, high)]);
   write('reactions/2.json', [
@@ -130,8 +135,9 @@ describe('dane z GitHuba', () => {
   write('reverts.txt', '\x1e2026-11-05T09:00:00Z\tRevert "Low cofnięty"\n\nThis reverts commit abcdef1.\n');
 
   it('bierze tylko PR-y fabryki z tego repo, ostatni werdykt bota i ostatnią reakcję właściciela', () => {
-    const [ten, eleven, ...rest] = collectRecords(dir, ['owner'], 7).sort((a, b) => a.number - b.number);
+    const [ten, eleven, fourteen, ...rest] = collectRecords(dir, ['owner'], 7).sort((a, b) => a.number - b.number);
     assert.equal(rest.length, 0);
+    assert.equal(fourteen!.number, 14);
     assert.deepEqual(ten, {
       number: 10, title: 'Low cofnięty', state: 'merged', createdAt: '2026-11-01T09:00:00Z',
       mergedAt: '2026-11-02T12:00:00Z', closedAt: '2026-11-02T12:00:00Z', readyAt: '2026-10-31T08:00:00Z',
@@ -140,6 +146,17 @@ describe('dane z GitHuba', () => {
     assert.equal(eleven!.state, 'closed');
     assert.equal(eleven!.shadow?.record.action, 'escalate');
     assert.equal(eleven!.shadow?.reaction, undefined);
+  });
+
+  it('issue bierze z nazwy gałęzi; bez zdarzenia ready liczy od założenia issue', () => {
+    assert.equal(issueOf({ headRefName: 'factory/12-menu', closingIssuesReferences: [{ number: 3 }] }), 12);
+    assert.equal(issueOf({ headRefName: 'factory/menu', closingIssuesReferences: [{ number: 3 }] }), 3);
+    assert.equal(issueOf({ headRefName: 'factory/menu' }), undefined);
+    assert.deepEqual(factoryIssues(dir), [1, 2, 7]);
+    const fourteen = collectRecords(dir, ['owner'], 7).find((r) => r.number === 14);
+    assert.equal(fourteen?.readyAt, '2026-11-04T08:00:00Z');
+    // #10: od ready 31.10 8:00 do merge'u 2.11 12:00 to 52 h; #14: od założenia 8:00 do 12:00 to 4 h.
+    assert.equal(computeMetrics(collectRecords(dir, ['owner'], 7), config).medianHoursToMerge, (52 + 4) / 2);
   });
 
   it('revert po oknie revert_days się nie liczy', () => {
@@ -251,6 +268,8 @@ describe('dziennik', () => {
       const result = spawnSync(process.execPath, [cli, 'journal', '--raw', dir, '--config', join(dir, 'config.json'), '--owners', 'owner,'], { encoding: 'utf8' });
       assert.equal(result.status, 0, result.stderr);
       assert.match(result.stdout, /- #5 Stopka · bez werdyktu · otwarty/);
+      const issues = spawnSync(process.execPath, [cli, 'journal-issues', '--raw', dir], { encoding: 'utf8' });
+      assert.equal(issues.stdout.trim(), '5', issues.stderr);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
