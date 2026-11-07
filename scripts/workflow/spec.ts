@@ -43,3 +43,8 @@ export function parseSpec(body: string): IssueSpec {
 export function normalizeCriterion(text: string): string {
   return text.trim().replace(/\s+/g, ' ').toLowerCase();
 }
+
+/** Kryterium bez końcowego dopisku w nawiasie, np. „(test)”. Agenci często go dopisują albo przy przepisywaniu pomijają. */
+export function looseCriterion(text: string): string {
+  return normalizeCriterion(text.replace(/\s*\([^()]*\)\s*$/, ''));
+}

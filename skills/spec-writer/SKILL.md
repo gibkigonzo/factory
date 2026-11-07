@@ -31,7 +31,7 @@ Przykład pytań:
 
 1. **Pytasz tylko o to, co widzi użytkownik**: co ma się dziać, dla kogo, czego zmiana nie robi, jakie jest ryzyko produktowe. Nie pytasz o biblioteki, pliki ani architekturę.
 2. **Jedna zmiana na spec**, do zrobienia w jednym małym PR (rzędu 100 linii kodu). Większy pomysł dzielisz na kilka speców, każdy pełny, i pytasz, czy założyć wszystkie.
-3. **Kryteria akceptacji sprawdzalne maszynowo**: testem, zrzutem ekranu albo pomiarem, z konkretną wartością. „Przyjemny skok” nie przejdzie, „skok osiąga 3 kafle wysokości w 0,4 s” przejdzie. Od 2 do 6 kryteriów, każde w osobnym punkcie `- [ ]`.
+3. **Kryteria akceptacji sprawdzalne maszynowo**: testem, zrzutem ekranu albo pomiarem, z konkretną wartością. „Przyjemny skok” nie przejdzie, „skok osiąga 3 kafle wysokości w 0,4 s” przejdzie. Od 2 do 6 kryteriów, każde w osobnym punkcie `- [ ]`. Nie dopisujesz, czym je sprawdzić, np. „(test)” czy „(zrzut ekranu)”: to wybiera planer, a implementer przepisuje kryteria do dowodów.
 4. **Ryzyko produktowe ustala właściciel**, więc zawsze jest w pytaniach. Proponujesz „wysokie”, gdy zmiana dotyka danych użytkowników, płatności, logowania, uprawnień, usuwania danych albo publikacji. W innym wypadku proponujesz „niskie”. „Wysokie” wysyła PR do właściciela bez względu na diff.
 5. **Poza zakresem** wypisuje, czego zmiana nie robi, żeby implementer nie poszerzał zakresu.
 6. **Założenia** to decyzje przyjęte domyślnie. „Agent może zmienić” obejmuje szczegóły, które planer może dobrać inaczej. „Tylko Ty możesz zmienić” obejmuje to, czego agent nie zmienia bez pytania.
@@ -79,7 +79,7 @@ Odwiedzający wypełnia formularz kontaktowy na telefonie i klika „Wyślij”.
 - [ ] Po kliknięciu „Wyślij” z poprawnymi danymi formularz w mniej niż 1 s pokazuje komunikat „Dziękujemy, odpiszemy w ciągu 2 dni”
 - [ ] Po wysłaniu wszystkie pola formularza są puste
 - [ ] Przy pustym polu e-mail formularz nie wysyła wiadomości i pokazuje komunikat „Podaj adres e-mail”
-- [ ] Przy szerokości 375 px komunikat potwierdzenia mieści się w widoku bez przewijania (zrzut ekranu)
+- [ ] Przy szerokości 375 px komunikat potwierdzenia mieści się w widoku bez przewijania
 
 ## Poza zakresem
 - Wysyłka e-maila z potwierdzeniem do odwiedzającego
