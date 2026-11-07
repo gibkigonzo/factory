@@ -216,10 +216,14 @@ jobs:
           DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -z "$PR" ]; then git checkout -b "$BRANCH"; fi
           git apply --index "$RUNNER_TEMP/change/change.patch"
           git commit -m "factory: $TITLE (#$ISSUE)"
-          git push origin "HEAD:$BRANCH"
+          if [ -z "$PR" ]; then
+            # Nowa gałąź factory/* należy do taśmy; po nieudanej próbie nadpisujemy ją bez otwartego PR.
+            git push --force origin "HEAD:refs/heads/$BRANCH"
+          else
+            git push origin "HEAD:$BRANCH"
+          fi
 
           printf '%s' "$IMPLEMENTATION" > "$RUNNER_TEMP/implementation.json"
           node "$F/scripts/workflow/cli.ts" pr-body --implementation "$RUNNER_TEMP/implementation.json" > "$RUNNER_TEMP/body.md"
@@ -256,4 +260,4 @@ jobs:
           fi
           gh label create blocked --force >/dev/null
           gh issue edit "$ISSUE" --add-label blocked
-          gh issue comment "$ISSUE" --body "Implementer nie dokończył zadania. Szczegóły w logu: $RUN"
+          gh issue comment "$ISSUE" --body "Etap implementacji się nie udał (implementer albo publikacja PR). Szczegóły w logu: $RUN"
