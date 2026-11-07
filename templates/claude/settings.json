@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "factory": {
+      "source": {
+        "source": "github",
+        "repo": "gibkigonzo/factory"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "factory@factory": true
+  }
+}

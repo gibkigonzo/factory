@@ -1,6 +1,17 @@
 // Odczyt specu z treści issue: kryteria akceptacji i ryzyko produktowe.
 // Format pochodzi z szablonu specu (skill spec-writer): sekcje „## Kryteria akceptacji” i „## Ryzyko produktowe: …”.
 
+/** Sekcje specu w kolejności z szablonu. Spec-writer je pisze, planer i recenzenci czytają. */
+export const SPEC_SECTIONS = [
+  'Cel',
+  'Scenariusz',
+  'Kryteria akceptacji',
+  'Poza zakresem',
+  'Założenia',
+  'Ryzyko produktowe',
+  'Projekt',
+] as const;
+
 export interface IssueSpec {
   acceptance: string[];
   productRisk?: 'low' | 'high';

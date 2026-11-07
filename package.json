@@ -11,7 +11,8 @@
     "test": "node --test \"scripts/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "validate": "node scripts/config/cli.ts",
-    "agents": "node scripts/agents/build.ts"
+    "agents": "node scripts/agents/build.ts",
+    "skill:zip": "mkdir -p dist && rm -f dist/spec-writer.zip && cd skills && zip -qr ../dist/spec-writer.zip spec-writer"
   },
   "dependencies": {
     "yaml": "2.9.1"

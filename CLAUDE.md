@@ -77,6 +77,12 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Kalibracja progu pewności porównuje odsetek przyjętych PR w grupach pewności, a nie zgodność z werdyktem, bo werdykt sam zależy od pewności.
 - Progi Bramki 1 są w sekcji `shadow` w `base`.
 
+### Spec z telefonu (7 listopada 2026)
+
+- `spec-writer` dostarcza fabryka jako plugin: projekt ma `.claude/settings.json` z `templates/claude/settings.json`, a spec powstaje w sesji Claude Code (z telefonu: zakładka Code). Wgranie ZIP-a (`npm run skill:zip`) do zwykłego czatu aplikacji Claude to opcja; tam skille są przypisane do konta i fabryka ich nie wgra.
+- Sekcje specu są w `SPEC_SECTIONS`; test pilnuje szablonu, przykładu i planera.
+- Issue zakłada konto właściciela (konektor i sesja Claude Code), więc strażnik taśmy je przepuszcza.
+
 ### Logowanie i pilot (6 listopada 2026)
 
 - `claude-code-action` loguje się przez subskrypcję: sekret `CLAUDE_CODE_OAUTH_TOKEN`, który dodaje właściciel.
