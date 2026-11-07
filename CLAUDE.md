@@ -56,6 +56,13 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - „Koszt” to dzienny limit uruchomień taśmy (`daily_runs`).
 - Schemat jest w `scripts/config/spec.ts`, opis pól w README.
 
+### Perspektywy i modele (7 listopada 2026)
+
+- Pięć perspektyw z `base` ocenia każdy PR. Dodatkowe projekt włącza w `reviewers.extra`, gdy ich potrzebuje: z katalogu fabryki albo własne w `.factory/perspectives/<nazwa>.md`.
+- Dodatkowa perspektywa z `paths` albo `zones` ocenia tylko zmiany, których dotyczy. Skład panelu i reguły ryzyka liczą to tym samym kodem.
+- Najpierw tanie strażniki deterministyczne w CI (rozmiar paczki, Lighthouse, axe), a recenzent LLM dopiero wtedy, gdy projekt go potrzebuje.
+- Sekcja `models` w `factory.yml` ustawia model na każdym etapie; wartości startowe są w `base`.
+
 ### Logowanie i pilot (6 listopada 2026)
 
 - `claude-code-action` loguje się przez subskrypcję: sekret `CLAUDE_CODE_OAUTH_TOKEN`, który dodaje właściciel.

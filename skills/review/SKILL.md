@@ -1,6 +1,6 @@
 ---
 name: review
-description: Panel recenzji fabryki. Uruchamia recenzentów PR (subagenci review-<perspektywa>, tylko do odczytu, każdy w świeżym kontekście), zbiera ich werdykty JSON i sprawdza je skryptem. Używaj, gdy PR z gałęzi factory/* ma zielone CI i trzeba go ocenić.
+description: Panel recenzji fabryki. Ustala skład panelu skryptem, uruchamia recenzentów PR (subagenci review-<perspektywa>, tylko do odczytu, każdy w świeżym kontekście), zbiera ich werdykty JSON i sprawdza je skryptem. Używaj, gdy PR z gałęzi factory/* ma zielone CI i trzeba go ocenić.
 ---
 
 # Panel recenzji
@@ -21,8 +21,10 @@ Organizujesz recenzję PR. Sam niczego nie oceniasz: przygotowujesz materiał, u
    - `spec.md`: treść issue bez zmian;
    - `pr.md`: opis PR bez zmian;
    - `artifacts/`: artefakty z CI.
-2. Ustal perspektywy: `reviewers.perspectives` i `reviewers.extra` z `factory.yml`. Dla każdej perspektywy jest subagent `review-<perspektywa>`. Perspektywy bez subagenta zgłoś w podsumowaniu jako brakujące; reguły ryzyka policzą brak werdyktu.
-3. Uruchom wszystkich recenzentów równolegle. Każdy dostaje to samo krótkie polecenie z listą ścieżek z kroku 1 i nic więcej: bez Twojej opinii, bez rozumowania implementera, bez werdyktów innych recenzentów.
+2. Ustal skład panelu skryptem, nie samodzielnie:
+   `node <katalog pluginu>/scripts/review/panel.ts --base origin/main --head HEAD --out .factory/review`.
+   Skrypt zwraca listę `run`: podstawowe perspektywy zawsze, a dodatkowe (`reviewers.extra`) tylko wtedy, gdy diff dotyka ich plików albo stref. Dla każdej podaje subagenta (`agent`), model i powód. Lista `skipped` to perspektywy, których ta zmiana nie dotyczy. Reguły ryzyka wymagają werdyktu dokładnie od perspektyw z `run`.
+3. Uruchom wszystkich recenzentów z `run` równolegle, każdego jako jego subagenta. Każdy dostaje to samo krótkie polecenie z listą ścieżek z kroku 1 i nic więcej: bez Twojej opinii, bez rozumowania implementera, bez werdyktów innych recenzentów. Recenzent perspektywy projektu (`review-project`) dostaje też ścieżkę z pola `criteria`. Model z pola `model` ustawia workflow; w sesji interaktywnej recenzent używa modelu sesji.
 4. Zapisz ostatnią wiadomość każdego recenzenta do `.factory/review/raw/<perspektywa>.md`. Wyciągnij i sprawdź werdykt:
    `node <katalog pluginu>/scripts/agents/output.ts verdict .factory/review/raw/<perspektywa>.md > .factory/review/verdicts/<perspektywa>.json`.
    Gdy skrypt odrzuci werdykt, poproś tego samego recenzenta raz o poprawny format. Gdy znowu się nie uda, zostaw brak werdyktu.

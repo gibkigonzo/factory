@@ -2,6 +2,7 @@
 
 import { LEVELS } from '../config/spec.ts';
 import type { Gate, Level } from '../config/spec.ts';
+import type { PerspectiveDef } from '../review/perspectives.ts';
 
 export interface ChangedFile {
   path: string;
@@ -77,6 +78,8 @@ export interface RiskInput {
   sizes: Record<string, FileSize>;
   evidence: Evidence;
   lint: LintFinding[];
+  /** Włączone perspektywy z warunkami; bez nich wymagane są wszystkie z reviewers.perspectives i reviewers.extra. */
+  perspectives?: PerspectiveDef[];
 }
 
 export type RuleId = 'zones' | 'behavior' | 'tests' | 'size' | 'evidence';

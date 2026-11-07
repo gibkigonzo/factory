@@ -6,7 +6,12 @@ import type { FactoryConfig, Level } from '../config/spec.ts';
 import { matchesAny } from './glob.ts';
 import type { ChangedFile, Evidence, Finding, Review, RuleResult } from './types.ts';
 
-export function evidenceRule(files: readonly ChangedFile[], evidence: Evidence, config: FactoryConfig): RuleResult {
+export function evidenceRule(
+  files: readonly ChangedFile[],
+  evidence: Evidence,
+  config: FactoryConfig,
+  required?: readonly string[],
+): RuleResult {
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
   const tests = testProblems(sorted, config);
   const high = [
@@ -19,7 +24,7 @@ export function evidenceRule(files: readonly ChangedFile[], evidence: Evidence, 
     ...ciProblems(evidence),
     ...acceptanceProblems(evidence),
     ...regressionProblems(evidence),
-    ...reviewProblems(evidence, config),
+    ...reviewProblems(evidence, config, required),
     ...citationProblems(sorted, evidence),
     ...tests.medium,
     ...newMarkers(sorted, config),
@@ -54,8 +59,8 @@ export function effectiveVerdict(review: Review): Review['verdict'] {
 }
 
 /** Recenzenci, którzy się różnią, albo pewność poniżej progu dają Medium. */
-function reviewProblems(evidence: Evidence, config: FactoryConfig): string[] {
-  const perspectives = [...new Set([...config.reviewers.perspectives, ...config.reviewers.extra])];
+function reviewProblems(evidence: Evidence, config: FactoryConfig, required?: readonly string[]): string[] {
+  const perspectives = [...new Set(required ?? [...config.reviewers.perspectives, ...config.reviewers.extra])];
   const minimum = config.risk.min_confidence;
   return perspectives.flatMap((perspective) => {
     const review = evidence.reviews?.find((r) => r.perspective === perspective);

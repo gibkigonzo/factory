@@ -49,7 +49,23 @@ export function loadConfig(text: string, file: string, presets: PresetSource = p
   const layers = [...loadPresets(project, presets, errors), project];
   checkZoneNames(layers, errors);
   if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, config: withDefaults(mergeLayers(layers.map((l) => l.data))) };
+  const merged = mergeLayers(layers.map((l) => l.data));
+  errors.push(...checkReviewerModels(merged, project.file));
+  if (errors.length > 0) return { ok: false, errors };
+  return { ok: true, config: withDefaults(merged) };
+}
+
+/** Model można ustawić tylko dla perspektywy, która jest włączona, albo jako `default`. */
+function checkReviewerModels(merged: Obj, file: string): string[] {
+  const models = getPath(merged, 'models.reviewers');
+  if (!isObject(models)) return [];
+  const enabled = ['perspectives', 'extra'].flatMap((key) => {
+    const list = getPath(merged, `reviewers.${key}`);
+    return Array.isArray(list) ? list.map(String) : [];
+  });
+  return Object.keys(models)
+    .filter((name) => name !== 'default' && !enabled.includes(name))
+    .map((name) => `${file}: models.reviewers.${name}: perspektywa „${name}” nie jest włączona; włączone: ${enabled.join(', ')}`);
 }
 
 function parseLayer(text: string, file: string, kind: LayerKind, errors: string[]): Layer | undefined {

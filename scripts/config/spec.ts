@@ -33,6 +33,10 @@ const level: Spec = { kind: 'enum', values: LEVELS };
 const globs: Spec = { kind: 'list', item: { kind: 'glob' } };
 const names: Spec = { kind: 'list', item: name };
 
+/** Alias modelu (opus, sonnet, haiku) albo pełny identyfikator modelu Claude. */
+export const MODEL = /^(opus|sonnet|haiku)$|^claude-[a-z0-9][a-z0-9.-]*$/;
+const model: Spec = { kind: 'string', pattern: MODEL, hint: 'opus, sonnet, haiku albo pełny identyfikator modelu claude-…' };
+
 function namedMap(value: Spec): Spec {
   return { kind: 'map', key: NAME, keyHint: NAME_HINT, value };
 }
@@ -93,6 +97,10 @@ export const SCHEMA: Extract<Spec, { kind: 'object' }> = {
     risk,
     gates,
     reviewers: { kind: 'object', fields: { perspectives: names, extra: names } },
+    models: {
+      kind: 'object',
+      fields: { planner: model, implementer: model, risk_assessor: model, reviewers: namedMap(model) },
+    },
     human_gates: namedMap({ kind: 'list', item: text }),
     exceptions: { kind: 'list', item: exception },
     wip_limit: positive,
@@ -144,6 +152,10 @@ export const REQUIRED: Record<LayerKind, readonly string[]> = {
     'gates.complexity',
     'gates.nesting',
     'reviewers.perspectives',
+    'models.planner',
+    'models.implementer',
+    'models.risk_assessor',
+    'models.reviewers.default',
     'wip_limit',
     'daily_runs',
   ],
@@ -190,6 +202,13 @@ export interface FactoryConfig {
     nesting: number;
   };
   reviewers: { perspectives: string[]; extra: string[] };
+  /** Model na każdym etapie taśmy; `reviewers.default` dla perspektyw bez własnego wpisu. */
+  models: {
+    planner: string;
+    implementer: string;
+    risk_assessor: string;
+    reviewers: Record<string, string> & { default: string };
+  };
   human_gates: Record<string, string[]>;
   exceptions: GateException[];
   wip_limit: number;

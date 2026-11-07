@@ -29,6 +29,15 @@ gates:
 reviewers:
   perspectives: [correctness, tests, security, maintainability, spec]
 
+# Model na każdym etapie taśmy. Projekt może nadpisać każdy wpis.
+models:
+  planner: opus          # mało wywołań, a od planu zależy reszta
+  implementer: sonnet    # najwięcej tokenów
+  risk_assessor: sonnet
+  reviewers:
+    default: sonnet      # kilka wywołań na każdy PR
+    security: opus       # najwyższa stawka
+
 wip_limit: 3     # równoległe zadania
 daily_runs: 20   # dzienne uruchomienia taśmy; po przekroczeniu taśma czeka do następnego dnia
 
@@ -38,6 +47,7 @@ zones:
     - ".claude/**"
     - ".mcp.json"
     - "factory.yml"
+    - ".factory/**"
     - "**/CLAUDE.md"
     - "CODEOWNERS"
     - "docs/CODEOWNERS"

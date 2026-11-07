@@ -2,6 +2,7 @@
 
 import type { FactoryConfig } from '../config/spec.ts';
 import { checkGates } from './gates.ts';
+import { panelFor } from '../review/perspectives.ts';
 import { evidenceRule } from './evidence-rule.ts';
 import { behaviorRule, sizeRule, testsRule, zonesRule } from './rules.ts';
 import { maxLevel } from './types.ts';
@@ -11,12 +12,14 @@ export function assess(input: RiskInput, config: FactoryConfig): Assessment {
   const files = [...input.files].sort((a, b) => a.path.localeCompare(b.path));
   const repoFiles = [...input.repoFiles].sort();
   const size = sizeRule(files, config, input.evidence);
+  // Werdykt jest wymagany tylko od perspektyw, które powinny były ocenić tę zmianę.
+  const required = input.perspectives ? panelFor(input.perspectives, files, config).run.map((e) => e.def.name) : undefined;
   const rules = [
     zonesRule(files, config),
     behaviorRule(input.evidence),
     testsRule(files, repoFiles, config),
     { rule: size.rule, name: size.name, level: size.level, reasons: size.reasons },
-    evidenceRule(files, input.evidence, config),
+    evidenceRule(files, input.evidence, config, required),
   ];
   let level = maxLevel(rules.map((r) => r.level));
   const notes: string[] = [];

@@ -26,9 +26,17 @@ zones:                             # dopisuje ścieżki do stref z base i preset
 risk:
   medium_veto_hours: 24            # 0 = Medium traktowane jak High
 
-# Dodatkowe perspektywy recenzji dopisz, gdy projekt ich potrzebuje:
+# Dodatkowe perspektywy recenzji dopisz, gdy projekt ich potrzebuje. Z katalogu fabryki:
+# ux-visual, accessibility-web, web-performance, devils-advocate. Własną dodaj jako
+# .factory/perspectives/<nazwa>.md. Dodatkowa perspektywa ocenia tylko zmiany, których dotyczy.
 # reviewers:
-#   extra: [nazwa-perspektywy]
+#   extra: [ux-visual]
+
+# Modele na etapach: wartości startowe są w base, tu nadpisujesz tylko to, co chcesz zmienić.
+# models:
+#   implementer: opus
+#   reviewers:
+#     ux-visual: haiku
 
 protected_files: ["backup/**"]     # dopisuje do listy z base
 
