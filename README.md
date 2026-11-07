@@ -112,7 +112,7 @@ Reguły mają trzy warstwy: wspólne `base`, presety języka i frameworka oraz `
   plugins: factory@factory
   ```
 
-  Lokalnie: `/plugin marketplace add gibkigonzo/factory`, potem `/plugin install factory@factory`.
+  W sesjach Claude Code w repo projektu, także z telefonu: [`templates/claude/settings.json`](templates/claude/settings.json) skopiowany do `.claude/settings.json`. Ręcznie: `/plugin marketplace add gibkigonzo/factory`, potem `/plugin install factory@factory`.
 - **Workflowy.** Wspólne workflowy działają przez `workflow_call`:
   `uses: gibkigonzo/factory/.github/workflows/<name>.yml@v1`. Mogą je wywoływać także repozytoria prywatne.
 - **Kontrakt.** Projekt dodaje `factory.yml` z `extends: [base, <język>, <framework>]`. Wersje presetów przypina tagami.
@@ -201,6 +201,7 @@ Werdykt recenzenta (`reviews[]`) ma stały format: perspektywa, `verdict` (`appr
 
 | Agent | Kiedy | Wyjście |
 | --- | --- | --- |
+| `spec-writer` (skill) | rozmowa o pomyśle w aplikacji Claude | issue ze specem i etykietą `ready` |
 | `planner` (skill) | issue z etykietą `ready` | plan w komentarzu i blok JSON: `planned`, `blocked` albo `split` |
 | `implementer` (skill) | issue z etykietą `planned` | PR z gałęzi `factory/*` i blok JSON z dowodem dla każdego kryterium |
 | `review` (skill) | PR z zielonym CI | uruchamia recenzentów i zbiera ich werdykty |
@@ -214,6 +215,22 @@ node scripts/agents/output.ts <plan|implementation|verdict|behavior> odpowiedź-
 ```
 
 Recenzenci mają jedno źródło: wspólny protokół `skills/review/protocol.md` i kryteria w `skills/review/perspectives/<perspektywa>.md`. Pliki `agents/review-*.md` generuje `npm run agents`, a test pilnuje, żeby były aktualne.
+
+### Spec z telefonu
+
+Spec pisze skill `spec-writer` w rozmowie z Claude. Zadaje najwyżej 5 pytań o decyzje produktowe, każde z proponowaną odpowiedzią. Potem pokazuje spec i po Twoim „tak” zakłada issue z etykietą `ready`, a ta uruchamia planera.
+
+Spec ma sekcje: Cel, Scenariusz, Kryteria akceptacji (sprawdzalne maszynowo), Poza zakresem, Założenia, Ryzyko produktowe (`niskie` albo `wysokie`) i Projekt. Szablon i przykład są w [`skills/spec-writer/SKILL.md`](skills/spec-writer/SKILL.md). Test pilnuje, żeby szablon, przykład i planer znały te same sekcje (`SPEC_SECTIONS` w `scripts/workflow/spec.ts`).
+
+**Domyślnie: Claude Code.** Skill dostarcza fabryka jako plugin. Projekt kopiuje [`templates/claude/settings.json`](templates/claude/settings.json) do `.claude/settings.json`, a każda sesja Claude Code w repo projektu ma skille fabryki w wersji z `main`. Z telefonu: zakładka Code w aplikacji Claude, sesja na repo projektu i np. „Mam pomysł: …”.
+
+**Opcjonalnie: zwykły czat w aplikacji Claude.** Rozmowa startuje szybciej, ale skille w czacie są przypisane do konta, więc fabryka ich tam nie wgra. Robisz to sam, raz i ponownie po każdej zmianie skilla:
+
+1. `npm run skill:zip` tworzy `dist/spec-writer.zip`.
+2. W claude.ai: Settings → Capabilities → Skills, wgraj ZIP. Skille wymagają włączonego wykonywania kodu (Code execution).
+3. Konektor GitHub potrzebuje prawa zapisu, a repo projektu musi być w instalacji jego aplikacji GitHub; inaczej zapis kończy się błędem 403.
+
+W obu drogach issue zakłada Twoje konto, więc strażnik taśmy je przepuszcza. Bez narzędzia z prawem zapisu spec-writer pokaże spec do skopiowania, a issue założysz ręcznie z etykietą `ready`.
 
 ### Perspektywy
 
@@ -261,11 +278,12 @@ Projekt nadpisuje w `factory.yml` tylko to, co chce zmienić, np. `models.review
 
 ## Taśma w GitHub Actions
 
-Projekt podłącza taśmę w trzech krokach:
+Projekt podłącza taśmę w czterech krokach:
 
 1. kopiuje [`templates/workflows/factory.yml`](templates/workflows/factory.yml) do `.github/workflows/factory.yml`;
-2. dodaje sekret `CLAUDE_CODE_OAUTH_TOKEN` (Settings → Secrets and variables → Actions);
-3. w Settings → Actions → General → Workflow permissions zaznacza „Allow GitHub Actions to create and approve pull requests”, bez czego workflow nie otworzy PR.
+2. kopiuje [`templates/claude/settings.json`](templates/claude/settings.json) do `.claude/settings.json`, żeby sesje Claude Code w projekcie miały skille fabryki, np. `spec-writer`;
+3. dodaje sekret `CLAUDE_CODE_OAUTH_TOKEN` (Settings → Secrets and variables → Actions);
+4. w Settings → Actions → General → Workflow permissions zaznacza „Allow GitHub Actions to create and approve pull requests”, bez czego workflow nie otworzy PR.
 
 Dalej wszystko dzieje się w issue i PR, także z telefonu.
 
@@ -297,11 +315,11 @@ Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plika
 
 ```
 .claude-plugin/       plugin.json i marketplace.json (plugin = całe repo)
-skills/               skille: planner, implementer, review, risk-assessor; później spec-writer, po-scout, factory-init
+skills/               skille: spec-writer, planner, implementer, review, risk-assessor; później po-scout, factory-init
 agents/               recenzenci review-<perspektywa>, generowani z skills/review, tylko do odczytu
 hooks/                hooks.json: blokada chronionych plików, Stop dopiero po zielonych testach
 scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, skład panelu, wyjście agentów, merger
 presets/              warstwy reguł: base, typescript, web, gdscript, godot
-templates/            szablony dla projektów: workflow taśmy (templates/workflows/factory.yml), przykładowy factory.yml
+templates/            szablony dla projektów: workflow taśmy (templates/workflows/factory.yml), ustawienia Claude Code z pluginem (templates/claude/settings.json), przykładowy factory.yml
 .github/workflows/    wspólne workflowy typu workflow_call
 ```
