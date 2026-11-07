@@ -50,6 +50,7 @@ jobs:
     outputs:
       plan: ${{ steps.result.outputs.plan }}
       wip_limit: ${{ steps.data.outputs.wip_limit }}
+      usage: ${{ steps.usage.outputs.usage }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -107,6 +108,17 @@ jobs:
             --disallowedTools ${{ steps.data.outputs.denied }}
             --json-schema '${{ steps.data.outputs.schema }}'
 
+      - name: Zużycie planera
+        id: usage
+        if: always() && steps.claude.outcome != 'skipped'
+        continue-on-error: true
+        env:
+          EXEC: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          mkdir -p "$(dirname "$W/usage.json")"
+          node "$F/scripts/workflow/cli.ts" usage --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" --stage plan --out "$W/usage.json"
+          { echo "usage<<FACTORY_EOF"; cat "$W/usage.json" 2>/dev/null || echo '[]'; echo; echo "FACTORY_EOF"; } >> "$GITHUB_OUTPUT"
+
       - name: Sprawdzenie planu
         id: result
         env:
@@ -144,6 +156,7 @@ jobs:
           ISSUE: ${{ inputs.issue }}
           PLAN: ${{ needs.plan.outputs.plan }}
           LIMIT: ${{ needs.plan.outputs.wip_limit }}
+          USAGE: ${{ needs.plan.outputs.usage }}
           WORKFLOW: ${{ inputs.workflow }}
         run: |
           printf '%s' "$PLAN" > plan.json
@@ -158,7 +171,8 @@ jobs:
               NOTE="Kolejka jest pełna ($OPEN z $LIMIT zadań w toku). Implementer ruszy, gdy uruchomisz etap implement ręcznie."
             fi
           fi
-          node factory/scripts/workflow/cli.ts plan-comment --plan plan.json --note "$NOTE" > comment.md
+          printf '%s' "$USAGE" > usage.json
+          node factory/scripts/workflow/cli.ts plan-comment --plan plan.json --note "$NOTE" --usage usage.json > comment.md
           gh issue comment "$ISSUE" --body-file comment.md
           gh issue edit "$ISSUE" --remove-label ready >/dev/null 2>&1 || true
 

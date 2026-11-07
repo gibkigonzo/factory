@@ -221,6 +221,17 @@ jobs:
             --disallowedTools ${{ steps.data.outputs.denied }}
             --json-schema '${{ steps.data.outputs.schema }}'
 
+      - name: Zużycie recenzenta
+        id: usage
+        if: always() && steps.claude.outcome != 'skipped'
+        continue-on-error: true
+        env:
+          EXEC: ${{ steps.claude.outputs.execution_file }}
+          NAME: ${{ matrix.member.name }}
+        run: |
+          mkdir -p "$(dirname "usage/review-$NAME.json")"
+          node "$F/scripts/workflow/cli.ts" usage --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" --stage review --out "usage/review-$NAME.json"
+
       - name: Sprawdzenie werdyktu
         env:
           OUTPUT: ${{ steps.claude.outputs.structured_output }}
@@ -238,3 +249,10 @@ jobs:
         with:
           name: factory-verdict-${{ matrix.member.name }}
           path: verdict/
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: factory-usage-review-${{ matrix.member.name }}
+          path: usage/
+          if-no-files-found: ignore

@@ -1,6 +1,8 @@
 // Metryki trybu cienia i stan Bramki 1. Liczy je skrypt z danych z PR-ów, nie model.
 
 import type { FactoryConfig } from '../config/spec.ts';
+import { STAGES } from '../workflow/usage.ts';
+import type { Stage } from '../workflow/usage.ts';
 import type { PrRecord } from './collect.ts';
 
 /** Ile ocen w grupie trzeba, żeby wnioskować o progu pewności. */
@@ -22,6 +24,8 @@ export interface Metrics {
   avgRounds?: number;
   medianHoursToMerge?: number;
   calibration: { threshold: number; above: Group; below: Group; enoughData: boolean };
+  /** Średni koszt na PR (równowartość cen API) z PR-ów, które mają pomiar zużycia. */
+  cost?: { prs: number; perPr: number; outputPerPr: number; stages: { stage: Stage; perPr: number }[] };
   gate: { passed: boolean; missing: string[] };
 }
 
@@ -74,6 +78,22 @@ function gate(m: Omit<Metrics, 'gate'>, config: FactoryConfig): Metrics['gate'] 
   return { passed: missing.length === 0, missing };
 }
 
+function cost(records: readonly PrRecord[]): Metrics['cost'] {
+  const measured = records.filter((r) => r.usage?.length);
+  if (measured.length === 0) return undefined;
+  const all = measured.flatMap((r) => r.usage!);
+  const avg = (values: number[]) => values.reduce((a, b) => a + b, 0) / measured.length;
+  return {
+    prs: measured.length,
+    perPr: avg(all.map((u) => u.cost)),
+    outputPerPr: avg(all.map((u) => u.output)),
+    stages: STAGES.filter((s) => all.some((u) => u.stage === s)).map((stage) => ({
+      stage,
+      perPr: avg(all.filter((u) => u.stage === stage).map((u) => u.cost)),
+    })),
+  };
+}
+
 export function percent(value: number | undefined): string {
   return value === undefined ? 'brak danych' : `${Math.round(value * 100)}%`;
 }
@@ -93,6 +113,8 @@ export function computeMetrics(records: readonly PrRecord[], config: FactoryConf
     falseLow: records.filter(isFalseLow).map((r) => r.number),
     calibration: calibration(withVerdict, config.risk.min_confidence),
   };
+  const costs = cost(records);
+  if (costs) base.cost = costs;
   const agreement = ratio(agreed, evaluated.length);
   if (agreement !== undefined) base.agreement = agreement;
   const avgRounds = ratio(finished.reduce((sum, r) => sum + r.rounds, 0), finished.length);

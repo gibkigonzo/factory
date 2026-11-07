@@ -47,7 +47,7 @@ Twoja ostatnia wiadomość to wyłącznie jeden blok JSON:
 ```
 
 - `level`: `Low`, `Medium` albo `High`;
-- `reason`: które kryterium pasuje i gdzie w diffie to widać, w jednym lub dwóch zdaniach. Przy Low napisz krótko, dlaczego żadne kryterium nie pasuje.
+- `reason`: które kryterium pasuje i gdzie w diffie to widać, w jednym zdaniu. Przy Low jedno zdanie, dlaczego żadne kryterium nie pasuje.
 
 ## Czego nie robisz
 

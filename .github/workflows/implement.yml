@@ -54,6 +54,7 @@ jobs:
       branch: ${{ steps.collect.outputs.branch }}
       title: ${{ steps.data.outputs.title }}
       empty: ${{ steps.collect.outputs.empty }}
+      usage: ${{ steps.usage.outputs.usage }}
       over_budget: ${{ steps.budget.outputs.skip }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -137,6 +138,17 @@ jobs:
             --disallowedTools WebFetch,WebSearch
             --json-schema '${{ steps.data.outputs.schema }}'
 
+      - name: Zużycie implementera
+        id: usage
+        if: always() && steps.claude.outcome != 'skipped'
+        continue-on-error: true
+        env:
+          EXEC: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          mkdir -p "$(dirname "$W/usage.json")"
+          node "$F/scripts/workflow/cli.ts" usage --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" --stage implement --out "$W/usage.json"
+          { echo "usage<<FACTORY_EOF"; cat "$W/usage.json" 2>/dev/null || echo '[]'; echo; echo "FACTORY_EOF"; } >> "$GITHUB_OUTPUT"
+
       - name: Patch i sprawdzenie zmienionych ścieżek
         id: collect
         if: steps.budget.outputs.skip != 'true'
@@ -210,6 +222,7 @@ jobs:
           BRANCH: ${{ needs.implement.outputs.branch }}
           TITLE: ${{ needs.implement.outputs.title }}
           IMPLEMENTATION: ${{ needs.implement.outputs.implementation }}
+          USAGE: ${{ needs.implement.outputs.usage }}
           WORKFLOW: ${{ inputs.workflow }}
         run: |
           F="$RUNNER_TEMP/factory"
@@ -226,7 +239,11 @@ jobs:
           fi
 
           printf '%s' "$IMPLEMENTATION" > "$RUNNER_TEMP/implementation.json"
-          node "$F/scripts/workflow/cli.ts" pr-body --implementation "$RUNNER_TEMP/implementation.json" > "$RUNNER_TEMP/body.md"
+          printf '%s' "$USAGE" > "$RUNNER_TEMP/usage.json"
+          # Opis PR niesie zużycie wszystkich rund implementacji, więc poprzednie bierzemy z dotychczasowego opisu.
+          if [ -n "$PR" ]; then gh pr view "$PR" --json body --jq .body > "$RUNNER_TEMP/previous.md"; fi
+          node "$F/scripts/workflow/cli.ts" pr-body --implementation "$RUNNER_TEMP/implementation.json" \
+            --usage "$RUNNER_TEMP/usage.json" --previous "$RUNNER_TEMP/previous.md" > "$RUNNER_TEMP/body.md"
           if [ -z "$PR" ]; then
             URL=$(gh pr create --base "$DEFAULT" --head "$BRANCH" --title "$TITLE" --body-file "$RUNNER_TEMP/body.md")
             PR=${URL##*/}

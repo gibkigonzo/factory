@@ -14,6 +14,12 @@ import { decide } from './decision.ts';
 import type { Action } from './decision.ts';
 import { renderJournal } from './journal.ts';
 import { computeMetrics, isFalseLow } from './metrics.ts';
+import { usageBlock } from '../workflow/usage.ts';
+import type { Usage } from '../workflow/usage.ts';
+
+const spend = (stage: Usage['stage'], cost: number, output = 1000): Usage => ({
+  stage, count: 1, cost, turns: 3, ms: 1000, input: 10, output, cacheRead: 0, cacheWrite: 0,
+});
 
 const config = configWith();
 
@@ -107,6 +113,7 @@ describe('dane z GitHuba', () => {
       mergedAt: '2026-11-02T12:00:00Z', closedAt: '2026-11-02T12:00:00Z', headRefName: 'factory/1-a',
       labels: [{ name: 'factory:round-1' }, { name: 'factory:round-2' }, { name: 'risk:low' }],
       mergeCommit: { oid: 'abcdef1234567890' }, closingIssuesReferences: [{ number: 1 }],
+      body: `Closes #1\n${usageBlock([spend('implement', 0.6), spend('implement', 0.2)])}`,
     },
     {
       number: 11, title: 'High zamknięty', state: 'CLOSED', createdAt: '2026-11-01T09:00:00Z',
@@ -120,7 +127,12 @@ describe('dane z GitHuba', () => {
     },
   ]);
   write('issues/7.json', { created_at: '2026-11-04T08:00:00Z' });
-  write('comments/10.json', [comment(1, { ...low, level: 'Medium', action: 'veto-window' }), comment(2, low), comment(3, high, 'mallory')]);
+  write('comments/10.json', [
+    comment(1, { ...low, level: 'Medium', action: 'veto-window', usage: [spend('review', 0.5), spend('assess', 0.1)] }),
+    comment(2, { ...low, usage: [spend('review', 0.4)] }),
+    comment(3, { ...high, usage: [spend('review', 99)] }, 'mallory'),
+  ]);
+  write('plans/1.json', [{ body: `plan\n${usageBlock([spend('plan', 0.3)])}` }]);
   write('comments/11.json', [comment(4, high)]);
   write('reactions/2.json', [
     { content: '-1', user: { login: 'owner' }, created_at: '2026-11-02T10:00:00Z' },
@@ -141,7 +153,8 @@ describe('dane z GitHuba', () => {
     assert.deepEqual(ten, {
       number: 10, title: 'Low cofnięty', state: 'merged', createdAt: '2026-11-01T09:00:00Z',
       mergedAt: '2026-11-02T12:00:00Z', closedAt: '2026-11-02T12:00:00Z', readyAt: '2026-10-31T08:00:00Z',
-      rounds: 2, reverted: true, shadow: { record: low, at: '2026-11-02T10:00:00Z', reaction: 'up' },
+      rounds: 2, reverted: true, shadow: { record: { ...low, usage: [spend('review', 0.4)] }, at: '2026-11-02T10:00:00Z', reaction: 'up' },
+      usage: ten!.usage,
     });
     assert.equal(eleven!.state, 'closed');
     assert.equal(eleven!.shadow?.record.action, 'escalate');
@@ -157,6 +170,20 @@ describe('dane z GitHuba', () => {
     assert.equal(fourteen?.readyAt, '2026-11-04T08:00:00Z');
     // #10: od ready 31.10 8:00 do merge'u 2.11 12:00 to 52 h; #14: od założenia 8:00 do 12:00 to 4 h.
     assert.equal(computeMetrics(collectRecords(dir, ['owner'], 7), config).medianHoursToMerge, (52 + 4) / 2);
+  });
+
+  it('zużycie zbiera z planu, opisu PR i wszystkich werdyktów bota, zsumowane na etap', () => {
+    const ten = collectRecords(dir, ['owner'], 7).find((r) => r.number === 10);
+    assert.deepEqual(ten?.usage?.map((u) => [u.stage, u.count, u.cost]), [
+      ['plan', 1, 0.3],
+      ['implement', 2, 0.8],
+      ['review', 2, 0.9],
+      ['assess', 1, 0.1],
+    ]);
+    const m = computeMetrics(collectRecords(dir, ['owner'], 7), config).cost;
+    assert.equal(m?.prs, 1, 'tylko PR z pomiarem');
+    assert.equal(m?.perPr.toFixed(2), '2.10');
+    assert.deepEqual(m?.stages.map((s) => [s.stage, s.perPr.toFixed(2)]), [['plan', '0.30'], ['implement', '0.80'], ['review', '0.90'], ['assess', '0.10']]);
   });
 
   it('revert po oknie revert_days się nie liczy', () => {
@@ -251,6 +278,19 @@ describe('dziennik', () => {
     assert.match(body, /- #41 Menu · bez werdyktu · otwarty/);
     assert.match(body, /Próg pewności recenzentów \(0,8\)/);
     assert.match(body, /_Aktualizacja: 2026-11-07 10:00 UTC\./);
+  });
+
+  it('koszt: średnio na PR i na etap, a przy PR suma', () => {
+    const records = [
+      pr({ number: 50, title: 'A', usage: [spend('implement', 1), spend('review', 0.5, 3000)] }),
+      pr({ number: 51, title: 'B', usage: [spend('implement', 0.5, 2000)] }),
+      pr({ number: 52, title: 'C' }),
+    ];
+    const body = renderJournal(records, config, 'teraz');
+    assert.match(body, /- PR z pomiarem: 2, średnio 1,00 USD i 3000 tokenów wyjścia na PR/);
+    assert.match(body, /- Etapy, średnio na PR: implementacja 0,75 USD · recenzja 0,25 USD/);
+    assert.match(body, /- #50 A · bez werdyktu · scalony · 1,50 USD/);
+    assert.match(body, /- #52 C · bez werdyktu · scalony\n/);
   });
 
   it('pusty dziennik przed pierwszym PR', () => {

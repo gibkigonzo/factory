@@ -80,6 +80,16 @@ jobs:
             --disallowedTools ${{ steps.data.outputs.denied }}
             --json-schema '${{ steps.data.outputs.schema }}'
 
+      - name: Zużycie oceniacza
+        id: usage
+        if: always() && steps.claude.outcome != 'skipped'
+        continue-on-error: true
+        env:
+          EXEC: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          mkdir -p "$(dirname "usage/assess.json")"
+          node "$F/scripts/workflow/cli.ts" usage --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" --stage assess --out "usage/assess.json"
+
       - name: Sprawdzenie oceny
         env:
           OUTPUT: ${{ steps.claude.outputs.structured_output }}
@@ -92,6 +102,13 @@ jobs:
         with:
           name: factory-behavior
           path: behavior/
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: factory-usage-assess
+          path: usage/
+          if-no-files-found: ignore
 
   rules:
     needs: assess
@@ -142,6 +159,11 @@ jobs:
           pattern: factory-behavior
           merge-multiple: true
           path: .factory/work
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: factory-usage-*
+          merge-multiple: true
+          path: .factory/work/usage
 
       - name: Dowody i reguły ryzyka
         env:
@@ -154,9 +176,10 @@ jobs:
           node "$F/scripts/workflow/cli.ts" evidence --work "$W" --rounds "$ROUNDS" > "$W/evidence.json"
           node "$F/scripts/risk-rules.ts" --base "origin/$BASE" --head HEAD --evidence "$W/evidence.json" --json > "$W/assessment.json"
           node "$F/scripts/workflow/cli.ts" report --assessment "$W/assessment.json" --panel "$W/panel.json" > "$W/report.md"
+          node "$F/scripts/workflow/cli.ts" usage-sum --dir "$W/usage" > "$W/usage.json"
           node "$F/scripts/workflow/cli.ts" shadow-comment --pr "$PR" --assessment "$W/assessment.json" \
-            --evidence "$W/evidence.json" --config "$W/config.json" > "$W/shadow.md"
-          mkdir -p risk && cp "$W/evidence.json" "$W/assessment.json" "$W/report.md" "$W/shadow.md" "$W/config.json" risk/
+            --evidence "$W/evidence.json" --config "$W/config.json" --usage "$W/usage.json" > "$W/shadow.md"
+          mkdir -p risk && cp "$W/evidence.json" "$W/assessment.json" "$W/report.md" "$W/shadow.md" "$W/config.json" "$W/usage.json" risk/
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

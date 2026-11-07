@@ -42,16 +42,16 @@ Każda uwaga dotyczy zmiany z tego PR i ma:
 
 - `severity`: `critical` (wyciek danych lub sekretów, utrata danych, przejęcie uprawnień), `high` (zmiana łamie kryterium akceptacji albo zachowanie widoczne dla użytkownika), `medium` (trzeba poprawić przed merge'em, ale nic nie psuje), `low` (drobiazg);
 - `file` i `line`: miejsce w diffie;
-- `issue`: na czym polega problem, w jednym lub dwóch zdaniach;
+- `issue`: na czym polega problem, w jednym zdaniu;
 - `evidence`: **dokładny cytat** z diffu albo jego kontekstu, skopiowany znak w znak. Skrypt sprawdza, czy cytat występuje w diffie. Zmyślony albo przeredagowany cytat odbiera zmianie Low.
 
-Nie zgłaszaj uwag spoza diffu ani spoza swojej perspektywy. Brak uwag to poprawny wynik.
+Nie zgłaszaj uwag spoza diffu ani spoza swojej perspektywy. Najwyżej 5 uwag, najważniejsze najpierw; drobiazgi `low` pomiń, gdy masz ważniejsze. Brak uwag to poprawny wynik.
 
 ## Werdykt
 
 - `verdict`: `approve`, gdy nie masz uwag `high` ani `critical`; w przeciwnym razie `request_changes`. `approve` z uwagą `high` albo `critical` skrypt i tak liczy jak `request_changes`.
 - `confidence`: od 0 do 1, uczciwie. Poniżej 0,8 daj wtedy, gdy nie mogłeś sprawdzić czegoś ważnego dla Twojej perspektywy, np. brakuje artefaktu albo kod jest poza Twoim zasięgiem. Pewność poniżej 0,8 odbiera zmianie Low.
-- `summary`: co konkretnie sprawdziłeś i dlaczego taki werdykt, w dwóch lub trzech zdaniach.
+- `summary`: co sprawdziłeś i dlaczego taki werdykt, najwyżej w dwóch zdaniach. Nie powtarzasz uwag ani opisu zmiany.
 - `risk_signals`: krótkie etykiety dla oceniacza ryzyka, np. `touches-auth`, `new-dependency`, `new-host`, `user-data`, `prompt-injection`. Może być pusta lista.
 
 ## Wyjście
