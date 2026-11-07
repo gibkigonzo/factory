@@ -3,6 +3,7 @@
 //   comments/<pr>.json       komentarze PR (wystarczą te z werdyktem)
 //   reactions/<comment>.json reakcje na komentarz z werdyktem
 //   events/<issue>.json      zdarzenia issue (kiedy dostało etykietę ready)
+//   issues/<issue>.json      data założenia issue: { created_at }
 //   reverts.txt              git log gałęzi głównej: rekordy „\x1e<data ISO>\t<treść commita>”
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -86,10 +87,21 @@ function latestShadow(dir: string, pr: number, owners: readonly string[]): PrRec
   return shadow;
 }
 
+/**
+ * Issue, które zrealizował PR fabryki. Numer jest w nazwie gałęzi `factory/<numer>-<nazwa>`, którą nadaje fabryka.
+ * Powiązania PR z issue to tylko zapas: GitHub nie zawsze je zwraca po scaleniu.
+ */
+export function issueOf(pr: Pick<RawPr, 'headRefName' | 'closingIssuesReferences'>): number | undefined {
+  const fromBranch = /^factory\/(\d+)-/.exec(pr.headRefName)?.[1];
+  return fromBranch ? Number(fromBranch) : pr.closingIssuesReferences?.[0]?.number;
+}
+
+/** Kiedy issue dostało etykietę ready. Bez takiego zdarzenia: data założenia, bo issue założone od razu z etykietą jej nie ma. */
 function readyAt(dir: string, issue: number | undefined): string | undefined {
   if (!issue) return undefined;
   const events = read<{ event: string; label?: { name: string }; created_at: string }[]>(join(dir, 'events', `${issue}.json`), []);
-  return events.filter((e) => e.event === 'labeled' && e.label?.name === 'ready').map((e) => e.created_at).sort()[0];
+  const labeled = events.filter((e) => e.event === 'labeled' && e.label?.name === 'ready').map((e) => e.created_at).sort()[0];
+  return labeled ?? read<{ created_at?: string }>(join(dir, 'issues', `${issue}.json`), {}).created_at;
 }
 
 function rounds(labels: readonly { name: string }[] = []): number {
@@ -99,11 +111,20 @@ function rounds(labels: readonly { name: string }[] = []): number {
 
 const DAY = 24 * 60 * 60 * 1000;
 
+/** PR-y fabryki z tego repo: gałęzie factory/*, bez forków. */
+function factoryPrs(dir: string): RawPr[] {
+  return read<RawPr[]>(join(dir, 'prs.json'), []).filter((pr) => pr.headRefName.startsWith('factory/') && !pr.isCrossRepository);
+}
+
+/** Numery issue, dla których workflow ma pobrać zdarzenia i datę założenia. */
+export function factoryIssues(dir: string): number[] {
+  return [...new Set(factoryPrs(dir).map(issueOf).filter((n): n is number => n !== undefined))].sort((a, b) => a - b);
+}
+
 /** owners: konta, których 👍/👎 liczą się jako ocena werdyktu (właściciel repo i zaufane konta). */
 export function collectRecords(dir: string, owners: readonly string[], revertDays: number): PrRecord[] {
   const reverts = existsSync(join(dir, 'reverts.txt')) ? parseReverts(readFileSync(join(dir, 'reverts.txt'), 'utf8')) : [];
-  return read<RawPr[]>(join(dir, 'prs.json'), [])
-    .filter((pr) => pr.headRefName.startsWith('factory/') && !pr.isCrossRepository)
+  return factoryPrs(dir)
     .sort((a, b) => b.number - a.number)
     .map((pr) => {
       const state = pr.state === 'MERGED' ? 'merged' : pr.state === 'CLOSED' ? 'closed' : 'open';
@@ -115,7 +136,7 @@ export function collectRecords(dir: string, owners: readonly string[], revertDay
       const record: PrRecord = { number: pr.number, title: pr.title, state, createdAt: pr.createdAt, rounds: rounds(pr.labels), reverted };
       if (pr.mergedAt) record.mergedAt = pr.mergedAt;
       if (pr.closedAt) record.closedAt = pr.closedAt;
-      const ready = readyAt(dir, pr.closingIssuesReferences?.[0]?.number);
+      const ready = readyAt(dir, issueOf(pr));
       if (ready) record.readyAt = ready;
       const shadow = latestShadow(dir, pr.number, owners);
       if (shadow) record.shadow = shadow;
