@@ -40,8 +40,9 @@ export function parseSpec(body: string): IssueSpec {
   return spec;
 }
 
+/** Kryterium do porównania: bez formatowania Markdown (`kod`, **pogrubienie**), różnic w odstępach i wielkości liter. */
 export function normalizeCriterion(text: string): string {
-  return text.trim().replace(/\s+/g, ' ').toLowerCase();
+  return text.replace(/`|\*\*/g, '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
 /** Kryterium bez końcowego dopisku w nawiasie, np. „(test)”. Agenci często go dopisują albo przy przepisywaniu pomijają. */

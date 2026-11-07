@@ -82,6 +82,18 @@ describe('dowody dla reguł ryzyka', () => {
     assert.equal(buildEvidence({ spec: plain, implementation: proof('Build przechodzi (CI)'), reviews: [], rounds: 0 }).acceptance?.[0]?.evidence, 'test: a');
   });
 
+  it('formatowanie Markdown w kryterium, np. `kod` albo **pogrubienie**, nie gubi dowodu', () => {
+    const spec = { acceptance: ['`formatPrice(129900)` zwraca „1 299,00 zł”', 'Przycisk jest **niebieski**'] };
+    const implementation = {
+      issue: 1, bugfix: false, assumptions: [],
+      acceptance: [
+        { criterion: 'formatPrice(129900) zwraca „1 299,00 zł”', evidence: 'test: a' },
+        { criterion: 'Przycisk jest niebieski', evidence: 'test: b' },
+      ],
+    };
+    assert.deepEqual(buildEvidence({ spec, implementation, reviews: [], rounds: 0 }).acceptance?.map((a) => a.evidence), ['test: a', 'test: b']);
+  });
+
   it('dwuznaczny dopisek niczego nie dopasowuje: jeden dowód nie zalicza dwóch kryteriów', () => {
     const spec = { acceptance: ['Przycisk jest niebieski (desktop)', 'Przycisk jest niebieski (mobile)'] };
     const implementation = { issue: 1, bugfix: false, acceptance: [{ criterion: 'Przycisk jest niebieski', evidence: 'zrzut: a.png' }], assumptions: [] };
