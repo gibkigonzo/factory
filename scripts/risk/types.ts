@@ -24,7 +24,7 @@ export interface FileSize {
 }
 
 export interface Finding {
-  severity: 'low' | 'medium' | 'high';
+  severity: 'low' | 'medium' | 'high' | 'critical';
   file?: string;
   line?: number;
   issue: string;
@@ -56,6 +56,8 @@ export interface Evidence {
   diff_coverage?: number;
   /** Planer stwierdził, że zbyt dużej zmiany nie da się podzielić. */
   split_impossible?: boolean;
+  /** Ryzyko produktowe ze specu; „high” wymusza High niezależnie od diffu. */
+  product_risk?: 'low' | 'high';
   behavior?: { level: Level; reason: string };
 }
 

@@ -12,7 +12,7 @@ const percent: Spec = { kind: 'number', min: 0, max: 100 };
 const FINDING_SPEC: Spec = {
   kind: 'object',
   fields: {
-    severity: { kind: 'enum', values: ['low', 'medium', 'high'] },
+    severity: { kind: 'enum', values: ['low', 'medium', 'high', 'critical'] },
     file: text,
     line: { kind: 'integer', min: 1 },
     issue: text,
@@ -35,6 +35,13 @@ export const REVIEW_SPEC: Spec = {
   required: ['perspective', 'verdict', 'confidence', 'summary', 'findings'],
 };
 
+/** Ocena oceniacza ryzyka (reguła 2): poziom i uzasadnienie. */
+export const BEHAVIOR_SPEC: Spec = {
+  kind: 'object',
+  fields: { level: { kind: 'enum', values: LEVELS }, reason: text },
+  required: ['level', 'reason'],
+};
+
 export const EVIDENCE_SPEC: Spec = {
   kind: 'object',
   fields: {
@@ -53,11 +60,8 @@ export const EVIDENCE_SPEC: Spec = {
     review_rounds: { kind: 'integer', min: 0 },
     diff_coverage: percent,
     split_impossible: { kind: 'boolean' },
-    behavior: {
-      kind: 'object',
-      fields: { level: { kind: 'enum', values: LEVELS }, reason: text },
-      required: ['level', 'reason'],
-    },
+    product_risk: { kind: 'enum', values: ['low', 'high'] },
+    behavior: BEHAVIOR_SPEC,
   },
 };
 

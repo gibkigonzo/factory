@@ -26,8 +26,9 @@ zones:                             # dopisuje ścieżki do stref z base i preset
 risk:
   medium_veto_hours: 24            # 0 = Medium traktowane jak High
 
-reviewers:
-  extra: [accessibility, performance]
+# Dodatkowe perspektywy recenzji dopisz, gdy projekt ich potrzebuje:
+# reviewers:
+#   extra: [nazwa-perspektywy]
 
 protected_files: ["backup/**"]     # dopisuje do listy z base
 

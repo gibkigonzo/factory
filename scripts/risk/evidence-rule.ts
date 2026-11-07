@@ -1,6 +1,6 @@
-// Reguła 5: dowody. Low wymaga kompletu dowodów; braki dają Medium. Osłabienie testów (usunięty plik testów
-// przy zachowanym kodzie, ubytek asercji), niskie pokrycie zmienionych linii i uwagi nierozstrzygnięte
-// po limicie rund poprawek dają High.
+// Reguła 5: dowody. Low wymaga kompletu dowodów; braki dają Medium. Nierozstrzygnięta uwaga high lub critical,
+// osłabienie testów (usunięty plik testów przy zachowanym kodzie, ubytek asercji), niskie pokrycie zmienionych
+// linii i uwagi nierozstrzygnięte po limicie rund poprawek dają High.
 
 import type { FactoryConfig, Level } from '../config/spec.ts';
 import { matchesAny } from './glob.ts';
@@ -9,7 +9,12 @@ import type { ChangedFile, Evidence, Finding, Review, RuleResult } from './types
 export function evidenceRule(files: readonly ChangedFile[], evidence: Evidence, config: FactoryConfig): RuleResult {
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
   const tests = testProblems(sorted, config);
-  const high = [...tests.high, ...coverageProblems(evidence, config), ...unresolved(evidence, config)];
+  const high = [
+    ...seriousFindings(evidence),
+    ...tests.high,
+    ...coverageProblems(evidence, config),
+    ...unresolved(evidence, config),
+  ];
   const medium = [
     ...ciProblems(evidence),
     ...acceptanceProblems(evidence),
@@ -41,9 +46,11 @@ function regressionProblems(evidence: Evidence): string[] {
   return ['poprawka błędu bez testu, który nie przechodzi przed zmianą, a przechodzi po niej'];
 }
 
-/** `approve` z uwagą o wadze high jest sprzeczny, więc liczy się jak `request_changes`. */
+const SERIOUS: readonly Finding['severity'][] = ['high', 'critical'];
+
+/** `approve` z uwagą o wadze high lub critical jest sprzeczny, więc liczy się jak `request_changes`. */
 export function effectiveVerdict(review: Review): Review['verdict'] {
-  return review.findings.some((f) => f.severity === 'high') ? 'request_changes' : review.verdict;
+  return review.findings.some((f) => SERIOUS.includes(f.severity)) ? 'request_changes' : review.verdict;
 }
 
 /** Recenzenci, którzy się różnią, albo pewność poniżej progu dają Medium. */
@@ -54,7 +61,7 @@ function reviewProblems(evidence: Evidence, config: FactoryConfig): string[] {
     const review = evidence.reviews?.find((r) => r.perspective === perspective);
     if (!review) return [`brak werdyktu recenzenta: ${perspective}`];
     const verdict = effectiveVerdict(review);
-    if (verdict !== review.verdict) return [`recenzent ${perspective}: approve z uwagą o wadze high liczy się jak request_changes`];
+    if (verdict !== review.verdict) return [`recenzent ${perspective}: approve z uwagą high lub critical liczy się jak request_changes`];
     if (verdict !== 'approve') return [`recenzent ${perspective}: ${verdict}`];
     if (review.confidence < minimum) return [`recenzent ${perspective}: pewność ${review.confidence} poniżej ${minimum}`];
     return [];
@@ -81,6 +88,15 @@ function citationFound(finding: Finding, files: readonly ChangedFile[]): boolean
 function where(finding: Finding): string {
   if (!finding.file) return finding.issue;
   return finding.line ? `${finding.file}:${finding.line}` : finding.file;
+}
+
+/** Nierozstrzygnięta uwaga o wadze high lub critical daje High. */
+function seriousFindings(evidence: Evidence): string[] {
+  return (evidence.reviews ?? []).flatMap((review) =>
+    review.findings
+      .filter((finding) => SERIOUS.includes(finding.severity))
+      .map((finding) => `nierozstrzygnięta uwaga ${finding.severity} recenzenta ${review.perspective}: ${finding.issue} (${where(finding)})`),
+  );
 }
 
 function unresolved(evidence: Evidence, config: FactoryConfig): string[] {

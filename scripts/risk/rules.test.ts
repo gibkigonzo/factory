@@ -48,6 +48,12 @@ describe('reguła 2: zachowanie i odwracalność', () => {
     assert.equal(behaviorRule({ behavior: { level: 'High', reason: 'zmienia liczenie kwot' } }).level, 'High');
     assert.equal(behaviorRule({ behavior: { level: 'Low', reason: 'tylko wygląd' } }).level, 'Low');
   });
+
+  it('wysokie ryzyko produktowe ze specu daje High bez względu na ocenę', () => {
+    const result = behaviorRule({ product_risk: 'high', behavior: { level: 'Low', reason: 'tylko wygląd' } });
+    assert.deepEqual([result.level, result.reasons], ['High', ['ryzyko produktowe w specu: wysokie', 'tylko wygląd']]);
+    assert.equal(behaviorRule({ product_risk: 'low', behavior: { level: 'Low', reason: 'tylko wygląd' } }).level, 'Low');
+  });
 });
 
 describe('reguła 3: brak testów', () => {
