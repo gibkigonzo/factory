@@ -101,6 +101,15 @@ export const SCHEMA: Extract<Spec, { kind: 'object' }> = {
       kind: 'object',
       fields: { planner: model, implementer: model, risk_assessor: model, reviewers: namedMap(model) },
     },
+    shadow: {
+      kind: 'object',
+      fields: {
+        gate_prs: positive,
+        min_agreement: { kind: 'number', min: 0, max: 1 },
+        max_false_low: { kind: 'integer', min: 0 },
+        revert_days: positive,
+      },
+    },
     human_gates: namedMap({ kind: 'list', item: text }),
     exceptions: { kind: 'list', item: exception },
     wip_limit: positive,
@@ -133,6 +142,7 @@ export const BASE_ONLY: Record<string, string> = {
   'risk.max_review_rounds': 'limit rund poprawek ustala warstwa base',
   'risk.min_diff_coverage': 'próg pokrycia zmienionych linii ustala warstwa base',
   'reviewers.perspectives': 'podstawowe perspektywy ustala warstwa base; dodatkowe wpisz w reviewers.extra',
+  shadow: 'progi Bramki 1 ustala warstwa base',
 };
 
 /** Pola presetu języka lub frameworka. */
@@ -156,6 +166,10 @@ export const REQUIRED: Record<LayerKind, readonly string[]> = {
     'models.implementer',
     'models.risk_assessor',
     'models.reviewers.default',
+    'shadow.gate_prs',
+    'shadow.min_agreement',
+    'shadow.max_false_low',
+    'shadow.revert_days',
     'wip_limit',
     'daily_runs',
   ],
@@ -209,6 +223,8 @@ export interface FactoryConfig {
     risk_assessor: string;
     reviewers: Record<string, string> & { default: string };
   };
+  /** Progi Bramki 1 trybu cienia. */
+  shadow: { gate_prs: number; min_agreement: number; max_false_low: number; revert_days: number };
   human_gates: Record<string, string[]>;
   exceptions: GateException[];
   wip_limit: number;

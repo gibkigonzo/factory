@@ -1,6 +1,7 @@
 # Etap oceny ryzyka po recenzji: oceniacz (reguła 2), reguły ryzyka, check factory/risk, etykieta risk:* i raport w PR.
 # W Etapie 0 check jest tylko informacyjny (neutral): fabryka niczego nie scala.
 # Wywołuj w tym samym uruchomieniu co review.yml (needs), bo korzysta z jego artefaktów.
+# Artefakt factory-risk (ocena, dowody, raport, werdykt trybu cienia) czyta potem merge.yml.
 name: factory-risk
 
 on:
@@ -153,7 +154,9 @@ jobs:
           node "$F/scripts/workflow/cli.ts" evidence --work "$W" --rounds "$ROUNDS" > "$W/evidence.json"
           node "$F/scripts/risk-rules.ts" --base "origin/$BASE" --head HEAD --evidence "$W/evidence.json" --json > "$W/assessment.json"
           node "$F/scripts/workflow/cli.ts" report --assessment "$W/assessment.json" --panel "$W/panel.json" > "$W/report.md"
-          mkdir -p risk && cp "$W/evidence.json" "$W/assessment.json" "$W/report.md" risk/
+          node "$F/scripts/workflow/cli.ts" shadow-comment --pr "$PR" --assessment "$W/assessment.json" \
+            --evidence "$W/evidence.json" --config "$W/config.json" > "$W/shadow.md"
+          mkdir -p risk && cp "$W/evidence.json" "$W/assessment.json" "$W/report.md" "$W/shadow.md" "$W/config.json" risk/
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

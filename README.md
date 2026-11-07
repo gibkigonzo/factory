@@ -2,7 +2,7 @@
 
 Generyczna fabryka oprogramowania oparta na Claude Code. Zamienia rozmowę o pomyśle w scalony, zweryfikowany kod. Działa dla stron WWW i dla gier w Godot.
 
-> **Status:** Etap 0 (tryb cienia) w przygotowaniu. Gotowy jest kontrakt projektu: schemat `factory.yml`, presety i walidacja.
+> **Status:** Etap 0 (tryb cienia). Taśma prowadzi zadanie od issue do werdyktu fabryki w PR, ale niczego nie scala. O przejściu do Etapu 1 rozstrzyga Bramka 1 w dzienniku trybu cienia.
 
 ## Jak działa
 
@@ -35,8 +35,10 @@ flowchart TD
   A4("Recenzenci, każdy w świeżym kontekście: werdykty w JSON"):::agent
   A5("Oceniacz ryzyka: zachowanie i odwracalność"):::agent
   S6["Reguły ryzyka: poziom, check factory/risk, etykieta risk:*, raport w PR"]:::script
-  H3(["Etap 0: decydujesz o każdym PR, oceniasz werdykt fabryki"]):::human
-  D{"Etap 1: poziom"}:::script
+  D{"Merger: decyzja z poziomu"}:::script
+  S7["Etap 0: werdykt w PR, nic się nie scala"]:::script
+  H3(["Oceniasz werdykt 👍 albo 👎 i sam decydujesz o PR"]):::human
+  S8["Dziennik trybu cienia: metryki i Bramka 1"]:::script
   M1["Merger scala od razu"]:::script
   M2["Merger scala po 24 h bez /veto"]:::script
   H4(["Decydujesz Ty"]):::human
@@ -49,11 +51,11 @@ flowchart TD
   S3 --> S4 & S5
   S5 --> A4 --> A5 --> S6
   S4 --> S6
-  S6 --> H3
   S6 --> D
-  D -->|"Low"| M1
-  D -->|"Medium"| M2
-  D -->|"High"| H4
+  D -->|"Etap 0"| S7 --> H3 --> S8
+  D -->|"Etap 1, Low"| M1
+  D -->|"Etap 1, Medium"| M2
+  D -->|"Etap 1, High"| H4
   H5 -->|"/change"| A3
 
   classDef human fill:#dbeafe,stroke:#1d4ed8,color:#0b1f33
@@ -62,6 +64,21 @@ flowchart TD
 ```
 
 W Etapie 0 (tryb cienia) fabryka niczego nie scala. Przy każdym PR zapisuje, co by zrobiła, a decyduje właściciel. Merger włącza się w Etapie 1, po przejściu Bramki 1.
+
+### Tryb cienia
+
+1. Po ocenie ryzyka `merge.yml` dodaje w PR komentarz z werdyktem fabryki. Low: scaliłaby od razu. Medium: czekałaby 24 h na `/veto`. High: przekazałaby decyzję Tobie. Zmiana za duża albo zablokowana przez bramki jakości: odesłałaby ją do podziału albo do poprawek.
+2. Na komentarz reagujesz 👍 (zgoda) albo 👎 (niezgoda). Każda runda poprawek dostaje nowy komentarz, więc ocena dotyczy konkretnego werdyktu. O samym PR decydujesz jak zwykle: merge, `/reject` albo revert.
+3. `journal.yml` prowadzi przypięte issue „Tryb cienia” (etykieta `factory:journal`): stan Bramki 1, metryki i listę PR-ów fabryki. Reakcje nie uruchamiają workflowów, więc dziennik odświeża się po każdym werdykcie, po zamknięciu PR fabryki i raz dziennie. Na żądanie: Actions → factory → Run workflow → `journal`.
+
+Metryki liczy skrypt, nie model:
+
+- **zgodność**: odsetek werdyktów, które oceniłeś 👍;
+- **fałszywe Low**: werdykt „scaliłaby”, który oceniłeś 👎, PR zamknięty bez merge'u albo merge cofnięty w ciągu `revert_days` dni;
+- **rundy poprawek** i **czas od `ready` do merge'u**;
+- **próg pewności recenzentów**: zakończone PR-y dzielone według najniższej pewności w panelu (≥ 0,8 i < 0,8) z odsetkiem przyjętych (scalonych i niecofniętych) w każdej grupie. Jeśli odsetek jest podobny, pewność nie przewiduje Twoich decyzji i próg zastąpią zgodność recenzentów oraz cytaty, które da się sprawdzić.
+
+Bramka 1 przechodzi przy 20 ocenionych PR, zgodności co najmniej 90% i braku fałszywych Low (progi `shadow` w `base`). Dziennik pokazuje wtedy, że można przejść do Etapu 1, ale decyzja należy do Ciebie.
 
 ## Reguły ryzyka v1
 
@@ -122,6 +139,7 @@ Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy skła
 | `models` | `base`, projekt | model na etapie: `planner`, `implementer`, `risk_assessor`, `reviewers.default` i wybrane perspektywy |
 | `human_gates` | projekt | etykiety kierujące PR do człowieka, np. `playtest: [feel]` |
 | `wip_limit`, `daily_runs` | `base`, projekt | równoległe zadania i dzienne uruchomienia taśmy |
+| `shadow` | tylko `base` | progi Bramki 1: `gate_prs`, `min_agreement`, `max_false_low`, `revert_days` |
 | `schedules` | projekt | agenci cykliczni: `nightly`, `weekly` albo `off` |
 
 Wzorce ścieżek są względne od korzenia repo i znają tylko `*` (w obrębie katalogu), `**` (dowolna głębokość, także zero katalogów) i `?`. Wzorzec zaczynający się od `*` trzeba w YAML-u ująć w cudzysłów.
@@ -257,6 +275,8 @@ Dalej wszystko dzieje się w issue i PR, także z telefonu.
 | `implement.yml` | plan albo `/change` w PR | patch od implementera, sprawdzenie ścieżek, PR z gałęzi `factory/<numer>-<nazwa>`; uruchamia recenzję |
 | `review.yml` | implementacja | komendy z `factory.yml` (CI), skład panelu, recenzenci równolegle |
 | `risk.yml` | po recenzji, w tym samym uruchomieniu | oceniacz ryzyka, reguły, check `factory/risk`, etykieta `risk:*`, raport w PR |
+| `merge.yml` | po ocenie ryzyka, w tym samym uruchomieniu | w Etapie 0 tylko werdykt trybu cienia w nowym komentarzu |
+| `journal.yml` | po werdykcie, po zamknięciu PR fabryki, raz dziennie | dziennik trybu cienia w przypiętym issue |
 | `commands.yml` | komentarz od właściciela | `/approve`, `/veto`, `/reject`, `/change <opis>`, `/split` |
 
 **Bezpieczeństwo:**
@@ -267,10 +287,11 @@ Dalej wszystko dzieje się w issue i PR, także z telefonu.
 - Etapy łączy `workflow_dispatch`, bo zdarzenia z `GITHUB_TOKEN` nie uruchamiają innych workflowów. W Etapie 0 zmiany podpisuje `github-actions[bot]`; własna aplikacja GitHub fabryki przyjdzie w Etapie 1.
 - Na taśmę wchodzą tylko zdarzenia od właściciela repo, kont z wejścia `trusted` i workflowów fabryki. Komendy wydaje tylko człowiek.
 - `factory.yml` i perspektywy projektu w recenzji i ocenie pochodzą z gałęzi bazowej.
+- Dziennik uruchamia też `pull_request_target` przy zamknięciu PR z gałęzi `factory/*` tego repo. Nie pobiera kodu z PR: czyta gałąź główną i API.
 
 **Ustawienia** (wejścia w szablonie): `factory_ref` (wersja fabryki; w Etapie 0 `main`), `runs_on` (np. `'["self-hosted", "vps"]'` dla własnego runnera w repo prywatnym), `trusted`, `max_parallel` (recenzenci naraz). Modele bierze z `models` w `factory.yml`, a dzienny limit z `daily_runs` (liczą się uruchomienia etapów przez `workflow_dispatch`).
 
-Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML: Claude bez prawa zapisu, akcje przypięte do commitów, żadnych wyrażeń wklejonych w skrypty, uprawnienia szablonu pokrywają uprawnienia jobów.
+Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML: Claude bez prawa zapisu, akcje przypięte do commitów, żadnych wyrażeń wklejonych w skrypty, uprawnienia szablonu pokrywają uprawnienia jobów, merger i dziennik bez Claude.
 
 ## Struktura repo
 

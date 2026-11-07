@@ -70,6 +70,13 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Taśma zostaje na GitHubie. `runs-on` jest ustawieniem: VPS właściciela podłączymy później jako self-hosted runner, tylko dla repo prywatnych.
 - Repo testowe jest prywatne. Ruleset na `main` w repo prywatnym wymaga GitHub Pro; decyzja przed Etapem 1.
 
+### Tryb cienia (7 listopada 2026)
+
+- Po każdej ocenie ryzyka `merge.yml` dodaje w PR nowy komentarz z werdyktem mergera, a właściciel ocenia go 👍 albo 👎. Decyzję liczy `scripts/shadow/decision.ts`; ten sam kod zdecyduje o merge'u w Etapie 1.
+- Dziennik to przypięte issue „Tryb cienia”. Odświeża się po werdykcie, po zamknięciu PR fabryki i raz dziennie, bo reakcje nie uruchamiają workflowów.
+- Kalibracja progu pewności porównuje odsetek przyjętych PR w grupach pewności, a nie zgodność z werdyktem, bo werdykt sam zależy od pewności.
+- Progi Bramki 1 są w sekcji `shadow` w `base`.
+
 ### Logowanie i pilot (6 listopada 2026)
 
 - `claude-code-action` loguje się przez subskrypcję: sekret `CLAUDE_CODE_OAUTH_TOKEN`, który dodaje właściciel.
