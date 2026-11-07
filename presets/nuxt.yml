@@ -1,0 +1,30 @@
+# Preset Nuxt 4 (katalog aplikacji app/, serwer w server/). Dołączaj po web: extends: [base, typescript, web, nuxt].
+
+zones:
+  security:
+    - "app/middleware/**"      # middleware tras: przekierowania i strażnicy dostępu
+    - "server/middleware/**"
+  shared:
+    - "server/**"              # API i trasy serwera
+    - "shared/**"              # kod wspólny dla app/ i server/
+    - "app/app.vue"
+    - "app/app.config.*"
+    - "app/error.vue"
+    - "app/layouts/**"
+    - "app/composables/**"
+    - "app/utils/**"
+    - "app/plugins/**"
+    - "app/stores/**"
+    - "modules/**"
+    - "layers/**"
+  code:
+    - "app/components/**"
+    - "app/pages/**"
+    - "app/assets/**"
+    - "content/**"
+
+files:
+  translations:
+    - "i18n/**"
+  generated:
+    - ".data/**"

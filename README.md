@@ -115,7 +115,7 @@ Reguły mają trzy warstwy: wspólne `base`, presety języka i frameworka oraz `
   Lokalnie: `/plugin marketplace add gibkigonzo/factory`, potem `/plugin install factory@factory`. Sesje Claude Code w chmurze (także z telefonu) nie instalują pluginów z ustawień repo, więc skille potrzebne tam, jak `spec-writer`, projekt trzyma w `.claude/skills/`.
 - **Workflowy.** Wspólne workflowy działają przez `workflow_call`:
   `uses: gibkigonzo/factory/.github/workflows/<name>.yml@v1`. Mogą je wywoływać także repozytoria prywatne.
-- **Kontrakt.** Projekt dodaje `factory.yml` z `extends: [base, <język>, <framework>]`. Wersje presetów przypina tagami.
+- **Kontrakt.** Projekt dodaje `factory.yml` z `extends: [base, <język>, <framework>]`, np. `[base, typescript, web, nuxt]`. Preset `nuxt` zna układ Nuxt 4: komponenty, strony i zasoby w `app/` to Low, serwer, composables, layouty i pluginy to Medium, middleware to High. Wersje presetów przypina tagami.
 
 ## Kontrakt projektu (`factory.yml`)
 
@@ -324,7 +324,7 @@ skills/               skille: spec-writer, planner, implementer, review, risk-as
 agents/               recenzenci review-<perspektywa>, generowani z skills/review, tylko do odczytu
 hooks/                hooks.json: blokada chronionych plików, Stop dopiero po zielonych testach
 scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, skład panelu, wyjście agentów, merger
-presets/              warstwy reguł: base, typescript, web, gdscript, godot
+presets/              warstwy reguł: base, typescript, web, nuxt; później gdscript, godot
 templates/            szablony dla projektów: workflow taśmy (templates/workflows/factory.yml), reguła dla CLAUDE.md projektu (templates/claude/CLAUDE.md), przykładowy factory.yml
 .github/workflows/    wspólne workflowy typu workflow_call
 ```

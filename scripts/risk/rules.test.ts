@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { changed, configWith } from './fixtures.ts';
-import { behaviorRule, sizeRule, testsRule, zonesRule } from './rules.ts';
+import { loadConfig } from '../config/load.ts';
+import { behaviorRule, sizeRule, testsRule, zoneOf, zonesRule } from './rules.ts';
 
 const config = configWith();
 
@@ -9,6 +10,20 @@ describe('reguła 1: strefy', () => {
   it('zwykły kod to Low, logika współdzielona Medium', () => {
     assert.equal(zonesRule([changed('src/components/Button.vue')], config).level, 'Low');
     assert.equal(zonesRule([changed('src/lib/api.ts')], config).level, 'Medium');
+  });
+
+  it('preset nuxt: komponenty i strony Low, serwer i composables Medium, middleware High', () => {
+    const nuxt = loadConfig('project: x\nextends: [base, typescript, web, nuxt]\ncommands: { test: t, build: b }\n', 'factory.yml');
+    assert.ok(nuxt.ok, nuxt.ok ? '' : nuxt.errors.join('\n'));
+    const level = (path: string) => zoneOf(path, nuxt.config).level;
+    assert.equal(level('app/components/SiteHeader.vue'), 'Low');
+    assert.equal(level('app/pages/index.vue'), 'Low');
+    assert.equal(level('app/composables/useCart.ts'), 'Medium');
+    assert.equal(level('app/app.vue'), 'Medium');
+    assert.equal(level('server/api/products.get.ts'), 'Medium');
+    assert.equal(level('nuxt.config.ts'), 'Medium');
+    assert.equal(level('app/middleware/auth.ts'), 'High');
+    assert.equal(level('server/middleware/log.ts'), 'High');
   });
 
   it('ścieżka spoza mapy stref dostaje Medium', () => {
