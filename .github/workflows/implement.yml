@@ -117,16 +117,22 @@ jobs:
             echo "prompt<<FACTORY_EOF"; cat "$W/prompt.md"; echo "FACTORY_EOF"
           } >> "$GITHUB_OUTPUT"
 
+      # Limit dotyczy nowych zadań. Rundy poprawek otwartego PR (pętla, /change) go nie sprawdzają,
+      # bo pętla kończy się po risk.max_review_rounds rundach, a PR nie powinien zostać bez werdyktu.
       - name: Budżet dzienny
         id: budget
+        if: inputs.pr == ''
         env:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW: ${{ inputs.workflow }}
         run: |
           LIMIT=$(jq .daily_runs "$W/config.json")
-          COUNT=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$WORKFLOW/runs?event=workflow_dispatch&created=>=$(date -u +%F)&per_page=1" --jq .total_count)
+          gh api --paginate "repos/$GITHUB_REPOSITORY/actions/workflows/$WORKFLOW/runs?created=>=$(date -u +%F)&per_page=100" \
+            --jq '[.workflow_runs[] | {display_title, event}]' | jq -s 'add // []' > "$W/runs.json"
+          COUNT=$(node "$F/scripts/workflow/cli.ts" budget --runs "$W/runs.json")
+          echo "Przebiegi z Claude dzisiaj (UTC): $COUNT z $LIMIT" >> "$GITHUB_STEP_SUMMARY"
           if [ "$COUNT" -gt "$LIMIT" ]; then
-            echo "::warning::Dzienny limit uruchomień ($LIMIT) wyczerpany; taśma czeka do jutra."
+            echo "::warning::Dzienny limit uruchomień ($LIMIT) wyczerpany; zadanie czeka w kolejce do jutra."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -411,7 +417,10 @@ jobs:
           WORKFLOW: ${{ inputs.workflow }}
         run: |
           if [ "$OVER" = true ]; then
-            gh issue comment "$ISSUE" --body "Dzienny limit uruchomień taśmy jest wyczerpany. Uruchom etap implement jutro albo ręcznie: $RUN"
+            # Kolejka uruchomi zadanie przy porannym przeglądzie (schedule), gdy limit się odnowi.
+            gh label create queued --force >/dev/null
+            gh issue edit "$ISSUE" --add-label queued
+            gh issue comment "$ISSUE" --body "Dzienny limit uruchomień taśmy jest wyczerpany. Zadanie czeka w kolejce i ruszy samo przy porannym przeglądzie kolejki. Log: $RUN"
             exit 0
           fi
           gh label create blocked --force >/dev/null

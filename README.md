@@ -154,7 +154,7 @@ Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy skła
 | `reviewers` | `base` (`perspectives`), projekt (`extra`) | perspektywy recenzji: podstawowe zawsze, dodatkowe z katalogu albo z `.factory/perspectives/` |
 | `models` | `base`, projekt | model na etapie: `planner`, `implementer`, `risk_assessor`, `reviewers.default` i wybrane perspektywy |
 | `human_gates` | projekt | etykiety kierujące PR do człowieka, np. `playtest: [feel]` |
-| `wip_limit`, `daily_runs` | `base`, projekt | równoległe zadania i dzienne uruchomienia taśmy; zadanie ponad limit albo ze wspólnymi plikami z zadaniem w toku czeka w kolejce |
+| `wip_limit`, `daily_runs` | `base`, projekt | równoległe zadania i dzienny limit przebiegów z Claude (plan, implementacja, recenzja); zadanie ponad `wip_limit`, ponad dzienny limit albo ze wspólnymi plikami z zadaniem w toku czeka w kolejce |
 | `shadow` | tylko `base` | progi Bramki 1: `gate_prs`, `min_agreement`, `max_false_low`, `revert_days` |
 | `schedules` | projekt | agenci cykliczni: `nightly`, `weekly` albo `off` |
 
@@ -329,7 +329,7 @@ Dalej wszystko dzieje się w issue i PR, także z telefonu.
 - `factory.yml` i perspektywy projektu w recenzji i ocenie pochodzą z gałęzi bazowej.
 - Dziennik i kolejkę uruchamia też `pull_request_target` przy zamknięciu PR z gałęzi `factory/*` tego repo. Nie pobierają kodu z PR: czytają gałąź główną i API.
 
-**Ustawienia** (wejścia w szablonie): `factory_ref` (wersja fabryki; w Etapie 0 `main`), `runs_on` (np. `'["self-hosted", "vps"]'` dla własnego runnera w repo prywatnym), `trusted`, `max_parallel` (recenzenci naraz). Modele bierze z `models` w `factory.yml`, a dzienny limit z `daily_runs` (liczą się uruchomienia etapów przez `workflow_dispatch`).
+**Ustawienia** (wejścia w szablonie): `factory_ref` (wersja fabryki; w Etapie 0 `main`), `runs_on` (np. `'["self-hosted", "vps"]'` dla własnego runnera w repo prywatnym), `trusted`, `max_parallel` (recenzenci naraz). Modele bierze z `models` w `factory.yml`, a dzienny limit z `daily_runs`. Limit liczy przebiegi z Claude po nazwie przebiegu (`run-name` w szablonie: `factory plan`, `factory implement`, `factory review`) i sprawdza go implementacja nowego zadania. Zadanie ponad limit czeka w kolejce do porannego przeglądu, a rundy poprawek otwartego PR limitu nie sprawdzają.
 
 Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML: Claude bez prawa zapisu, akcje przypięte do commitów, żadnych wyrażeń wklejonych w skrypty, uprawnienia szablonu pokrywają uprawnienia jobów, merger i dziennik bez Claude.
 

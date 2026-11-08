@@ -17,6 +17,8 @@ import { toJsonSchema } from './jsonschema.ts';
 import { branchName, DENIED_FOR_READERS, implementerTools, pathProblems, READ_ONLY_TOOLS } from './patch.ts';
 import { assessPrompt, implementPrompt, planPrompt, reviewPrompt } from './prompts.ts';
 import { latestMarked, planComment, PLAN_MARKER, prBody, PR_MARKER } from './render.ts';
+import { claudeRuns } from './budget.ts';
+import type { Run } from './budget.ts';
 import { installCommands } from './dependencies.ts';
 import type { Dependency } from './dependencies.ts';
 import { nextRound, roundComment } from './loop.ts';
@@ -70,6 +72,7 @@ function options(args: string[]) {
       limit: { type: 'string' },
       round: { type: 'string', default: '0' },
       waiting: { type: 'string' },
+      runs: { type: 'string' },
     },
   });
 }
@@ -165,6 +168,8 @@ function run(command: string | undefined, rest: string[]): string {
       return evidence(v);
     case 'usage':
       return usage(v);
+    case 'budget':
+      return String(claudeRuns(json(required(v.runs, '--runs')) as Run[]));
     case 'started': {
       const file = required(v.file, '--file');
       if (!existsSync(file) || !sessionStarted(json(file))) throw new UsageError('Claude nie wystartował: brak wyniku sesji albo błąd bez kosztu');

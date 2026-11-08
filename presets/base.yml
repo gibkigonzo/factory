@@ -46,7 +46,7 @@ models:
     security: opus       # najwyższa stawka
 
 wip_limit: 3     # równoległe zadania
-daily_runs: 20   # dzienne uruchomienia taśmy; po przekroczeniu taśma czeka do następnego dnia
+daily_runs: 20   # dzienne przebiegi z Claude (plan, implementacja, recenzja); nowe zadanie ponad limit czeka do jutra
 
 zones:
   factory:
