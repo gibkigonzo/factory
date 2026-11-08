@@ -77,6 +77,15 @@ export function sessionError(raw: unknown): string | undefined {
   return text.replace(/\s+/g, ' ').slice(0, 300);
 }
 
+/** Czy sesja Claude zaczęła pracę: jest wynik i koszt większy od zera. Inaczej to awaria startu, którą warto ponowić. */
+export function sessionStarted(raw: unknown): boolean {
+  const messages = Array.isArray(raw) ? raw : [raw];
+  const result = [...messages].reverse().find((m) => (m as { type?: unknown } | null)?.type === 'result') as
+    | { total_cost_usd?: unknown }
+    | undefined;
+  return typeof result?.total_cost_usd === 'number' && result.total_cost_usd > 0;
+}
+
 /** Suma rekordów na etap, w kolejności taśmy. */
 export function sumUsage(records: readonly Usage[]): Usage[] {
   const totals = new Map<Stage, Usage>();
