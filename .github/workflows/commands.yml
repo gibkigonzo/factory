@@ -60,8 +60,14 @@ jobs:
               ;;
             change)
               if [ "$IS_PR" != true ]; then gh issue comment "$NUMBER" --body "/change działa tylko w PR."; exit 0; fi
-              ISSUE=$(gh pr view "$NUMBER" --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty')
-              if [ -z "$ISSUE" ]; then gh pr comment "$NUMBER" --body "Nie znalazłem issue, które ten PR zamyka."; exit 0; fi
+              # Numer issue z gałęzi factory/<numer>-…, którą nadaje fabryka. GitHub nie zawsze łączy PR z issue
+              # przez „Closes #N”, więc powiązanie to tylko zapas.
+              BRANCH=$(gh pr view "$NUMBER" --json headRefName --jq .headRefName)
+              ISSUE=$(sed -nE 's#^factory/([0-9]+)-.*#\1#p' <<<"$BRANCH")
+              if [ -z "$ISSUE" ]; then
+                ISSUE=$(gh pr view "$NUMBER" --json closingIssuesReferences --jq '.closingIssuesReferences[0].number // empty')
+              fi
+              if [ -z "$ISSUE" ]; then gh pr comment "$NUMBER" --body "Nie znalazłem issue tego PR: gałąź nie jest factory/<numer>-… i PR nie zamyka żadnego issue."; exit 0; fi
               gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=implement -f issue="$ISSUE" -f pr="$NUMBER" -f note="$COMMENT"
               ;;
             split)
