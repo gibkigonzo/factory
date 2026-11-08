@@ -131,6 +131,11 @@ describe('workflowy fabryki', () => {
     assert.match(text, /--add-label blocked/);
   });
 
+  it('recenzenci dostają diff bez lockfile i plików generowanych, a ich streszczenie obok', () => {
+    assert.match(workflows.review!.text, /cli\.ts" review-diff --base/);
+    assert.doesNotMatch(workflows.review!.text, /git diff --no-color -M[^\n]*> "\$W\/diff\.patch"/);
+  });
+
   it('limit dzienny: liczy etapy z Claude, sprawdza tylko nowe zadania, a zadanie ponad limit trafia do kolejki', () => {
     const { text, data } = workflows.implement!;
     const budget = (data.jobs.implement!.steps ?? []).find((step) => (step as { id?: string }).id === 'budget') as Step & { if?: string };

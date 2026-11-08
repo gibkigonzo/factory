@@ -162,7 +162,9 @@ jobs:
             || git show "origin/$BASE:factory.yml" > "$RUNNER_TEMP/base/factory.yml"
           node "$F/scripts/config/cli.ts" "$RUNNER_TEMP/base/factory.yml" --json > "$W/config.json"
           node "$F/scripts/review/panel.ts" --base "origin/$BASE" --head HEAD --out "$W" > "$W/panel.json"
-          git diff --no-color -M "$(git merge-base "origin/$BASE" HEAD)" HEAD > "$W/diff.patch"
+          # Lockfile'y i pliki generowane zamiast w diffie są w streszczeniu skipped.md (pakiety, wersje, hosty).
+          node "$F/scripts/workflow/cli.ts" review-diff --base "$(git merge-base "origin/$BASE" HEAD)" --config "$W/config.json" \
+            --out "$W/diff.patch" --summary "$W/skipped.md"
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$W/pr.md"
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body \
             | node "$F/scripts/workflow/cli.ts" find-implementation --pr "$PR" > "$W/implementation.json"
@@ -315,7 +317,7 @@ jobs:
           NAME: ${{ matrix.member.name }}
         run: |
           mkdir -p "$(dirname "usage/review-$NAME.json")"
-          node "$F/scripts/workflow/cli.ts" usage --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" --stage review --out "usage/review-$NAME.json"
+          node "$F/scripts/workflow/cli.ts" usage --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" --stage review --name "$NAME" --out "usage/review-$NAME.json"
 
       - name: Sprawdzenie werdyktu
         env:

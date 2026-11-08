@@ -1,7 +1,8 @@
 // Jedno wejście dla kroków workflowów fabryki. Każda podkomenda robi jedną deterministyczną rzecz.
 // Użycie: node scripts/workflow/cli.ts <podkomenda> [opcje]
 
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { isOutputKind, OUTPUTS, parseOutput } from '../agents/output.ts';
@@ -20,6 +21,9 @@ import { latestMarked, planComment, PLAN_MARKER, prBody, PR_MARKER } from './ren
 import { claudeRuns } from './budget.ts';
 import type { Run } from './budget.ts';
 import { installCommands } from './dependencies.ts';
+import { packageLockChanges, skippedSummary } from './lockfiles.ts';
+import type { SkippedFile } from './lockfiles.ts';
+import { matchesAny } from '../risk/glob.ts';
 import type { Dependency } from './dependencies.ts';
 import { nextRound, roundComment } from './loop.ts';
 import { admit, queueState, release } from './queue.ts';
@@ -73,6 +77,9 @@ function options(args: string[]) {
       round: { type: 'string', default: '0' },
       waiting: { type: 'string' },
       runs: { type: 'string' },
+      name: { type: 'string' },
+      base: { type: 'string' },
+      summary: { type: 'string' },
     },
   });
 }
@@ -136,7 +143,7 @@ function usage(v: Values): string {
   if (!isStage(stage)) throw new UsageError(`usage: etap ${['plan', 'implement', 'review', 'assess'].join('|')}`);
   const file = required(v.file, '--file');
   const raw = existsSync(file) ? json(file) : undefined;
-  const record = raw === undefined ? undefined : readUsage(raw, stage);
+  const record = raw === undefined ? undefined : readUsage(raw, stage, v.name);
   if (!record) return `zużycie: brak wyniku w ${file}`;
   writeFileSync(required(v.out, '--out'), JSON.stringify([record]));
   const error = sessionError(raw);
@@ -168,6 +175,8 @@ function run(command: string | undefined, rest: string[]): string {
       return evidence(v);
     case 'usage':
       return usage(v);
+    case 'review-diff':
+      return reviewDiff(v);
     case 'budget':
       return String(claudeRuns(json(required(v.runs, '--runs')) as Run[]));
     case 'started': {
@@ -249,6 +258,48 @@ function run(command: string | undefined, rest: string[]): string {
     default:
       throw new UsageError(`nieznana podkomenda: ${command ?? '(brak)'}`);
   }
+}
+
+function git(args: string[]): string {
+  const run = spawnSync('git', args, { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+  if (run.status !== 0) throw new UsageError(`git ${args.join(' ')}: ${run.stderr.trim()}`);
+  return run.stdout;
+}
+
+/** Diff dla recenzentów bez lockfile'ów i plików generowanych, a obok ich streszczenie. */
+function reviewDiff(v: Values): string {
+  const base = required(v.base, '--base');
+  const cfg = config(v.config);
+  const skip = [...cfg.files.lockfiles, ...cfg.files.generated];
+  const changed = git(['diff', '--name-only', '--no-renames', base, 'HEAD']).split('\n').filter(Boolean);
+  const skipped = changed.filter((path) => matchesAny(path, skip));
+  const out = openSync(required(v.out, '--out'), 'w');
+  const diff = spawnSync('git', ['diff', '--no-color', '-M', base, 'HEAD', '--', '.', ...skipped.map((p) => `:(exclude,literal)${p}`)], {
+    stdio: ['ignore', out, 'inherit'],
+  });
+  closeSync(out);
+  if (diff.status !== 0) throw new UsageError('git diff dla recenzentów się nie udał');
+  const show = (ref: string, path: string) => {
+    const run = spawnSync('git', ['show', `${ref}:${path}`], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
+    return run.status === 0 ? run.stdout : undefined;
+  };
+  const parse = (text: string | undefined): unknown => {
+    try {
+      return text === undefined ? {} : JSON.parse(text);
+    } catch {
+      return {};
+    }
+  };
+  const files: SkippedFile[] = skipped.map((path) => {
+    const [added = '0', deleted = '0'] = git(['diff', '--numstat', '--no-renames', base, 'HEAD', '--', `:(literal)${path}`]).split('\t');
+    const file: SkippedFile = { path, added: Number(added) || 0, deleted: Number(deleted) || 0 };
+    if (path === 'package-lock.json' || path.endsWith('/package-lock.json')) {
+      file.lock = packageLockChanges(parse(show(base, path)), parse(show('HEAD', path)));
+    }
+    return file;
+  });
+  writeFileSync(required(v.summary, '--summary'), skippedSummary(files));
+  return `diff dla recenzentów: pominięte pliki: ${skipped.length}`;
 }
 
 function limit(v: Values): number {

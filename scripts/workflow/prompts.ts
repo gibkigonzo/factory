@@ -49,7 +49,7 @@ export function implementPrompt(ctx: PromptContext & { change?: boolean }): stri
 
 export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: string }): string {
   const lines = [
-    `Diff zmiany: \`${ctx.work}/diff.patch\`.`,
+    `Diff zmiany: \`${ctx.work}/diff.patch\`. Lockfile'y i pliki generowane są zamiast w nim streszczone w \`${ctx.work}/skipped.md\` (plik jest pusty, gdy niczego nie pominięto).`,
     `Spec z issue: \`${ctx.work}/spec.md\`.`,
     `Opis PR z dowodami implementera: \`${ctx.work}/pr.md\`.`,
     `Artefakty weryfikacji (mogą być puste): \`${ctx.work}/artifacts/\`.`,
@@ -63,7 +63,7 @@ export function assessPrompt(ctx: PromptContext): string {
   return [
     body('skills/risk-assessor/SKILL.md'),
     task([
-      `Diff zmiany: \`${ctx.work}/diff.patch\`.`,
+      `Diff zmiany: \`${ctx.work}/diff.patch\`. Lockfile'y i pliki generowane są zamiast w nim streszczone w \`${ctx.work}/skipped.md\` (plik jest pusty, gdy niczego nie pominięto).`,
       `Spec z issue: \`${ctx.work}/spec.md\`.`,
       `Werdykty recenzentów: \`${ctx.work}/verdicts/\`.`,
     ]),

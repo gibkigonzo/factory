@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { parseUsageBlocks, parseUsageList, readUsage, sessionError, sessionStarted, sumUsage, usageBlock } from './usage.ts';
+import { outputChars, parseUsageBlocks, parseUsageList, readUsage, sessionError, sessionStarted, sumUsage, usageBlock } from './usage.ts';
 import type { Usage } from './usage.ts';
 import { planComment, prBody } from './render.ts';
 
@@ -53,6 +53,33 @@ describe('zużycie etapów', () => {
     assert.equal(sessionStarted([{ type: 'system', subtype: 'init' }]), false);
     assert.equal(sessionStarted([{ type: 'result', is_error: true, num_turns: 1, total_cost_usd: 0 }]), false);
     assert.equal(sessionStarted(null), false);
+  });
+
+  it('perspektywa recenzenta i podział wyjścia: rozumowanie, tekst, wywołania narzędzi', () => {
+    const assistant = (...content: object[]) => ({ type: 'assistant', message: { content } });
+    const messages = [
+      assistant({ type: 'thinking', thinking: 'abcd' }, { type: 'text', text: 'ab' }),
+      assistant({ type: 'tool_use', name: 'Write', input: { file_path: 'a', content: 'xyz' } }),
+      RESULT,
+    ];
+    assert.deepEqual(outputChars(messages), { thinking: 4, text: 2, tools: JSON.stringify({ file_path: 'a', content: 'xyz' }).length });
+    const record = readUsage(messages, 'review', 'security')!;
+    assert.equal(record.name, 'security');
+    assert.equal(record.chars?.thinking, 4);
+    assert.equal(readUsage([RESULT], 'review', 'Zła Nazwa')?.name, undefined);
+    assert.deepEqual(parseUsageList([{ ...usage('review', 1), name: 'tests', chars: { thinking: 1, text: -2 } }])[0], {
+      ...usage('review', 1), name: 'tests', chars: { thinking: 1, text: 0, tools: 0 },
+    });
+  });
+
+  it('sumuje recenzentów osobno, a pozostałe etapy razem', () => {
+    const named = (name: string, cost: number) => ({ ...usage('review', cost), name, chars: { thinking: 1, text: 1, tools: 0 } });
+    const totals = sumUsage([named('tests', 0.1), usage('plan', 0.3), named('security', 0.2), named('tests', 0.05), usage('plan', 0.1)]);
+    assert.deepEqual(totals.map((t) => [t.stage, t.name, t.count, t.cost, t.chars?.thinking]), [
+      ['plan', undefined, 2, 0.4, undefined],
+      ['review', 'security', 1, 0.2, 1],
+      ['review', 'tests', 2, 0.15, 2],
+    ]);
   });
 
   it('sumuje na etap w kolejności taśmy', () => {

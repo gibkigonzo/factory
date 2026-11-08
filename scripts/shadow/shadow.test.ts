@@ -186,6 +186,17 @@ describe('dane z GitHuba', () => {
     assert.deepEqual(m?.stages.map((s) => [s.stage, s.perPr.toFixed(2)]), [['plan', '0.30'], ['implement', '0.80'], ['review', '0.90'], ['assess', '0.10']]);
   });
 
+  it('koszt recenzentów osobno i podział wyjścia w dzienniku', () => {
+    const record = (number: number, usage: Usage[]) => ({ number, title: `PR ${number}`, usage }) as never;
+    const named = (name: string, cost: number) => ({ ...spend('review', cost), name, chars: { thinking: 6, text: 2, tools: 2 } });
+    const m = computeMetrics([record(1, [named('security', 0.4), named('tests', 0.1)]), record(2, [named('security', 0.2), spend('plan', 0.3)])], config).cost!;
+    assert.deepEqual(m.reviewers.map((r) => [r.name, r.perPr.toFixed(2)]), [['security', '0.30'], ['tests', '0.10']]);
+    assert.deepEqual(m.output, { thinking: 0.6, text: 0.2, tools: 0.2 });
+    const body = renderJournal([record(1, [named('security', 0.4), named('tests', 0.1)])], config, 'teraz');
+    assert.match(body, /- Recenzenci, średnio na PR: security 0,40 USD · tests 0,10 USD/);
+    assert.match(body, /- Wyjście \(znaki\): rozumowanie 60% · tekst 20% · narzędzia, w tym kod 20%/);
+  });
+
   it('revert po oknie revert_days się nie liczy', () => {
     const ten = collectRecords(dir, ['owner'], 2).find((r) => r.number === 10);
     assert.equal(ten?.reverted, false);
