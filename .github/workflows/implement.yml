@@ -256,7 +256,8 @@ jobs:
           TITLE: ${{ steps.data.outputs.title }}
         run: |
           git add -A
-          git diff --cached --name-only > "$W/paths.txt"
+          # --no-renames: przy zmianie nazwy lista ma starą i nową ścieżkę, więc przeniesienie pliku chronionego też odpada.
+          git diff --cached --name-only --no-renames > "$W/paths.txt"
           node "$F/scripts/workflow/cli.ts" check-paths --config "$W/config.json" < "$W/paths.txt"
           git diff --cached --binary > "$W/change.patch"
           printf '%s' "$OUTPUT" > "$W/implementation.raw.json"

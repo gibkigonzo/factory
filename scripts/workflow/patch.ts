@@ -35,7 +35,8 @@ export function implementerTools(config: FactoryConfig): string {
   const commands = Object.values(config.commands)
     .filter((command) => !UNSAFE.test(command))
     .map((command) => `Bash(${command}:*)`);
-  const git = ['Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)'];
+  // git mv i git rm: zmiana nazwy i usunięcie pliku. Pliki chronione i .github/ i tak odrzuca sprawdzenie ścieżek patcha.
+  const git = ['Bash(git status:*)', 'Bash(git diff:*)', 'Bash(git log:*)', 'Bash(git mv:*)', 'Bash(git rm:*)'];
   return [...new Set(['Read', 'Grep', 'Glob', 'Edit', 'MultiEdit', 'Write', ...commands, ...git])].join(',');
 }
 
