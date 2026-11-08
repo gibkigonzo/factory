@@ -62,7 +62,7 @@ Konwencje kodu projektu zapisz w jego `CLAUDE.md`. Czytają je planer, implement
 
 ### 4. Workflow taśmy
 
-Skopiuj [`templates/workflows/factory.yml`](templates/workflows/factory.yml) do `.github/workflows/factory.yml` w repo projektu. Dopisz `.factory/review/` do `.gitignore`. Taśma nie potrzebuje aplikacji Claude na GitHubie, bo działa na tokenie workflowu.
+Skopiuj [`templates/workflows/factory.yml`](templates/workflows/factory.yml) do `.github/workflows/factory.yml` w repo projektu. To cienki plik: jeden job wywołuje dyrygenta fabryki (`pipeline.yml`), który rozdziela zdarzenia na etapy. Zmiany etapów działają więc bez kopiowania, a plik zmieniasz tylko przy zmianie wersji fabryki. Dopisz `.factory/review/` do `.gitignore`. Taśma nie potrzebuje aplikacji Claude na GitHubie, bo działa na tokenie workflowu.
 
 ### 5. Spec z telefonu
 
@@ -85,11 +85,9 @@ Postęp widać w przypiętym issue „Tryb cienia” i w Actions → factory. Na
 
 ### Aktualizacje
 
-W Etapie 0 projekty używają fabryki z `@main`, więc zmiany workflowów i skilli fabryki działają od razu. Wyjątki trzeba skopiować ręcznie:
-- szablon workflowu ([`templates/workflows/factory.yml`](templates/workflows/factory.yml));
-- skill `spec-writer`.
+Projekt przypina jedną wersję fabryki w swoim workflowie (`uses: …/pipeline.yml@main` i `factory_ref: main`). Etapy, skille agentów, presety i skrypty fabryki pochodzą z tej wersji przy każdym przebiegu, więc aktualizują się same. W Etapie 0 to `@main`; po nim powstanie tag `v1`: zmiany zgodne trafią do projektów same, a niezgodne do `v2`, na którą przechodzi się świadomie.
 
-Opis PR fabryki mówi, kiedy to konieczne. Po Etapie 0 powstanie tag `v1`, a projekty przypną wersję.
+Ręcznie, na razie, synchronizujesz tylko kopię skilla `spec-writer` w `.claude/skills/` (sesje w chmurze nie instalują pluginów). Docelowo i to ma się dziać samo.
 
 ## Na co dzień: etykiety i komendy
 
@@ -374,10 +372,11 @@ Projekt nadpisuje w `factory.yml` tylko to, co chce zmienić, np. `models.review
 
 ### Workflowy i bezpieczeństwo
 
-Wspólne workflowy to `workflow_call` w tym repo: `uses: gibkigonzo/factory/.github/workflows/<name>.yml@main` (w Etapie 0 `@main`, potem tag). Mogą je wywoływać także repozytoria prywatne. Szablon dla projektu łączy je w jeden workflow.
+Wspólne workflowy to `workflow_call` w tym repo. Projekt wywołuje tylko dyrygenta: `uses: gibkigonzo/factory/.github/workflows/pipeline.yml@main` (w Etapie 0 `@main`, potem tag). Dyrygent wywołuje etapy składnią `$/.github/workflows/<etap>.yml`, czyli z tego repo w tej samej wersji co on. Uprawnienia przyznane przez projekt są sufitem, a każdy etap i job bierze z niego tylko swoje minimum. Mogą go wywoływać także repozytoria prywatne.
 
 | Etap | Uruchamia go | Co robi |
 | --- | --- | --- |
+| `pipeline.yml` | każde zdarzenie workflowu projektu | dyrygent: rozdziela zdarzenia na etapy poniżej |
 | `plan.yml` | etykieta `ready` na issue | plan w komentarzu, etykieta `planned`, `blocked` albo `split`; przy `planned` uruchamia implementację albo stawia zadanie w kolejce (`queued`, `needs-approval`) |
 | `implement.yml` | plan, kolejka, `/change` w PR albo pętla poprawek | dzienny limit, instalacja zatwierdzonych zależności, patch od implementera, sprawdzenie ścieżek, PR z gałęzi `factory/<numer>-<nazwa>`; uruchamia recenzję. Przy blokadzie: etykieta `blocked` i komentarz, bez PR |
 | `review.yml` | implementacja | komendy z `factory.yml` (CI), skład panelu, recenzenci równolegle; pętla poprawek odsyła PR do implementera |
@@ -387,7 +386,7 @@ Wspólne workflowy to `workflow_call` w tym repo: `uses: gibkigonzo/factory/.git
 | `queue.yml` | po zamknięciu PR fabryki, po `/reject`, po zgodzie na zależności, raz dziennie | uruchamia implementację czekających zadań, które mieszczą się w limitach |
 | `commands.yml` | komentarz od właściciela | `/approve`, `/veto`, `/reject`, `/change <opis>`, `/split` |
 
-**Ustawienia** (wejścia w szablonie): `factory_ref` (wersja fabryki; w Etapie 0 `main`), `runs_on` (np. `'["self-hosted", "vps"]'` dla własnego runnera w repo prywatnym), `trusted` (dodatkowe zaufane konta), `max_parallel` (recenzenci naraz). Modele i limity bierze z `factory.yml`.
+**Ustawienia** (wejścia w szablonie): `factory_ref` (wersja skryptów fabryki, ta sama co w `uses`; w Etapie 0 `main`), `runs_on` (np. `'["self-hosted", "vps"]'` dla własnego runnera w repo prywatnym), `trusted` (dodatkowe zaufane konta), `max_parallel` (recenzenci naraz). Modele i limity bierze z `factory.yml`.
 
 **Bezpieczeństwo:**
 
@@ -399,7 +398,7 @@ Wspólne workflowy to `workflow_call` w tym repo: `uses: gibkigonzo/factory/.git
 - `factory.yml` i perspektywy projektu w recenzji i ocenie pochodzą z gałęzi bazowej, więc PR nie poluzuje własnej oceny.
 - Dziennik i kolejkę uruchamia też `pull_request_target` przy zamknięciu PR z gałęzi `factory/*` tego repo. Nie pobierają kodu z PR: czytają gałąź główną i API.
 
-Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML: Claude bez prawa zapisu, akcje przypięte do commitów, żadnych wyrażeń wklejonych w skrypty, uprawnienia szablonu pokrywają uprawnienia jobów, merger, dziennik i kolejka bez Claude.
+Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML: Claude bez prawa zapisu, akcje przypięte do commitów, żadnych wyrażeń wklejonych w skrypty, uprawnienia w łańcuchu projekt → dyrygent → etap → job tylko maleją, dyrygent woła każdy etap, merger, dziennik i kolejka bez Claude.
 
 ### Plugin w Claude Code
 
