@@ -40,13 +40,13 @@ PR z gałęzi `factory/*` do gałęzi głównej. Opis PR: `Closes #<numer>`, co 
 }
 ```
 
-- `acceptance`: wszystkie kryteria ze specu, każde z dowodem: `test: <plik> › <nazwa>` albo `zrzut: <ścieżka artefaktu>`.
+- `acceptance`: wszystkie kryteria ze specu, każde z dowodem: `test: <plik> › <nazwa>` albo `zrzut: <ścieżka artefaktu>`. `criterion` to kryterium ze specu przepisane słowo w słowo, w kolejności specu, bez skrótów i dopisków; workflow łączy dowody z kryteriami po treści.
 - `summary`: co zmieniono, w jednym lub dwóch zdaniach; workflow wstawia go do opisu PR.
 - `assumptions`: najwyżej 5, po jednym zdaniu. Tylko decyzje i odstępstwa, których nie ma w specu ani w planie.
 - `evidence`: sam wskaźnik dowodu, bez komentarza.
 
 Opis PR składa workflow z tego bloku, więc nie piszesz osobnego opisu ani podsumowania pracy.
-- `bugfix`: `true` przy poprawce błędu; wtedy wymagane jest pole `regression_test` z nazwą testu, który na bazie nie przechodzi.
+- `bugfix`: `true` tylko wtedy, gdy issue zgłasza błąd na gałęzi głównej; wtedy wymagane jest pole `regression_test` z nazwą testu, który na bazie nie przechodzi. Poprawki po recenzji i po `/change` w tym samym PR to `false`.
 
 ## Czego nie robisz
 

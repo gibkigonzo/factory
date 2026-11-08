@@ -89,9 +89,9 @@ Poziom zmiany to najwyższy wynik z pięciu reguł. Reguły i oceniacz mogą go 
 | --- | --- |
 | 1. Strefy | ścieżki plików według mapy stref projektu; ścieżka spoza mapy dostaje Medium |
 | 2. Zachowanie i odwracalność | ocena LLM, która może poziom tylko podnieść; zmiana sposobu liczenia kwot to Medium |
-| 3. Brak testów | strefa bez testów jest o poziom wyżej |
+| 3. Brak testów | strefa bez testów jest o poziom wyżej; testy strefy leżą w jej ścieżkach albo wskazuje je `zone_tests` |
 | 4. Rozmiar | Low: maks. 100 linii i 5 plików; Medium: maks. 400 linii i 15 plików; większe zmiany planer dzieli |
-| 5. Dowody | zielone CI, dowód dla każdego kryterium akceptacji, test regresyjny przy poprawce błędu, approve recenzentów z pewnością ≥ 0,8 |
+| 5. Dowody | zielone CI, dowód dla każdego kryterium akceptacji (kryterium ze specu, dosłownie albo jednoznaczna parafraza z tej samej pozycji z tymi samymi liczbami), test regresyjny przy poprawce błędu, approve recenzentów z pewnością ≥ 0,8 |
 
 Bramki jakości nie są ryzykiem: blokują merge, ale fabryka poprawia je sama.
 
@@ -128,6 +128,7 @@ Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy skła
 | `commands` | projekt | komendy CI; wymagane `test` i `build`, reszta dowolna (`lint`, `e2e`, `scene_check`…) |
 | `evidence` | projekt | `screenshots` (komenda) i `preview_deploy` (podgląd w PR) |
 | `zones` | wszystkie warstwy | ścieżki w strefach: `data`, `security`, `release`, `dependencies`, `factory`, `shared`, `code` |
+| `zone_tests` | wszystkie warstwy | testy spoza ścieżek strefy, które ją sprawdzają (reguła 3), np. `shared: ["e2e/**"]`, gdy e2e sprawdzają układ strony |
 | `files` | wszystkie warstwy | klasy plików: `source` (kod), `tests`, `lockfiles`, `generated`, `translations` (reguły 3, 4 i bramki) |
 | `disable_markers` | wszystkie warstwy | znaczniki wyłączeń (`eslint-disable`, `@ts-ignore`…), których nowe wystąpienia odbierają Low |
 | `assertion_markers` | wszystkie warstwy | znaczniki asercji w testach (`expect(`, `assert`); ich ubytek daje High |

@@ -52,7 +52,8 @@ export function behaviorRule(evidence: Evidence): RuleResult {
   return { ...assessed, level: 'High', reasons: ['ryzyko produktowe w specu: wysokie', ...assessed.reasons] };
 }
 
-/** Reguła 3: kod w strefie bez testów jest o poziom wyżej. Testy strefy to pliki testów pasujące do jej wzorców. */
+/** Reguła 3: kod w strefie bez testów jest o poziom wyżej. Testy strefy to pliki testów
+ * pasujące do jej wzorców albo do wzorców tej strefy w zone_tests. */
 export function testsRule(files: readonly ChangedFile[], repoFiles: readonly string[], config: FactoryConfig): RuleResult {
   const name = 'Brak testów';
   const testFiles = repoFiles.filter((f) => matchesAny(f, config.files.tests));
@@ -60,7 +61,9 @@ export function testsRule(files: readonly ChangedFile[], repoFiles: readonly str
   for (const path of touchedPaths(files)) {
     if (!matchesAny(path, config.files.source) || matchesAny(path, config.files.tests)) continue;
     const { zone } = zoneOf(path, config);
-    if (!zone || testFiles.some((t) => matchesAny(t, config.zones[zone] ?? []))) continue;
+    if (!zone) continue;
+    const covering = [...(config.zones[zone] ?? []), ...(config.zone_tests[zone] ?? [])];
+    if (testFiles.some((t) => matchesAny(t, covering))) continue;
     untested.set(zone, [...(untested.get(zone) ?? []), path]);
   }
   if (untested.size === 0) return { rule: 'tests', name, level: 'Low', reasons: ['zmieniony kod jest w strefach z testami'] };
