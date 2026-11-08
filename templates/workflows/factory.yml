@@ -6,6 +6,8 @@
 # Komendy w komentarzach: /approve, /veto, /reject, /change, /split.
 # W Etapie 0 (tryb cienia) fabryka niczego nie scala: o każdym PR decydujesz Ty, a werdykt fabryki oceniasz 👍 albo 👎.
 # Dziennik z metrykami prowadzi przypięte issue „Tryb cienia”.
+# Kolejka: zadanie ponad wip_limit albo ze wspólnymi plikami z zadaniem w toku czeka z etykietą `queued`
+# i rusza samo po zamknięciu PR fabryki (albo przy dziennym przeglądzie).
 name: factory
 
 on:
@@ -14,14 +16,14 @@ on:
   issue_comment:
     types: [created]
   pull_request_target:
-    types: [closed]   # tylko dziennik; kodu z PR nie pobiera
+    types: [closed]   # dziennik i kolejka; kodu z PR nie pobierają
   schedule:
-    - cron: '17 4 * * *'   # dziennik raz dziennie, bo reakcje 👍/👎 nie uruchamiają workflowów
+    - cron: '17 4 * * *'   # dziennik i kolejka raz dziennie, bo reakcje 👍/👎 nie uruchamiają workflowów
   workflow_dispatch:
     inputs:
       stage:
         type: choice
-        options: [plan, implement, review, journal]
+        options: [plan, implement, review, journal, queue]
         required: true
       issue: { type: string, default: '' }
       pr: { type: string, default: '' }
@@ -124,6 +126,22 @@ jobs:
       contents: read
       issues: write
       pull-requests: read
+
+  queue:
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.stage == 'queue') ||
+      (github.event_name == 'pull_request_target' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        startsWith(github.event.pull_request.head.ref, 'factory/'))
+    uses: gibkigonzo/factory/.github/workflows/queue.yml@main
+    with:
+      factory_ref: main
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      actions: write
 
   commands:
     if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/')

@@ -23,7 +23,7 @@ Factory to generyczna fabryka oprogramowania oparta na Claude Code, dla stron WW
 - Nie scalaj PR-ów, także przez `merge_pull_request` z konektora GitHub, nawet jeśli masz do tego uprawnienia.
 - Wszystkie progi to wartości startowe do kalibracji w trybie cienia.
 - Prywatne projekty właściciela wymienione w `CLAUDE.local.md` służą tylko jako materiał do analizy. Niczego w nich nie zmieniaj. Zakaz nie dotyczy repo testowego fabryki (piaskownicy) ani projektów, które właściciel podłączył do taśmy, np. pilota: w nich fabryka i Claude zakładają i zmieniają issue oraz PR-y.
-- `factory-init`: w dokumencie jest tylko idea. Przebieg sesji ustalamy razem z użytkownikiem. Nie projektuj go sam.
+- `factory-init`: kierunek jest w Ustaleniach niżej. Szczegóły przebiegu sesji ustalamy razem z użytkownikiem. Nie projektuj ich sam.
 
 ## Ustalenia
 
@@ -95,6 +95,17 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - `claude-code-action` loguje się przez subskrypcję: sekret `CLAUDE_CODE_OAUTH_TOKEN`, który dodaje właściciel.
 - Pilot to strona WWW: fabryka odtwarza w Nuxt istniejącą stronę osoby trzeciej. Odtwarza układ i wygląd; teksty to lorem ipsum, zdjęcia to placeholdery.
 - Pilot rusza dopiero po pierwszej wersji taśmy. Godot włączamy jako drugi projekt.
+
+### factory-init (8 listopada 2026)
+
+- Sesja z AI ustala reguły projektu, zanim taśma dostanie pierwsze zadanie. Wynik to konwencje w `CLAUDE.md` projektu i `factory.yml`.
+- Fabryka jest generyczna, więc nie ma stałej listy pytań. Agent dobiera je do typu projektu, np. dla frontendu podejście do stylów i tokeny wyglądu, dla gry nazwy i strukturę scen.
+- Lekcja z pilota: bez spisanych konwencji agent sam wybrał styl kodu, a recenzent nie miał czego pilnować.
+
+### Kolejka zadań (8 listopada 2026)
+
+- Zadania ze wspólnymi plikami (z planu i z otwartego PR) nie idą równolegle. Drugie czeka z etykietą `queued`, tak samo jak zadanie ponad `wip_limit`, i rusza samo po zamknięciu PR fabryki.
+- Testy spoza ścieżek strefy liczą się dla niej przez `zone_tests` w `factory.yml`, np. e2e dla układu strony.
 
 ## Otwarte pytania
 

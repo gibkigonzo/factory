@@ -140,7 +140,7 @@ Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy skła
 | `reviewers` | `base` (`perspectives`), projekt (`extra`) | perspektywy recenzji: podstawowe zawsze, dodatkowe z katalogu albo z `.factory/perspectives/` |
 | `models` | `base`, projekt | model na etapie: `planner`, `implementer`, `risk_assessor`, `reviewers.default` i wybrane perspektywy |
 | `human_gates` | projekt | etykiety kierujące PR do człowieka, np. `playtest: [feel]` |
-| `wip_limit`, `daily_runs` | `base`, projekt | równoległe zadania i dzienne uruchomienia taśmy |
+| `wip_limit`, `daily_runs` | `base`, projekt | równoległe zadania i dzienne uruchomienia taśmy; zadanie ponad limit albo ze wspólnymi plikami z zadaniem w toku czeka w kolejce |
 | `shadow` | tylko `base` | progi Bramki 1: `gate_prs`, `min_agreement`, `max_false_low`, `revert_days` |
 | `schedules` | projekt | agenci cykliczni: `nightly`, `weekly` albo `off` |
 
@@ -296,12 +296,13 @@ Dalej wszystko dzieje się w issue i PR, także z telefonu.
 
 | Etap | Uruchamia go | Co robi |
 | --- | --- | --- |
-| `plan.yml` | etykieta `ready` na issue | plan w komentarzu, etykieta `planned`, `blocked` albo `split`; przy `planned` uruchamia implementację |
+| `plan.yml` | etykieta `ready` na issue | plan w komentarzu, etykieta `planned`, `blocked` albo `split`; przy `planned` uruchamia implementację albo stawia zadanie w kolejce (`queued`) |
 | `implement.yml` | plan albo `/change` w PR | patch od implementera, sprawdzenie ścieżek, PR z gałęzi `factory/<numer>-<nazwa>`; uruchamia recenzję |
 | `review.yml` | implementacja | komendy z `factory.yml` (CI), skład panelu, recenzenci równolegle |
 | `risk.yml` | po recenzji, w tym samym uruchomieniu | oceniacz ryzyka, reguły, check `factory/risk`, etykieta `risk:*`, raport w PR |
 | `merge.yml` | po ocenie ryzyka, w tym samym uruchomieniu | w Etapie 0 tylko werdykt trybu cienia w nowym komentarzu |
 | `journal.yml` | po werdykcie, po zamknięciu PR fabryki, raz dziennie | dziennik trybu cienia w przypiętym issue; po scaleniu PR fabryki zamyka jego issue |
+| `queue.yml` | po zamknięciu PR fabryki, raz dziennie | uruchamia implementację czekających zadań, które zmieszczą się w limicie |
 | `commands.yml` | komentarz od właściciela | `/approve`, `/veto`, `/reject`, `/change <opis>`, `/split` |
 
 **Bezpieczeństwo:**
@@ -312,7 +313,7 @@ Dalej wszystko dzieje się w issue i PR, także z telefonu.
 - Etapy łączy `workflow_dispatch`, bo zdarzenia z `GITHUB_TOKEN` nie uruchamiają innych workflowów. W Etapie 0 zmiany podpisuje `github-actions[bot]`; własna aplikacja GitHub fabryki przyjdzie w Etapie 1.
 - Na taśmę wchodzą tylko zdarzenia od właściciela repo, kont z wejścia `trusted` i workflowów fabryki. Komendy wydaje tylko człowiek.
 - `factory.yml` i perspektywy projektu w recenzji i ocenie pochodzą z gałęzi bazowej.
-- Dziennik uruchamia też `pull_request_target` przy zamknięciu PR z gałęzi `factory/*` tego repo. Nie pobiera kodu z PR: czyta gałąź główną i API.
+- Dziennik i kolejkę uruchamia też `pull_request_target` przy zamknięciu PR z gałęzi `factory/*` tego repo. Nie pobierają kodu z PR: czytają gałąź główną i API.
 
 **Ustawienia** (wejścia w szablonie): `factory_ref` (wersja fabryki; w Etapie 0 `main`), `runs_on` (np. `'["self-hosted", "vps"]'` dla własnego runnera w repo prywatnym), `trusted`, `max_parallel` (recenzenci naraz). Modele bierze z `models` w `factory.yml`, a dzienny limit z `daily_runs` (liczą się uruchomienia etapów przez `workflow_dispatch`).
 

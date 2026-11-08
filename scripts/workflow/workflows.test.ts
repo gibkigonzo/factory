@@ -12,7 +12,7 @@ type Job = { permissions?: Record<string, string>; steps?: Step[]; uses?: string
 type Workflow = { permissions?: unknown; on: unknown; jobs: Record<string, Job> };
 
 const DIR = join(ROOT, '.github/workflows');
-const REUSABLE = ['plan', 'implement', 'review', 'risk', 'merge', 'journal', 'commands'];
+const REUSABLE = ['plan', 'implement', 'review', 'risk', 'merge', 'journal', 'queue', 'commands'];
 const read = (path: string) => readFileSync(path, 'utf8');
 const workflows = Object.fromEntries(
   readdirSync(DIR)
@@ -94,6 +94,16 @@ describe('workflowy fabryki', () => {
     assert.match(String(job.if), /merged == true/);
     assert.deepEqual(job.permissions, { issues: 'write' });
     assert.match(String(job.steps?.[0]?.run), /s#\^factory\/\(\[0-9\]\+\)-\.\*#\\1#p/);
+  });
+
+  it('kolejka nie pobiera kodu z PR i decyduje skryptem: plan i kolejka korzystają z tej samej logiki', () => {
+    const { text, data } = workflows.queue!;
+    assert.doesNotMatch(text, /head\.(ref|sha)|pull_request\.head/);
+    assert.ok(!Object.values(data.jobs).some(usesClaude));
+    for (const name of ['plan', 'queue']) assert.match(workflows[name]!.text, /queue-raw\.sh/, name);
+    assert.match(workflows.plan!.text, /queue-admit/);
+    assert.match(text, /queue-release/);
+    assert.match(workflows.plan!.text, /--add-label queued/);
   });
 
   it('strażnik zaufanych kont jest taki sam we wszystkich etapach', () => {

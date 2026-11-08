@@ -1,0 +1,66 @@
+# Kolejka zadań: uruchamia implementera dla issue z etykietą `queued`, które mieszczą się w limicie WIP
+# i nie dzielą plików z zadaniami w toku. Projekt wywołuje ją po zamknięciu PR fabryki i raz dziennie.
+# Kodu z PR nie pobiera: czyta factory.yml z gałęzi głównej i dane z API.
+name: factory-queue
+
+on:
+  workflow_call:
+    inputs:
+      factory_ref: { type: string, default: main }
+      node_version: { type: string, default: '22' }
+      workflow: { type: string, default: factory.yml, description: 'Plik workflowu projektu, który wywołuje fabrykę' }
+
+permissions: {}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      actions: write
+    # Jedno uruchomienie naraz, żeby dwa nie wpuściły tego samego issue. Czekające zastępuje nowsze: liczy od nowa.
+    concurrency:
+      group: factory-queue
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Narzędzia fabryki
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+          echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
+          echo "RAW=$RUNNER_TEMP/queue" >> "$GITHUB_ENV"
+
+      - name: Czekające zadania
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WORKFLOW: ${{ inputs.workflow }}
+        run: |
+          mkdir -p "$RAW"
+          node "$F/scripts/config/cli.ts" factory.yml --json > "$RAW/config.json"
+          LIMIT=$(jq .wip_limit "$RAW/config.json")
+          bash "$F/scripts/workflow/queue-raw.sh" "$RAW"
+          DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
+          STARTED=$(node "$F/scripts/workflow/cli.ts" queue-release --raw "$RAW" --limit "$LIMIT")
+          for ISSUE in $STARTED; do
+            gh issue edit "$ISSUE" --remove-label queued >/dev/null
+            gh issue comment "$ISSUE" --body "Zadanie się zwolniło: implementer rusza." >/dev/null
+            gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=implement -f issue="$ISSUE"
+          done
+          WAITING=$(jq '[.[] | select(any(.labels[]; .name == "queued"))] | length' "$RAW/issues.json")
+          echo "Czekało zadań: $WAITING. Rusza: $(tr '\n' ' ' <<<"${STARTED:-nic}")" >> "$GITHUB_STEP_SUMMARY"
