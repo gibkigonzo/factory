@@ -89,6 +89,7 @@ export const SCHEMA: Extract<Spec, { kind: 'object' }> = {
     extends: names,
     commands: { kind: 'map', key: /^[a-z][a-z0-9_]*$/, keyHint: 'małe litery, cyfry i „_”', value: text },
     evidence: { kind: 'object', fields: { screenshots: text, preview_deploy: { kind: 'boolean' } } },
+    dependencies: { kind: 'object', fields: { add: text, add_dev: text } },
     zones: namedMap(globs),
     zone_tests: namedMap(globs),
     files,
@@ -127,6 +128,7 @@ export const PROJECT_ONLY = [
   'extends',
   'commands',
   'evidence',
+  'dependencies',
   'human_gates',
   'exceptions',
   'schedules',
@@ -196,6 +198,8 @@ export interface FactoryConfig {
   extends: string[];
   commands: Record<string, string>;
   evidence: { screenshots?: string; preview_deploy: boolean };
+  /** Komendy instalacji nowych zależności z planu; workflow dokleja do nich `nazwa@wersja`. Implementer ich nie dostaje. */
+  dependencies: { add?: string; add_dev?: string };
   zones: Record<string, string[]>;
   /** Testy spoza ścieżek strefy, które ją sprawdzają, np. e2e dla stron i układu (reguła 3). */
   zone_tests: Record<string, string[]>;

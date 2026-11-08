@@ -106,6 +106,39 @@ describe('workflowy fabryki', () => {
     assert.match(workflows.plan!.text, /--add-label queued/);
   });
 
+  it('pętla poprawek: decyduje skrypt bez Claude, czerwone CI omija recenzentów, a ocena ryzyka czeka na wynik', () => {
+    const { text, data } = workflows.review!;
+    const loop = data.jobs.loop!;
+    assert.ok(!usesClaude(loop));
+    assert.match(text, /cli\.ts" loop /);
+    assert.match(text, /-f stage=implement -f issue="\$ISSUE" -f pr="\$PR" -f note="\$ID"/);
+    assert.match(text, /needs\.ci\.outputs\.status != 'failure' \|\| needs\.ci\.outputs\.final == 'true'/);
+    assert.match(text, /jobs\.loop\.outputs\.retry != 'true'/, 'ok jest false, gdy PR wrócił do poprawek');
+  });
+
+  it('implementer: zależności instaluje workflow po zgodzie, a blokada nie otwiera PR', () => {
+    const { text, data } = workflows.implement!;
+    const steps = data.jobs.implement!.steps ?? [];
+    const deps = steps.find((step) => step.run?.includes('install-commands'))!;
+    assert.match(String((deps as { if?: string }).if), /inputs\.pr == ''/, 'tylko w pierwszej rundzie');
+    assert.match(deps.run!, /grep -qx factory:approved/);
+    const claude = steps.find((step) => step.uses?.startsWith(CLAUDE)) as Step & { if?: string };
+    assert.match(String(claude.if), /steps\.deps\.outputs\.blocker == ''/);
+    assert.ok(steps.indexOf(deps) < steps.indexOf(claude));
+    assert.match(String((data.jobs.publish as { if?: string }).if), /outputs\.status == 'done'/);
+    assert.ok(data.jobs.blocked && !usesClaude(data.jobs.blocked));
+    assert.match(text, /--add-label blocked/);
+  });
+
+  it('plan z nowymi zależnościami czeka na /approve, a /reject i zgoda uruchamiają kolejkę', () => {
+    assert.match(workflows.plan!.text, /--add-label needs-approval/);
+    assert.match(workflows.plan!.text, /--remove-label factory:approved/);
+    const commands = workflows.commands!.text;
+    assert.match(commands, /grep -qx needs-approval/);
+    assert.equal((commands.match(/^\s+queue$/gm) ?? []).length, 2, '/approve z zależnościami i /reject');
+    assert.match(commands, /-f stage=queue/);
+  });
+
   it('strażnik zaufanych kont jest taki sam we wszystkich etapach', () => {
     const guards = ['plan', 'implement', 'review'].map((name) => JSON.stringify(workflows[name]!.data.jobs.guard));
     assert.equal(new Set(guards).size, 1);

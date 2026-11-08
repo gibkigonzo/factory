@@ -1,6 +1,9 @@
 # Etap recenzji PR z gałęzi factory/*: komendy z factory.yml (CI), skład panelu i recenzenci równolegle.
 # Recenzenci mają tylko narzędzia do odczytu i repo bez poświadczeń. Werdykty trafiają do artefaktów,
 # a ocenę ryzyka liczy risk.yml w tym samym uruchomieniu.
+# Pętla poprawek: czerwone CI albo request_changes odsyła PR do implementera z uwagami (job loop, bez Claude),
+# do risk.max_review_rounds rund. Wtedy wyjście ok jest false, więc ocena ryzyka i werdykt czekają na wynik pętli.
+# Przy czerwonym CI recenzenci nie ruszają, chyba że to ostatnia runda.
 name: factory-review
 
 on:
@@ -12,11 +15,13 @@ on:
       node_version: { type: string, default: '22' }
       trusted: { type: string, default: '' }
       max_parallel: { type: string, default: '3', description: 'Ilu recenzentów naraz' }
+      workflow: { type: string, default: factory.yml, description: 'Plik workflowu projektu, który wywołuje fabrykę' }
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: { required: true }
     outputs:
       ok:
-        value: ${{ jobs.guard.outputs.ok }}
+        description: 'true, gdy recenzja się skończyła i można liczyć ryzyko; false także wtedy, gdy PR wrócił do poprawek'
+        value: ${{ (jobs.guard.outputs.ok == 'true' && jobs.loop.outputs.retry != 'true') && 'true' || 'false' }}
 
 permissions: {}
 
@@ -48,6 +53,10 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+    outputs:
+      status: ${{ steps.round.outputs.status }}
+      round: ${{ steps.round.outputs.round }}
+      final: ${{ steps.round.outputs.final }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -85,6 +94,21 @@ jobs:
 
       - name: Komendy z factory.yml
         run: node "$F/scripts/workflow/cli.ts" ci --config "$W/config.json" --out "$W/ci.json"
+
+      - name: Runda poprawek
+        id: round
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+        run: |
+          ROUND=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels \
+            --jq '[.labels[].name | select(startswith("factory:round-")) | ltrimstr("factory:round-") | tonumber] | max // 0')
+          MAX=$(jq .risk.max_review_rounds "$W/config.json")
+          {
+            echo "status=$(jq -r .status "$W/ci.json")"
+            echo "round=$ROUND"
+            echo "final=$([ "$ROUND" -ge "$MAX" ] && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -154,10 +178,12 @@ jobs:
 
   reviewer:
     # Recenzenci czekają na CI, żeby oprzeć uwagi na jego wyniku, a nie na domysłach.
+    # Czerwone CI wraca do implementera bez recenzji; recenzenci oceniają je tylko w ostatniej rundzie.
     needs: [panel, ci]
     if: >-
       always() && needs.panel.result == 'success' &&
-      needs.panel.outputs.matrix != '' && needs.panel.outputs.matrix != '[]'
+      needs.panel.outputs.matrix != '' && needs.panel.outputs.matrix != '[]' &&
+      (needs.ci.outputs.status != 'failure' || needs.ci.outputs.final == 'true')
     strategy:
       fail-fast: false
       max-parallel: ${{ fromJSON(inputs.max_parallel) }}
@@ -264,3 +290,66 @@ jobs:
           name: factory-usage-review-${{ matrix.member.name }}
           path: usage/
           if-no-files-found: ignore
+
+  loop:
+    needs: [guard, ci, panel, reviewer]
+    if: always() && needs.guard.outputs.ok == 'true' && needs.ci.result == 'success' && needs.panel.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      issues: write
+      pull-requests: write
+      actions: write
+    outputs:
+      retry: ${{ steps.decide.outputs.retry }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Narzędzia fabryki
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+          echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
+          echo "W=$RUNNER_TEMP/work" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: factory-review-input
+          path: ${{ runner.temp }}/work
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: factory-ci
+          merge-multiple: true
+          path: ${{ runner.temp }}/work
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: factory-verdict-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/work/verdicts
+
+      - name: Kolejna runda albo ocena ryzyka
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ inputs.pr }}
+          ROUND: ${{ needs.ci.outputs.round }}
+          WORKFLOW: ${{ inputs.workflow }}
+        run: |
+          DECISION=$(node "$F/scripts/workflow/cli.ts" loop --work "$W" --config "$W/config.json" --round "${ROUND:-0}" --out "$W/round.md")
+          echo "Pętla poprawek: $(jq -r .reason <<<"$DECISION")" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$(jq -r .retry <<<"$DECISION")" != true ] || [ "$(gh pr view "$PR" --json state --jq .state)" != OPEN ]; then
+            echo "retry=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          ISSUE=$(jq -r .issue "$W/implementation.json")
+          ID=$(gh api "repos/$GH_REPO/issues/$PR/comments" -F body=@"$W/round.md" --jq .id)
+          DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
+          gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=implement -f issue="$ISSUE" -f pr="$PR" -f note="$ID"
+          echo "retry=true" >> "$GITHUB_OUTPUT"

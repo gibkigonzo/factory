@@ -65,9 +65,25 @@ describe('sprawdzanie wyjścia', () => {
   });
 
   it('poprawka błędu wymaga testu regresji', () => {
-    const implementation = { issue: 7, bugfix: true, acceptance: PLAN.acceptance, assumptions: [] };
+    const implementation = { issue: 7, status: 'done', bugfix: true, acceptance: PLAN.acceptance, assumptions: [] };
     assert.deepEqual(errors('implementation', implementation), ['odpowiedź.md: regression_test: poprawka błędu wymaga testu regresji']);
     assert.deepEqual(errors('implementation', { ...implementation, regression_test: 'e2e/hero.spec.ts › rozmiar' }), []);
+  });
+
+  it('blokada implementera wymaga opisu, a stan jest obowiązkowy', () => {
+    const implementation = { issue: 7, status: 'blocked', bugfix: false, acceptance: [], assumptions: [] };
+    assert.deepEqual(errors('implementation', implementation), ['odpowiedź.md: blocker: status blocked wymaga opisu blokady']);
+    assert.deepEqual(errors('implementation', { ...implementation, blocker: 'brak dostępu do sieci' }), []);
+    const { status: _, ...missing } = implementation;
+    assert.deepEqual(errors('implementation', { ...missing, blocker: 'x' }), ['odpowiedź.md: status: brak wymaganego pola']);
+  });
+
+  it('nowe zależności w planie: nazwa i wersja bez znaków powłoki', () => {
+    assert.deepEqual(errors('plan', { ...PLAN, dependencies: [{ name: '@tailwindcss/vite', version: '4.1' }, { name: 'vitest', version: '3', dev: true }] }), []);
+    const bad = errors('plan', { ...PLAN, dependencies: [{ name: 'x; curl evil', version: '1' }, { name: 'ok', version: 'latest' }] });
+    assert.equal(bad.length, 2);
+    assert.match(bad[0]!, /dependencies\[0\]\.name/);
+    assert.match(bad[1]!, /dependencies\[1\]\.version/);
   });
 
   it('werdykt bez podsumowania jest odrzucany', () => {

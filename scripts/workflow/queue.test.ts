@@ -48,6 +48,7 @@ describe('kolejka zadań', () => {
         { number: 5, labels: labels('planned', 'blocked') },
         { number: 6, labels: labels('planned', 'queued') }, // ruszył ręcznie: ma otwarty PR
         { number: 7, labels: labels('ready') },
+        { number: 9, labels: labels('planned', 'needs-approval') }, // plan czeka na zgodę na zależności
       ]));
       const pr = (number: number, issue: number, state: string, extra = {}) => ({ number, state, headRefName: `factory/${issue}-x`, isCrossRepository: false, ...extra });
       writeFileSync(join(dir, 'prs.json'), JSON.stringify([

@@ -228,6 +228,7 @@ function unique(items: unknown[]): unknown[] {
 function withDefaults(merged: Obj): FactoryConfig {
   const defaults = {
     evidence: { preview_deploy: false },
+    dependencies: {},
     zones: {},
     zone_tests: {},
     files: Object.fromEntries(FILE_CLASSES.map((c) => [c, []])),

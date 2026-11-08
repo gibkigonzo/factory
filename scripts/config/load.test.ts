@@ -183,6 +183,14 @@ describe('warstwy', () => {
     assert.ok(errors.some((e) => e.startsWith('presets/x.yml: wip_limit: preset języka lub frameworka ustawia tylko')), errors.join('\n'));
   });
 
+  it('komendy instalacji nowych zależności ustawia tylko projekt', () => {
+    const ok = loadConfig(`${MINIMAL}dependencies:\n  add: npm install --save-exact --ignore-scripts\n`, 'factory.yml', source({ base }));
+    assert.ok(ok.ok, ok.ok ? '' : ok.errors.join('\n'));
+    assert.equal(ok.config.dependencies.add, 'npm install --save-exact --ignore-scripts');
+    const errors = errorsOf(MINIMAL, source({ base: `${base}\ndependencies:\n  add: npm i\n` }));
+    assert.ok(errors.includes('presets/base.yml: dependencies: to pole należy do factory.yml projektu'), errors.join('\n'));
+  });
+
   it('progi base muszą być spójne', () => {
     const broken = base.replace('low: { lines: 100', 'low: { lines: 1000');
     const errors = errorsOf(MINIMAL, source({ base: broken }));

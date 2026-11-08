@@ -162,29 +162,42 @@ jobs:
           printf '%s' "$PLAN" > plan.json
           DECISION=$(jq -r .decision plan.json)
           DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
-          for label in ready planned blocked split queued; do gh label create "$label" --force >/dev/null; done
+          for label in ready planned blocked split queued needs-approval; do gh label create "$label" --force >/dev/null; done
 
+          # Nowe zależności instaluje workflow, ale dopiero po zgodzie właściciela (/approve w issue).
           # Kolejka: implementer rusza w limicie WIP i bez wspólnych plików z zadaniami w toku albo czekającymi.
           NOTE=""
+          WAITING=""
           if [ "$DECISION" = planned ]; then
-            bash factory/scripts/workflow/queue-raw.sh queue
-            ADMIT=$(node factory/scripts/workflow/cli.ts queue-admit --raw queue --issue "$ISSUE" --plan plan.json --limit "$LIMIT")
-            if [ "$(jq -r .start <<<"$ADMIT")" != true ]; then
-              NOTE="$(jq -r .reason <<<"$ADMIT") Implementer ruszy sam, gdy zadanie się zwolni."
+            DEPS=$(jq -r '[.dependencies // [] | .[] | "`\(.name)@\(.version)`" + (if .dev then " (dev)" else "" end)] | join(", ")' plan.json)
+            if [ -n "$DEPS" ]; then
+              WAITING=approval
+              NOTE="Plan dodaje nowe zależności: $DEPS. Napisz /approve w tym issue, żeby workflow je zainstalował i uruchomił implementera."
+            else
+              bash factory/scripts/workflow/queue-raw.sh queue
+              ADMIT=$(node factory/scripts/workflow/cli.ts queue-admit --raw queue --issue "$ISSUE" --plan plan.json --limit "$LIMIT")
+              if [ "$(jq -r .start <<<"$ADMIT")" != true ]; then
+                WAITING=queue
+                NOTE="$(jq -r .reason <<<"$ADMIT") Implementer ruszy sam, gdy zadanie się zwolni."
+              fi
             fi
           fi
           printf '%s' "$USAGE" > usage.json
-          node factory/scripts/workflow/cli.ts plan-comment --plan plan.json --note "$NOTE" --usage usage.json > comment.md
+          node factory/scripts/workflow/cli.ts plan-comment --plan plan.json --note "$NOTE" --waiting "$WAITING" --usage usage.json > comment.md
           gh issue comment "$ISSUE" --body-file comment.md
-          gh issue edit "$ISSUE" --remove-label ready >/dev/null 2>&1 || true
+          # Nowy plan zaczyna od czystego stanu: etykiety poprzedniej próby nie mogą zostać.
+          for label in ready blocked needs-approval queued; do gh issue edit "$ISSUE" --remove-label "$label" >/dev/null 2>&1 || true; done
 
           case "$DECISION" in
             planned)
-              if [ -n "$NOTE" ]; then
+              # Zgoda dotyczy konkretnego planu: nowy plan z zależnościami wymaga nowej zgody.
+              gh issue edit "$ISSUE" --remove-label factory:approved >/dev/null 2>&1 || true
+              if [ "$WAITING" = approval ]; then
+                gh issue edit "$ISSUE" --add-label planned --add-label needs-approval
+              elif [ "$WAITING" = queue ]; then
                 gh issue edit "$ISSUE" --add-label planned --add-label queued
               else
                 gh issue edit "$ISSUE" --add-label planned
-                gh issue edit "$ISSUE" --remove-label queued >/dev/null 2>&1 || true
                 gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=implement -f issue="$ISSUE"
               fi
               ;;

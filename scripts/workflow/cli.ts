@@ -17,6 +17,9 @@ import { toJsonSchema } from './jsonschema.ts';
 import { branchName, DENIED_FOR_READERS, implementerTools, pathProblems, READ_ONLY_TOOLS } from './patch.ts';
 import { assessPrompt, implementPrompt, planPrompt, reviewPrompt } from './prompts.ts';
 import { latestMarked, planComment, PLAN_MARKER, prBody, PR_MARKER } from './render.ts';
+import { installCommands } from './dependencies.ts';
+import type { Dependency } from './dependencies.ts';
+import { nextRound, roundComment } from './loop.ts';
 import { admit, queueState, release } from './queue.ts';
 import { renderReport } from './report.ts';
 import type { PanelSummary } from './report.ts';
@@ -65,6 +68,8 @@ function options(args: string[]) {
       stage: { type: 'string' },
       dir: { type: 'string' },
       limit: { type: 'string' },
+      round: { type: 'string', default: '0' },
+      waiting: { type: 'string' },
     },
   });
 }
@@ -80,10 +85,20 @@ function prompt(stage: string | undefined, v: Values): string {
   throw new UsageError('prompt: etap plan, implement, review albo assess');
 }
 
+function verdicts(work: string): Review[] {
+  const dir = join(work, 'verdicts');
+  return existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')).sort().map((f) => json(join(dir, f)) as Review) : [];
+}
+
+function waiting(value: string | undefined): 'queue' | 'approval' | undefined {
+  if (value === undefined || value === '') return undefined;
+  if (value !== 'queue' && value !== 'approval') throw new UsageError(`--waiting: queue albo approval, jest: ${value}`);
+  return value;
+}
+
 function evidence(v: Values): string {
   const work = v.work!;
-  const dir = join(work, 'verdicts');
-  const reviews = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')).sort().map((f) => json(join(dir, f)) as Review) : [];
+  const reviews = verdicts(work);
   const result = buildEvidence({
     spec: parseSpec(readFileSync(join(work, 'spec.md'), 'utf8')),
     ci: optionalJson(join(work, 'ci.json')) as CiResult | undefined,
@@ -155,7 +170,20 @@ function run(command: string | undefined, rest: string[]): string {
     case 'report':
       return renderReport(json(required(v.assessment, '--assessment')) as Assessment, v.panel ? (json(v.panel) as PanelSummary) : undefined);
     case 'plan-comment':
-      return planComment(json(required(v.plan, '--plan')) as Parameters<typeof planComment>[0], v.note, usageFile(v.usage));
+      return planComment(json(required(v.plan, '--plan')) as Parameters<typeof planComment>[0], v.note, usageFile(v.usage), waiting(v.waiting));
+    case 'install-commands': {
+      const plan = json(required(v.plan, '--plan')) as { dependencies?: Dependency[] };
+      const result = installCommands(plan.dependencies ?? [], config(v.config));
+      if (!result.ok) throw new UsageError(result.reason);
+      return result.commands.join('\n');
+    }
+    case 'loop': {
+      const work = v.work!;
+      const input = { ci: optionalJson(join(work, 'ci.json')) as CiResult | undefined, reviews: verdicts(work), round: Number(v.round), maxRounds: config(v.config).risk.max_review_rounds };
+      const decision = nextRound(input);
+      if (decision.retry) writeFileSync(required(v.out, '--out'), roundComment(input));
+      return JSON.stringify(decision);
+    }
     case 'pr-body': {
       const previous = v.previous && existsSync(v.previous) ? parseUsageBlocks(readFileSync(v.previous, 'utf8')) : [];
       return prBody(json(required(v.implementation, '--implementation')) as Implementation, [...previous, ...usageFile(v.usage)]);

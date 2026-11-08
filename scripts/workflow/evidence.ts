@@ -12,6 +12,9 @@ export interface CiResult {
 
 export interface Implementation {
   issue: number;
+  /** `blocked`: implementer nie mógł dokończyć zadania; workflow nie otwiera PR, tylko zgłasza blokadę. */
+  status?: 'done' | 'blocked';
+  blocker?: string;
   bugfix: boolean;
   regression_test?: string;
   acceptance: { criterion: string; evidence: string }[];
