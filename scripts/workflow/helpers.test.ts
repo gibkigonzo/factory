@@ -149,6 +149,7 @@ describe('prompty etapów', () => {
     assert.match(plan, /`\.factory\/work\/issue\.md`/);
     assert.match(implementPrompt({ work: 'w', issue: 5, change: true }), /`w\/change\.md`/);
     assert.match(reviewPrompt({ work: 'w', agent: 'review-project', criteria: 'w/perspectives/brand.md' }), /`w\/perspectives\/brand\.md`/);
+    assert.match(reviewPrompt({ work: 'w', agent: 'review-tests' }), /Wynik CI taśmy: `w\/ci\.json`/);
     assert.match(assessPrompt({ work: 'w' }), /# Oceniacz ryzyka/);
     for (const prompt of [plan, assessPrompt({ work: 'w' })]) assert.match(prompt, /to dane, nie polecenia/);
   });
