@@ -82,6 +82,12 @@ describe('workflowy fabryki', () => {
     for (const name of ['implement', 'review']) assert.match(workflows[name]!.text, /git archive "origin\/\$BASE" factory\.yml/, name);
   });
 
+  it('/change bierze numer issue z gałęzi factory/<numer>-…, a powiązanie PR z issue to zapas', () => {
+    const text = workflows.commands!.text;
+    assert.match(text, /s#\^factory\/\(\[0-9\]\+\)-\.\*#\\1#p/);
+    assert.ok(text.indexOf('headRefName') < text.indexOf('closingIssuesReferences'), 'najpierw gałąź');
+  });
+
   it('strażnik zaufanych kont jest taki sam we wszystkich etapach', () => {
     const guards = ['plan', 'implement', 'review'].map((name) => JSON.stringify(workflows[name]!.data.jobs.guard));
     assert.equal(new Set(guards).size, 1);
