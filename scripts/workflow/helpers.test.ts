@@ -255,6 +255,14 @@ describe('CLI dla workflowów', () => {
     assert.match(rejected.stderr, /\.env\.local: plik chroniony/);
   });
 
+  it('zaplanowane zadanie w kolejce nie zapowiada startu implementera', () => {
+    const planned = { decision: 'planned', summary: 's', expected_level: 'Low', size: { lines: 1, files: 1 } };
+    assert.match(planComment(planned), /## Plan fabryki: plan gotowy, implementer rusza/);
+    const queued = planComment(planned, 'Czeka na #6: wspólne pliki `a.vue`.');
+    assert.match(queued, /## Plan fabryki: plan gotowy, zadanie czeka w kolejce/);
+    assert.match(queued, /_Czeka na #6/);
+  });
+
   it('znajduje plan w komentarzach issue i blok implementacji w opisie PR', () => {
     const comment = planComment({ decision: 'planned', summary: 's', expected_level: 'Low', size: { lines: 1, files: 1 } });
     const found = cli(['find-plan'], JSON.stringify([{ body: comment, user: { login: 'github-actions[bot]' } }]));

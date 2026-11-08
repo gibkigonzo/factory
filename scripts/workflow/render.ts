@@ -29,8 +29,10 @@ function jsonBlock(value: unknown): string {
   return ['<details><summary>JSON</summary>', '', '```json', JSON.stringify(value, null, 2), '```', '', '</details>'].join('\n');
 }
 
+/** note: powód, dla którego zaplanowane zadanie czeka w kolejce, zamiast od razu trafić do implementera. */
 export function planComment(plan: Plan, note?: string, usage: readonly Usage[] = []): string {
-  const lines = [PLAN_MARKER, `## Plan fabryki: ${DECISIONS[plan.decision] ?? plan.decision}`, '', plan.summary, ''];
+  const decision = plan.decision === 'planned' && note ? 'plan gotowy, zadanie czeka w kolejce' : (DECISIONS[plan.decision] ?? plan.decision);
+  const lines = [PLAN_MARKER, `## Plan fabryki: ${decision}`, '', plan.summary, ''];
   lines.push(`Szacunek: ${plan.size.lines} linii, plików: ${plan.size.files}. Prognoza poziomu: ${plan.expected_level}.`);
   if (plan.questions?.length) lines.push('', '**Pytania do Ciebie:**', ...plan.questions.map((q) => `- ${q}`));
   if (plan.sub_issues?.length) lines.push('', '**Proponowany podział:**', ...plan.sub_issues.map((s) => `- ${s.title}`));
