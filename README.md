@@ -75,6 +75,7 @@ W Etapie 0 (tryb cienia) fabryka niczego nie scala. Przy każdym PR zapisuje, co
 
 - **Pętla poprawek.** Czerwone CI albo `request_changes` recenzenta odsyła PR do implementera z komentarzem „Runda poprawek N z M” (uwagi od najpoważniejszej), do `risk.max_review_rounds` rund. Przy czerwonym CI recenzenci nie ruszają, bo poprawka i tak zmieni diff; oceniają je dopiero w ostatniej rundzie. Ocena ryzyka i werdykt powstają po pętli. Uwagi nierozstrzygnięte po ostatniej rundzie dają High.
 - **Blokada.** Gdy implementer nie może dokończyć zadania (brak narzędzia, zależności, uprawnień), kończy ze statusem `blocked` i opisem. Workflow nie otwiera wtedy PR i nie puszcza recenzji: issue dostaje etykietę `blocked` i komentarz z powodem. Tak samo, gdy implementer nie zmienił żadnego pliku.
+- **Awaria startu.** Gdy sesja Claude nie wystartuje (brak wyniku albo błąd bez kosztu, np. nieudane pobranie narzędzi akcji), etap czeka minutę i próbuje jeszcze raz. Błąd po rozpoczęciu pracy nie jest ponawiany.
 - **Nowe zależności.** Planer wpisuje pakiety z wersją do `dependencies` w planie. Plan z nimi czeka z etykietą `needs-approval` na `/approve` w issue. Potem workflow instaluje je komendami z `dependencies` w `factory.yml`, zanim ruszy implementer. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji, a obcy pakiet mógłby go odczytać.
 
 ### Tryb cienia

@@ -139,6 +139,21 @@ describe('workflowy fabryki', () => {
     assert.match(commands, /-f stage=queue/);
   });
 
+  it('każdy etap z Claude ponawia sesję raz, gdy Claude nie wystartował, a prawdziwy błąd dalej przerywa job', () => {
+    for (const name of ['plan', 'implement', 'review', 'risk']) {
+      const steps = Object.values(workflows[name]!.data.jobs).flatMap((job) => job.steps ?? []) as (Step & { id?: string; if?: string; 'continue-on-error'?: boolean })[];
+      const first = steps.find((step) => step.id === 'claude')!;
+      const retry = steps.find((step) => step.id === 'claude_retry')!;
+      assert.equal(first['continue-on-error'], true, name);
+      assert.ok(retry?.uses?.startsWith(CLAUDE), name);
+      assert.deepEqual(retry.with, first.with, `${name}: ponowna próba z tymi samymi ustawieniami`);
+      assert.match(String(retry.if), /steps\.started\.outputs\.retry == 'true'/, name);
+      assert.ok(steps.some((step) => step.run?.includes('cli.ts" started')), name);
+      assert.ok(steps.some((step) => /steps\.started\.outputs\.retry != 'true'/.test(String(step.if)) && step.run?.includes('exit 1')), name);
+      assert.doesNotMatch(workflows[name]!.text, /OUTPUT: \$\{\{ steps\.claude\.outputs/, `${name}: wynik bierze z ponownej próby, gdy była`);
+    }
+  });
+
   it('strażnik zaufanych kont jest taki sam we wszystkich etapach', () => {
     const guards = ['plan', 'implement', 'review'].map((name) => JSON.stringify(workflows[name]!.data.jobs.guard));
     assert.equal(new Set(guards).size, 1);

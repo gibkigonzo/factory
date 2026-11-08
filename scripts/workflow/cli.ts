@@ -24,7 +24,7 @@ import { admit, queueState, release } from './queue.ts';
 import { renderReport } from './report.ts';
 import type { PanelSummary } from './report.ts';
 import { parseSpec } from './spec.ts';
-import { isStage, parseUsageBlocks, parseUsageList, readUsage, sessionError, sumUsage } from './usage.ts';
+import { isStage, parseUsageBlocks, parseUsageList, readUsage, sessionError, sessionStarted, sumUsage } from './usage.ts';
 import type { Usage } from './usage.ts';
 
 class UsageError extends Error {}
@@ -165,6 +165,11 @@ function run(command: string | undefined, rest: string[]): string {
       return evidence(v);
     case 'usage':
       return usage(v);
+    case 'started': {
+      const file = required(v.file, '--file');
+      if (!existsSync(file) || !sessionStarted(json(file))) throw new UsageError('Claude nie wystartował: brak wyniku sesji albo błąd bez kosztu');
+      return 'Claude wystartował';
+    }
     case 'usage-sum': {
       const dir = required(v.dir, '--dir');
       const files = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')) : [];

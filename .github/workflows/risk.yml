@@ -68,6 +68,7 @@ jobs:
 
       - name: Oceniacz ryzyka
         id: claude
+        continue-on-error: true
         uses: anthropics/claude-code-action@402b5b79551e3ce6614c179fbccbfdb79291cead # v1.0.269
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -80,19 +81,55 @@ jobs:
             --disallowedTools ${{ steps.data.outputs.denied }}
             --json-schema '${{ steps.data.outputs.schema }}'
 
+      - name: Czy Claude wystartował
+        id: started
+        if: steps.claude.outcome == 'failure'
+        env:
+          EXEC: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          # Awaria infrastruktury (np. pobieranie narzędzi akcji) albo błąd bez żadnej pracy: jedna ponowna próba.
+          if node "$F/scripts/workflow/cli.ts" started --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}"; then
+            echo "retry=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Claude nie wystartował; ponowna próba za minutę."
+            sleep 60
+            echo "retry=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Oceniacz ryzyka (ponowna próba)
+        id: claude_retry
+        if: steps.started.outputs.retry == 'true'
+        uses: anthropics/claude-code-action@402b5b79551e3ce6614c179fbccbfdb79291cead # v1.0.269
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          allowed_bots: github-actions[bot]   # kolejne etapy uruchamia workflow_dispatch od github-actions
+          prompt: ${{ steps.data.outputs.prompt }}
+          claude_args: >-
+            --model ${{ steps.data.outputs.model }}
+            --allowedTools ${{ steps.data.outputs.tools }}
+            --disallowedTools ${{ steps.data.outputs.denied }}
+            --json-schema '${{ steps.data.outputs.schema }}'
+
+      - name: Błąd sesji Claude
+        if: steps.claude.outcome == 'failure' && steps.started.outputs.retry != 'true'
+        run: |
+          echo "::error::Sesja Claude zakończyła się błędem po rozpoczęciu pracy; szczegóły w kroku zużycia."
+          exit 1
+
       - name: Zużycie oceniacza
         id: usage
         if: always() && steps.claude.outcome != 'skipped'
         continue-on-error: true
         env:
-          EXEC: ${{ steps.claude.outputs.execution_file }}
+          EXEC: ${{ steps.claude_retry.outputs.execution_file || steps.claude.outputs.execution_file }}
         run: |
           mkdir -p "$(dirname "usage/assess.json")"
           node "$F/scripts/workflow/cli.ts" usage --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" --stage assess --out "usage/assess.json"
 
       - name: Sprawdzenie oceny
         env:
-          OUTPUT: ${{ steps.claude.outputs.structured_output }}
+          OUTPUT: ${{ steps.claude_retry.outputs.structured_output || steps.claude.outputs.structured_output }}
         run: |
           mkdir -p behavior
           printf '%s' "$OUTPUT" > "$W/behavior.raw.json"
