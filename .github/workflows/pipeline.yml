@@ -1,0 +1,153 @@
+# Dyrygent taśmy: jedyny workflow fabryki, który wywołuje projekt. Rozdziela zdarzenia na etapy i wywołuje je
+# składnią $/, czyli z tego repo w tej samej wersji co ten plik. Projekt przypina więc jedną wersję fabryki,
+# a zmiany etapów (nowe joby, nowe uprawnienia w granicach sufitu) nie wymagają zmian w jego repo.
+# Uprawnienia, które przyznaje projekt, są sufitem: każdy etap i każdy job deklaruje tylko swoje minimum,
+# a joby z Claude dalej mają tylko prawo odczytu.
+name: factory-pipeline
+
+on:
+  workflow_call:
+    inputs:
+      stage: { type: string, default: '', description: 'Etap z workflow_dispatch: plan, implement, review, journal, queue' }
+      issue: { type: string, default: '' }
+      pr: { type: string, default: '' }
+      note: { type: string, default: '' }
+      factory_ref: { type: string, default: main, description: 'Wersja skryptów fabryki; ta sama co w uses projektu' }
+      runs_on: { type: string, default: ubuntu-latest, description: 'Runner dla jobów z Claude i CI' }
+      trusted: { type: string, default: '', description: 'Dodatkowe zaufane konta, po przecinku' }
+      max_parallel: { type: string, default: '3', description: 'Ilu recenzentów naraz' }
+      workflow: { type: string, default: factory.yml, description: 'Plik workflowu projektu, który wywołuje fabrykę' }
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: { required: true }
+
+permissions: {}
+
+jobs:
+  plan:
+    if: >-
+      (github.event_name == 'issues' && github.event.label.name == 'ready') ||
+      (github.event_name == 'workflow_dispatch' && inputs.stage == 'plan')
+    uses: $/.github/workflows/plan.yml
+    with:
+      issue: ${{ github.event.issue.number || inputs.issue }}
+      note: ${{ inputs.note }}
+      factory_ref: ${{ inputs.factory_ref }}
+      runs_on: ${{ inputs.runs_on }}
+      trusted: ${{ inputs.trusted }}
+      workflow: ${{ inputs.workflow }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      actions: write
+
+  implement:
+    if: github.event_name == 'workflow_dispatch' && inputs.stage == 'implement'
+    uses: $/.github/workflows/implement.yml
+    with:
+      issue: ${{ inputs.issue }}
+      pr: ${{ inputs.pr }}
+      note: ${{ inputs.note }}
+      factory_ref: ${{ inputs.factory_ref }}
+      runs_on: ${{ inputs.runs_on }}
+      trusted: ${{ inputs.trusted }}
+      workflow: ${{ inputs.workflow }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      actions: write
+
+  review:
+    if: github.event_name == 'workflow_dispatch' && inputs.stage == 'review'
+    uses: $/.github/workflows/review.yml
+    with:
+      pr: ${{ inputs.pr }}
+      factory_ref: ${{ inputs.factory_ref }}
+      runs_on: ${{ inputs.runs_on }}
+      trusted: ${{ inputs.trusted }}
+      max_parallel: ${{ inputs.max_parallel }}
+      workflow: ${{ inputs.workflow }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    permissions:     # zapis tylko dla joba pętli poprawek (bez Claude): komentarz z uwagami i kolejna runda
+      contents: read
+      issues: write
+      pull-requests: write
+      actions: write
+
+  risk:
+    needs: review
+    if: needs.review.outputs.ok == 'true'
+    uses: $/.github/workflows/risk.yml
+    with:
+      pr: ${{ inputs.pr }}
+      factory_ref: ${{ inputs.factory_ref }}
+      runs_on: ${{ inputs.runs_on }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    permissions:
+      contents: read
+      checks: write
+      issues: write
+      pull-requests: write
+
+  merge:
+    needs: risk
+    uses: $/.github/workflows/merge.yml
+    with:
+      pr: ${{ inputs.pr }}
+    permissions:
+      pull-requests: write
+
+  journal:
+    needs: merge
+    if: >-
+      !cancelled() && (
+        needs.merge.result == 'success' ||
+        github.event_name == 'schedule' ||
+        (github.event_name == 'workflow_dispatch' && inputs.stage == 'journal') ||
+        (github.event_name == 'pull_request_target' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          startsWith(github.event.pull_request.head.ref, 'factory/')))
+    uses: $/.github/workflows/journal.yml
+    with:
+      factory_ref: ${{ inputs.factory_ref }}
+      trusted: ${{ inputs.trusted }}
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+
+  queue:
+    if: >-
+      github.event_name == 'schedule' ||
+      (github.event_name == 'workflow_dispatch' && inputs.stage == 'queue') ||
+      (github.event_name == 'pull_request_target' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        startsWith(github.event.pull_request.head.ref, 'factory/'))
+    uses: $/.github/workflows/queue.yml
+    with:
+      factory_ref: ${{ inputs.factory_ref }}
+      workflow: ${{ inputs.workflow }}
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+      actions: write
+
+  commands:
+    if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/')
+    uses: $/.github/workflows/commands.yml
+    with:
+      trusted: ${{ inputs.trusted }}
+      workflow: ${{ inputs.workflow }}
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+      actions: write

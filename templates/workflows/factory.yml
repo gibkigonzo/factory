@@ -1,4 +1,6 @@
-# Taśma fabryki w repo projektu. Skopiuj do .github/workflows/factory.yml.
+# Taśma fabryki w repo projektu. Skopiuj do .github/workflows/factory.yml; to jedyny plik workflowu fabryki
+# w projekcie. Etapy rozdziela dyrygent fabryki (pipeline.yml), więc zmiany taśmy działają bez kopiowania.
+# Plik zmieniasz tylko przy zmianie wersji fabryki (uses i factory_ref) albo ustawień niżej.
 # Wymaga sekretu CLAUDE_CODE_OAUTH_TOKEN (Settings → Secrets and variables → Actions).
 #
 # Przebieg: etykieta `ready` na issue → plan → implementacja (PR z gałęzi factory/*) → recenzja → ocena ryzyka
@@ -30,8 +32,8 @@ on:
   workflow_dispatch:
     inputs:
       stage:
-        type: choice
-        options: [plan, implement, review, journal, queue]
+        description: 'Etap: plan, implement, review, journal albo queue'
+        type: string
         required: true
       issue: { type: string, default: '' }
       pr: { type: string, default: '' }
@@ -44,119 +46,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  plan:
-    if: >-
-      (github.event_name == 'issues' && github.event.label.name == 'ready') ||
-      (github.event_name == 'workflow_dispatch' && inputs.stage == 'plan')
-    uses: gibkigonzo/factory/.github/workflows/plan.yml@main
+  factory:
+    uses: gibkigonzo/factory/.github/workflows/pipeline.yml@main
     with:
-      issue: ${{ github.event.issue.number || inputs.issue }}
-      note: ${{ inputs.note }}
-      factory_ref: main
-      runs_on: ubuntu-latest   # albo np. '["self-hosted", "vps"]'
-    secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: read
-      actions: write
-
-  implement:
-    if: github.event_name == 'workflow_dispatch' && inputs.stage == 'implement'
-    uses: gibkigonzo/factory/.github/workflows/implement.yml@main
-    with:
+      stage: ${{ inputs.stage }}
       issue: ${{ inputs.issue }}
       pr: ${{ inputs.pr }}
       note: ${{ inputs.note }}
-      factory_ref: main
-      runs_on: ubuntu-latest
+      factory_ref: main          # ta sama wersja fabryki co w uses
+      runs_on: ubuntu-latest     # albo np. '["self-hosted", "vps"]'
+      # trusted: konto-a,konto-b  # dodatkowe zaufane konta obok właściciela
+      # max_parallel: '3'         # recenzenci naraz
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    # Sufit uprawnień dla całej taśmy. Każdy job fabryki bierze z niego tylko to, czego potrzebuje,
+    # a joby z Claude mają tylko prawo odczytu.
     permissions:
       contents: write
       issues: write
       pull-requests: write
       actions: write
-
-  review:
-    if: github.event_name == 'workflow_dispatch' && inputs.stage == 'review'
-    uses: gibkigonzo/factory/.github/workflows/review.yml@main
-    with:
-      pr: ${{ inputs.pr }}
-      factory_ref: main
-      runs_on: ubuntu-latest
-    secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-    permissions:     # zapis tylko dla joba pętli poprawek (bez Claude): komentarz z uwagami i kolejna runda
-      contents: read
-      issues: write
-      pull-requests: write
-      actions: write
-
-  risk:
-    needs: review
-    if: needs.review.outputs.ok == 'true'
-    uses: gibkigonzo/factory/.github/workflows/risk.yml@main
-    with:
-      pr: ${{ inputs.pr }}
-      factory_ref: main
-      runs_on: ubuntu-latest
-    secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-    permissions:
-      contents: read
       checks: write
-      issues: write
-      pull-requests: write
-
-  merge:
-    needs: risk
-    uses: gibkigonzo/factory/.github/workflows/merge.yml@main
-    with:
-      pr: ${{ inputs.pr }}
-    permissions:
-      pull-requests: write
-
-  journal:
-    needs: merge
-    if: >-
-      !cancelled() && (
-        needs.merge.result == 'success' ||
-        github.event_name == 'schedule' ||
-        (github.event_name == 'workflow_dispatch' && inputs.stage == 'journal') ||
-        (github.event_name == 'pull_request_target' &&
-          github.event.pull_request.head.repo.full_name == github.repository &&
-          startsWith(github.event.pull_request.head.ref, 'factory/')))
-    uses: gibkigonzo/factory/.github/workflows/journal.yml@main
-    with:
-      factory_ref: main
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: read
-
-  queue:
-    if: >-
-      github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && inputs.stage == 'queue') ||
-      (github.event_name == 'pull_request_target' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        startsWith(github.event.pull_request.head.ref, 'factory/'))
-    uses: gibkigonzo/factory/.github/workflows/queue.yml@main
-    with:
-      factory_ref: main
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: read
-      actions: write
-
-  commands:
-    if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/')
-    uses: gibkigonzo/factory/.github/workflows/commands.yml@main
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-      actions: write

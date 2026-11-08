@@ -12,7 +12,8 @@ type Job = { permissions?: Record<string, string>; steps?: Step[]; uses?: string
 type Workflow = { permissions?: unknown; on: unknown; jobs: Record<string, Job> };
 
 const DIR = join(ROOT, '.github/workflows');
-const REUSABLE = ['plan', 'implement', 'review', 'risk', 'merge', 'journal', 'queue', 'commands'];
+const STAGES = ['plan', 'implement', 'review', 'risk', 'merge', 'journal', 'queue', 'commands'];
+const REUSABLE = ['pipeline', ...STAGES];
 const read = (path: string) => readFileSync(path, 'utf8');
 const workflows = Object.fromEntries(
   readdirSync(DIR)
@@ -31,7 +32,8 @@ describe('workflowy fabryki', () => {
 
   for (const [name, { text, data }] of Object.entries(workflows)) {
     it(`${name}: każda akcja przypięta do commita z opisem wersji`, () => {
-      const uses = [...text.matchAll(/uses:\s*(\S+)(.*)$/gm)];
+      // Etapy fabryki z tej samej wersji ($/) nie mają własnego pinu: wersję przypina projekt jednym uses.
+      const uses = [...text.matchAll(/uses:\s*(\S+)(.*)$/gm)].filter(([, ref]) => !ref!.startsWith('$/'));
       for (const [, ref, comment] of uses) assert.match(`${ref}${comment}`, /@[0-9a-f]{40} # v\d+/, `${name}: ${ref}`);
     });
 
@@ -179,18 +181,33 @@ describe('workflowy fabryki', () => {
 });
 
 describe('wzorzec workflowu projektu', () => {
-  it('wywołuje każdy etap i daje mu co najmniej uprawnienia, których potrzebują jego joby', () => {
-    const rank = { read: 1, write: 2 } as Record<string, number>;
-    for (const [jobName, job] of Object.entries(template.jobs)) {
-      const name = /workflows\/(\w+)\.yml@/.exec(job.uses ?? '')?.[1];
-      assert.ok(name && workflows[name], `${jobName}: ${job.uses}`);
-      for (const [inner, innerJob] of Object.entries(workflows[name]!.data.jobs)) {
-        for (const [scope, level] of Object.entries(innerJob.permissions ?? {})) {
-          const granted = job.permissions?.[scope];
-          assert.ok(granted && rank[granted]! >= rank[level]!, `${jobName} → ${name}/${inner}: ${scope}: ${level}`);
-        }
+  const rank = { read: 1, write: 2 } as Record<string, number>;
+  /** Uprawnienia w łańcuchu mogą tylko maleć: każdy job mieści się w suficie wywołującego, rekurencyjnie. */
+  function checkCeiling(ceiling: Record<string, string> | undefined, workflow: string, path: string): void {
+    for (const [jobName, job] of Object.entries(workflows[workflow]!.data.jobs)) {
+      for (const [scope, level] of Object.entries(job.permissions ?? {})) {
+        const granted = ceiling?.[scope];
+        assert.ok(granted && rank[granted]! >= rank[level]!, `${path} → ${workflow}/${jobName}: ${scope}: ${level}`);
       }
+      const nested = /^\$\/\.github\/workflows\/(\w+)\.yml$/.exec(job.uses ?? '')?.[1];
+      if (job.uses) assert.ok(nested && workflows[nested], `${workflow}/${jobName}: etap fabryki przez $/: ${job.uses}`);
+      if (nested) checkCeiling(job.permissions, nested, `${path} → ${workflow}/${jobName}`);
     }
+  }
+
+  it('to cienki plik: jeden job wywołuje dyrygenta, a jego uprawnienia są sufitem dla całej taśmy', () => {
+    const jobs = Object.entries(template.jobs);
+    assert.equal(jobs.length, 1);
+    const [jobName, job] = jobs[0]!;
+    const ref = /^gibkigonzo\/factory\/\.github\/workflows\/pipeline\.yml@(\S+)$/.exec(job.uses ?? '')?.[1];
+    assert.ok(ref, String(job.uses));
+    assert.equal(job.with?.factory_ref, ref, 'skrypty fabryki z tej samej wersji co workflowy');
+    checkCeiling(job.permissions, 'pipeline', jobName);
+  });
+
+  it('dyrygent wywołuje każdy etap taśmy', () => {
+    const called = Object.values(workflows.pipeline!.data.jobs).map((job) => /workflows\/(\w+)\.yml$/.exec(job.uses ?? '')?.[1]);
+    assert.deepEqual([...called].sort(), [...STAGES].sort());
   });
 
   it('nazwa przebiegu mówi, który etap ruszył, bo po niej liczy się dzienny limit', () => {

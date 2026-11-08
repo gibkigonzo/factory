@@ -31,11 +31,13 @@ Factory to generyczna fabryka oprogramowania oparta na Claude Code, dla stron WW
 
 Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwracalność (LLM, tylko w górę), brak testów (+1 poziom), rozmiar, dowody. Progi są w README. Ścieżka spoza mapy stref dostaje Medium.
 
-### Dystrybucja
+### Dystrybucja (8 listopada 2026)
 
-- Repo jest marketplace'em pluginu (`.claude-plugin/marketplace.json`, plugin `factory` ze źródłem `./`). Projekty instalują go przez wejścia `plugin_marketplaces` i `plugins` w `claude-code-action`.
-- Wspólne workflowy to `workflow_call`, wywoływane jako `gibkigonzo/factory/.github/workflows/<name>.yml@v1`. W Etapie 0 projekty używają `@main`; tag `v1` powstanie po Etapie 0.
-- Presety projekt dołącza przez `extends`, a wersje przypina tagami.
+- Cel: jak najmniej obsługi. Projekt ma tylko `factory.yml`, regułę w `CLAUDE.md` i cienki workflow; reszta przychodzi z fabryki sama. Każde ręczne kopiowanie i synchronizacja to etap przejściowy do usunięcia.
+- Cienki workflow projektu ma jeden job: `uses: gibkigonzo/factory/.github/workflows/pipeline.yml@<wersja>`. Dyrygent wywołuje etapy składnią `$/` z tej samej wersji, a uprawnienia projektu są sufitem dla całej taśmy.
+- Taśma czyta skille agentów, presety i skrypty z fabryki w przypiętej wersji. W Etapie 0 projekty używają `@main`; po nim powstanie tag `v1` (zmiany zgodne same, niezgodne w `v2`).
+- Repo jest też marketplace'em pluginu (`.claude-plugin/marketplace.json`) do pracy lokalnej w Claude Code; taśma pluginu nie potrzebuje.
+- Na razie ręcznie: kopia skilla `spec-writer` w `.claude/skills/` projektu, bo sesje w chmurze nie instalują pluginów. Do sprawdzenia: wczytanie skilla z fabryki przez regułę w `CLAUDE.md` albo automatyczny PR z aktualizacją.
 
 ### Godot w CI
 
