@@ -1,22 +1,120 @@
 # Factory
 
-Generyczna fabryka oprogramowania oparta na Claude Code. Zamienia rozmowę o pomyśle w scalony, zweryfikowany kod. Działa dla stron WWW i dla gier w Godot.
+Fabryka oprogramowania oparta na Claude Code i GitHub Actions. Zamienia rozmowę o pomyśle w zweryfikowany pull request z oceną ryzyka. Ty decydujesz, co się scala, i robisz to z telefonu. Pierwszy projekt to strona WWW. Gry w Godot są w planach.
 
-> **Status:** Etap 0 (tryb cienia). Taśma prowadzi zadanie od issue do werdyktu fabryki w PR, ale niczego nie scala. O przejściu do Etapu 1 rozstrzyga Bramka 1 w dzienniku trybu cienia.
+> **Status: Etap 0, tryb cienia.** Taśma prowadzi zadanie od pomysłu do werdyktu w PR, ale niczego nie scala. Przy każdym PR zapisuje, co by zrobiła, a Ty oceniasz ten werdykt. Automatyczny merge włączy się w Etapie 1, gdy werdykty będą trafne (Bramka 1 w dzienniku).
+
+## Co potrafi
+
+- **Spec z rozmowy, także z telefonu.** Skill `spec-writer` zadaje najwyżej 5 pytań o decyzje produktowe i zakłada issue z kryteriami akceptacji, które da się sprawdzić maszynowo.
+- **Plan.** Planer rozpisuje podejście, pliki, testy i dowody dla każdego kryterium. Gdy czegoś nie wie, pyta. Za duże zadanie dzieli na mniejsze issue.
+- **Implementacja w PR.** Implementer pisze kod i testy na gałęzi `factory/<numer>-<nazwa>` i podaje dowód dla każdego kryterium. Gdy nie może dokończyć zadania, zgłasza blokadę zamiast oddawać połowiczny PR.
+- **Recenzja.** CI uruchamia komendy projektu. Pięć perspektyw (poprawność, testy, bezpieczeństwo, utrzymanie, zgodność ze specem) ocenia PR, każda w świeżym kontekście. Projekt może dodać własne perspektywy.
+- **Pętla poprawek.** Czerwone CI albo prośba recenzenta o zmiany odsyła PR do implementera z listą uwag, do 3 rund.
+- **Ocena ryzyka.** Deterministyczne reguły (strefy plików, testy, rozmiar, dowody) i ocena modelu, która może poziom tylko podnieść. Wynik: Low, Medium albo High, raport w PR czytelny na telefonie.
+- **Tryb cienia i dziennik.** Werdykt fabryki w PR oceniasz 👍 albo 👎. Przypięte issue „Tryb cienia” pokazuje zgodność, rundy poprawek, czas i koszt na PR, etap i recenzenta.
+- **Kolejka i limity.** Zadania na tych samych plikach idą po kolei, a reszta równolegle w granicach `wip_limit`. Dzienny limit przebiegów z Claude pilnuje kosztu, a zadanie ponad limit rusza samo następnego dnia.
+- **Nowe zależności tylko za Twoją zgodą.** Plan z nowym pakietem czeka na `/approve`, a pakiet instaluje workflow, nie model.
+- **Bezpieczeństwo.** Claude działa tylko z prawem odczytu i zwraca JSON albo patch. Zapisy robią skrypty. Fabryka nie zmienia własnych zabezpieczeń.
+
+**Jeszcze nie:**
+- automatyczny merge (Etap 1): wymaga rulesetu na `main` i aplikacji GitHub fabryki; w repo prywatnym ruleset wymaga GitHub Pro;
+- zrzuty ekranu i podgląd w PR (`evidence`), etykiety kierujące do człowieka (`human_gates`), agenci cykliczni (`schedules`): pola są w kontrakcie, ale taśma ich jeszcze nie używa;
+- presety i CI dla Godota, hooki pluginu;
+- sesja `factory-init`, która ustala konwencje projektu. Na razie konwencje (np. podejście do stylów, język nazw w kodzie) zapisujesz sam w `CLAUDE.md` projektu. Bez nich agent wybierze styl sam, a recenzent nie będzie miał czego pilnować.
+
+## Szybki start
+
+### Czego potrzebujesz
+
+- repo projektu na GitHubie, publiczne albo prywatne (w prywatnym taśma zużywa minuty GitHub Actions);
+- subskrypcję Claude Pro albo Max: taśma loguje się nią, a koszt pracy agentów liczy się w limitach subskrypcji;
+- raz komputer z Claude Code (CLI), żeby wygenerować token;
+- na co dzień telefon: aplikację Claude (spec) i GitHub Mobile (oceny, komendy, merge).
+
+### 1. Token Claude
+
+Na komputerze uruchom `claude setup-token` i zaloguj się kontem z subskrypcją. Skopiuj token. W repo projektu: Settings → Secrets and variables → Actions → New repository secret, nazwa `CLAUDE_CODE_OAUTH_TOKEN`.
+
+### 2. Ustawienia repo
+
+Settings → Actions → General → Workflow permissions: zaznacz „Allow GitHub Actions to create and approve pull requests”. Bez tego taśma nie otworzy PR. Pozostałe uprawnienia workflowy deklarują same.
+
+### 3. Kontrakt `factory.yml`
+
+Skopiuj [`templates/factory.yml`](templates/factory.yml) do korzenia repo projektu i dopasuj:
+
+- `extends`: presety języka i frameworka, np. `[base, typescript, web, nuxt]`;
+- `commands`: komendy CI, wymagane `test` i `build`. **`setup` musi zainstalować wszystko**, czego potrzebują pozostałe komendy, także przeglądarki do testów e2e. Implementer uruchamia tylko komendy z tej listy i tylko dosłownie;
+- `zones`: ścieżki z danymi trwałymi, autoryzacją i logiką współdzieloną (ścieżka spoza mapy dostaje Medium);
+- `zone_tests`: testy spoza ścieżek strefy, które ją sprawdzają, np. e2e całej strony;
+- `dependencies`: komendy instalacji nowych pakietów (bez nich plan z nową zależnością się zablokuje);
+- `protected_files`: pliki, których agenci nie zmienią.
+
+Sprawdź kontrakt w klonie tego repo (Node 22.18+):
+
+```bash
+npm ci
+npm run validate -- ścieżka/do/factory.yml
+```
+
+Konwencje kodu projektu zapisz w jego `CLAUDE.md`. Czytają je planer, implementer i recenzenci.
+
+### 4. Workflow taśmy
+
+Skopiuj [`templates/workflows/factory.yml`](templates/workflows/factory.yml) do `.github/workflows/factory.yml` w repo projektu. Dopisz `.factory/review/` do `.gitignore`. Taśma nie potrzebuje aplikacji Claude na GitHubie, bo działa na tokenie workflowu.
+
+### 5. Spec z telefonu
+
+1. Skopiuj katalog [`skills/spec-writer/`](skills/spec-writer/) do `.claude/skills/spec-writer/` w repo projektu.
+2. Dopisz regułę z [`templates/claude/CLAUDE.md`](templates/claude/CLAUDE.md) do `CLAUDE.md` projektu. Bez niej sesja od razu koduje, zamiast spisać spec.
+3. W claude.ai połącz konto GitHub i daj aplikacji Claude dostęp do repo projektu. Sesja Claude Code w chmurze widzi tylko repo z instalacji tej aplikacji.
+
+Szczegóły i wariant ze zwykłym czatem: [Spec z telefonu](#spec-z-telefonu).
+
+### 6. Pierwsze zadanie
+
+1. W aplikacji Claude: zakładka Code, nowa sesja na repo projektu i np. „Mam pomysł: …”.
+2. Odpowiadasz na pytania („ok” albo poprawki numerów) i akceptujesz spec. Powstaje issue z etykietą `ready`.
+3. Po kilku minutach w issue jest plan. Gdy planer pyta, odpowiadasz i nadajesz `ready` ponownie. Gdy plan dodaje pakiety, piszesz `/approve`.
+4. Implementer otwiera PR. Recenzja i pętla poprawek działają same.
+5. W PR pojawiają się raport ryzyka i werdykt fabryki. Werdykt oceniasz 👍 albo 👎, a o PR decydujesz jak zwykle: merge albo `/reject`.
+6. Po merge'u issue zamyka się samo, a kolejka uruchamia następne czekające zadanie.
+
+Postęp widać w przypiętym issue „Tryb cienia” i w Actions → factory. Nazwa przebiegu mówi, który etap ruszył, np. `factory implement #7`.
+
+### Aktualizacje
+
+W Etapie 0 projekty używają fabryki z `@main`, więc zmiany workflowów i skilli fabryki działają od razu. Wyjątki trzeba skopiować ręcznie:
+- szablon workflowu ([`templates/workflows/factory.yml`](templates/workflows/factory.yml));
+- skill `spec-writer`.
+
+Opis PR fabryki mówi, kiedy to konieczne. Po Etapie 0 powstanie tag `v1`, a projekty przypną wersję.
+
+## Na co dzień: etykiety i komendy
+
+| Etykieta w issue | Znaczy |
+| --- | --- |
+| `ready` | spec gotowy; nadajesz ją Ty, uruchamia planera |
+| `planned` | plan jest; implementacja trwa albo PR jest otwarty |
+| `queued` | zadanie czeka w kolejce: wspólne pliki z innym zadaniem, `wip_limit` albo dzienny limit; ruszy samo |
+| `needs-approval` | plan dodaje pakiety; czeka na Twoje `/approve` |
+| `blocked` | potrzebna Twoja decyzja: pytania planera, blokada implementera albo awaria etapu (powód w komentarzu) |
+| `split` | planer podzielił zadanie na mniejsze issue |
+
+W PR: `risk:low`, `risk:medium`, `risk:high` (poziom z oceny ryzyka) i `factory:round-N` (runda poprawek).
+
+| Komenda w komentarzu | Gdzie | Co robi |
+| --- | --- | --- |
+| `/approve` | issue z `needs-approval` | zgoda na nowe pakiety z planu; zadanie trafia do kolejki |
+| `/approve`, `/veto` | PR | zapisują Twoją decyzję etykietą; w Etapie 1 sterują merge'em Medium i High |
+| `/change <opis>` | PR | runda poprawek według Twojego opisu |
+| `/reject` | issue albo PR | odrzuca zadanie, zamyka PR i zwalnia kolejkę |
+| `/split` | issue | planer dzieli zadanie na mniejsze issue |
+
+Komendy działają tylko od właściciela repo i kont z wejścia `trusted`.
 
 ## Jak działa
-
-1. Spec powstaje w rozmowie w aplikacji Claude. Skill `spec-writer` zakłada issue z etykietą `ready`.
-2. Planer rozpisuje zadanie, a implementerzy pracują równolegle na gałęziach `factory/*`.
-3. Panel recenzentów ocenia każdy PR z 5–8 perspektyw. Każdy recenzent pracuje w świeżym kontekście.
-4. Oceniacz ryzyka nadaje poziom zmiany:
-   - **Low** scala się automatycznie;
-   - **Medium** scala się po 24 h, jeśli nikt nie da `/veto`;
-   - **High** czeka na decyzję właściciela, który nie czyta kodu, tylko decyduje.
-
-Scala deterministyczny skrypt, a nie model. Fabryka nie może zmieniać własnych zabezpieczeń.
-
-### Przebieg
 
 Niebieskie kroki wykonuje człowiek, fioletowe agent (Claude, tylko odczyt, zwraca JSON albo patch), a zielone skrypt, czyli deterministyczny job w GitHub Actions.
 
@@ -24,9 +122,9 @@ Niebieskie kroki wykonuje człowiek, fioletowe agent (Claude, tylko odczyt, zwra
 flowchart TD
   H1(["Rozmowa o pomyśle w aplikacji Claude, akceptacja specu"]):::human
   A1("spec-writer: issue ze specem i etykietą ready"):::agent
-  S1["Strażnik: zaufane konto, dzienny limit"]:::script
+  S1["Strażnik: zaufane konto"]:::script
   A2("Planer: plan w JSON"):::agent
-  S2["Komentarz z planem, etykieta, uruchomienie implementacji"]:::script
+  S2["Komentarz z planem, etykieta, kolejka: wspólne pliki, wip_limit, dzienny limit"]:::script
   H2(["Odpowiadasz na pytania albo dajesz ready mniejszym issue"]):::human
   A3("Implementer: zmiany w plikach i dowody w JSON"):::agent
   S3["Sprawdzenie ścieżek, gałąź factory/*, commit, push, PR"]:::script
@@ -69,7 +167,7 @@ flowchart TD
   classDef script fill:#dcfce7,stroke:#15803d,color:#0f2e16
 ```
 
-W Etapie 0 (tryb cienia) fabryka niczego nie scala. Przy każdym PR zapisuje, co by zrobiła, a decyduje właściciel. Merger włącza się w Etapie 1, po przejściu Bramki 1.
+W Etapie 1 merger zrobi to, co dziś opisuje werdykt: Low scali od razu, Medium po 24 h, jeśli nikt nie da `/veto`, a High zostawi Tobie. Scala deterministyczny skrypt, a nie model.
 
 ### Pętla poprawek, blokady i nowe zależności
 
@@ -78,10 +176,16 @@ W Etapie 0 (tryb cienia) fabryka niczego nie scala. Przy każdym PR zapisuje, co
 - **Awaria startu.** Bun dla akcji Claude pochodzi z rejestru npm, bo pobieranie z GitHub Releases bywa niedostępne. Gdy sesja Claude mimo to nie wystartuje (brak wyniku albo błąd bez kosztu), etap czeka minutę i próbuje jeszcze raz. Błąd po rozpoczęciu pracy nie jest ponawiany.
 - **Nowe zależności.** Planer wpisuje pakiety z wersją do `dependencies` w planie. Plan z nimi czeka z etykietą `needs-approval` na `/approve` w issue. Potem workflow instaluje je komendami z `dependencies` w `factory.yml`, zanim ruszy implementer. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji, a obcy pakiet mógłby go odczytać.
 
+### Kolejka i limity
+
+- Planer wypisuje pliki, które zmieni implementer. Zadanie ze wspólnymi plikami z zadaniem w toku (z planu albo z otwartego PR) czeka z etykietą `queued`, tak samo zadanie ponad `wip_limit`.
+- `daily_runs` to dzienny limit przebiegów z Claude: planu, implementacji i recenzji, liczonych po nazwie przebiegu. Kolejka, dziennik i komendy go nie zużywają. Limit sprawdza implementacja nowego zadania; zadanie ponad limit czeka w kolejce. Rundy poprawek otwartego PR limitu nie sprawdzają, bo pętla i tak kończy się po `max_review_rounds`.
+- Kolejka rusza po zamknięciu PR fabryki, po `/reject`, po zgodzie na zależności, po blokadzie albo awarii zadania w toku i raz dziennie o 04:17 UTC.
+
 ### Tryb cienia
 
 1. Po ocenie ryzyka `merge.yml` dodaje w PR komentarz z werdyktem fabryki. Low: scaliłaby od razu. Medium: czekałaby 24 h na `/veto`. High: przekazałaby decyzję Tobie. Zmiana za duża albo zablokowana przez bramki jakości: odesłałaby ją do podziału albo do poprawek.
-2. Na komentarz reagujesz 👍 (zgoda) albo 👎 (niezgoda). Werdykt powstaje po pętli poprawek, a każda kolejna ocena (np. po `/change`) dostaje nowy komentarz, więc reakcja dotyczy konkretnego werdyktu. O samym PR decydujesz jak zwykle: merge, `/reject` albo revert.
+2. Na komentarz reagujesz 👍 (zgoda) albo 👎 (niezgoda). Każda kolejna ocena (np. po `/change`) dostaje nowy komentarz, więc reakcja dotyczy konkretnego werdyktu. O samym PR decydujesz jak zwykle: merge, `/reject` albo revert.
 3. `journal.yml` prowadzi przypięte issue „Tryb cienia” (etykieta `factory:journal`): stan Bramki 1, metryki i listę PR-ów fabryki. Reakcje nie uruchamiają workflowów, więc dziennik odświeża się po każdym werdykcie, po zamknięciu PR fabryki i raz dziennie. Na żądanie: Actions → factory → Run workflow → `journal`.
 
 Metryki liczy skrypt, nie model:
@@ -89,12 +193,14 @@ Metryki liczy skrypt, nie model:
 - **zgodność**: odsetek werdyktów, które oceniłeś 👍;
 - **fałszywe Low**: werdykt „scaliłaby”, który oceniłeś 👎, PR zamknięty bez merge'u albo merge cofnięty w ciągu `revert_days` dni;
 - **rundy poprawek** i **czas od `ready` do merge'u**;
-- **próg pewności recenzentów**: zakończone PR-y dzielone według najniższej pewności w panelu (≥ 0,8 i < 0,8) z odsetkiem przyjętych (scalonych i niecofniętych) w każdej grupie. Jeśli odsetek jest podobny, pewność nie przewiduje Twoich decyzji i próg zastąpią zgodność recenzentów oraz cytaty, które da się sprawdzić.
-- **koszt**: równowartość cen API na PR, na etap (plan, implementacja, recenzja, ocena ryzyka) i na recenzenta, tokeny wyjścia oraz podział wyjścia na rozumowanie, tekst i wywołania narzędzi (w tym kod). Przy subskrypcji pokazuje, ile taśma waży w limitach. Każdy etap z Claude zapisuje zużycie z pliku przebiegu `claude-code-action`: planer w komentarzu planu, implementer w opisie PR (wszystkie rundy), recenzenci i oceniacz w danych werdyktu.
+- **próg pewności recenzentów**: zakończone PR-y dzielone według najniższej pewności w panelu (≥ 0,8 i < 0,8) z odsetkiem przyjętych (scalonych i niecofniętych) w każdej grupie. Jeśli odsetek jest podobny, pewność nie przewiduje Twoich decyzji i próg zastąpią zgodność recenzentów oraz cytaty, które da się sprawdzić;
+- **koszt**: równowartość cen API na PR, na etap (plan, implementacja, recenzja, ocena ryzyka) i na recenzenta, tokeny wyjścia oraz podział wyjścia na rozumowanie, tekst i wywołania narzędzi (w tym kod). Przy subskrypcji pokazuje, ile taśma waży w limitach.
 
 Bramka 1 przechodzi przy 20 ocenionych PR, zgodności co najmniej 90% i braku fałszywych Low (progi `shadow` w `base`). Dziennik pokazuje wtedy, że można przejść do Etapu 1, ale decyzja należy do Ciebie.
 
-## Reguły ryzyka v1
+## Szczegóły
+
+### Reguły ryzyka v1
 
 Poziom zmiany to najwyższy wynik z pięciu reguł. Reguły i oceniacz mogą go tylko podnieść.
 
@@ -115,35 +221,18 @@ Bramki jakości nie są ryzykiem: blokują merge, ale fabryka poprawia je sama.
 | Złożoność | maks. 15 |
 | Zagnieżdżenie | maks. 4 |
 
-## Jak projekt używa Factory
+### Kontrakt projektu (`factory.yml`)
 
-Reguły mają trzy warstwy: wspólne `base`, presety języka i frameworka oraz `factory.yml` projektu z mapą stref, komendami i wyjątkami.
-
-- **Plugin.** To repo jest marketplace'em pluginu Claude Code. W `claude-code-action`:
-
-  ```yaml
-  plugin_marketplaces: https://github.com/gibkigonzo/factory.git
-  plugins: factory@factory
-  ```
-
-  Lokalnie: `/plugin marketplace add gibkigonzo/factory`, potem `/plugin install factory@factory`. Sesje Claude Code w chmurze (także z telefonu) nie instalują pluginów z ustawień repo, więc skille potrzebne tam, jak `spec-writer`, projekt trzyma w `.claude/skills/`.
-- **Workflowy.** Wspólne workflowy działają przez `workflow_call`:
-  `uses: gibkigonzo/factory/.github/workflows/<name>.yml@v1`. Mogą je wywoływać także repozytoria prywatne.
-- **Kontrakt.** Projekt dodaje `factory.yml` z `extends: [base, <język>, <framework>]`, np. `[base, typescript, web, nuxt]`. Preset `nuxt` zna układ Nuxt 4: komponenty, strony i zasoby w `app/` to Low, serwer, composables, layouty i pluginy to Medium, middleware to High. Wersje presetów przypina tagami.
-
-## Kontrakt projektu (`factory.yml`)
-
-Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy składają się w kolejności `base` → presety z `extends` → `factory.yml`. Listy z warstw się sumują, więc projekt może dopisać strefę albo chroniony plik, ale nie może usunąć tych z `base`. Pojedyncze wartości z późniejszej warstwy nadpisują wcześniejsze.
+Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy składają się w kolejności `base` → presety z `extends` → `factory.yml`. Listy z warstw się sumują, więc projekt może dopisać strefę albo chroniony plik, ale nie może usunąć tych z `base`. Pojedyncze wartości z późniejszej warstwy nadpisują wcześniejsze. Presety: `base`, `typescript`, `web`, `nuxt` (Nuxt 4: komponenty, strony i zasoby w `app/` to Low, serwer, composables, layouty i pluginy to Medium, middleware to High).
 
 | Pole | Kto ustawia | Co znaczy |
 | --- | --- | --- |
 | `project`, `extends` | projekt | nazwa projektu; presety, `base` zawsze pierwszy |
-| `commands` | projekt | komendy CI; wymagane `test` i `build`, reszta dowolna (`lint`, `e2e`, `scene_check`…) |
-| `evidence` | projekt | `screenshots` (komenda) i `preview_deploy` (podgląd w PR) |
+| `commands` | projekt | komendy CI; wymagane `test` i `build`, reszta dowolna (`setup`, `lint`, `e2e`…); `setup` instaluje wszystko dla pozostałych, bo implementer uruchamia tylko te komendy |
 | `dependencies` | projekt | `add` i `add_dev`: komendy instalacji nowych zależności z planu, np. `npm install --save-exact --ignore-scripts`; workflow dokleja `nazwa@wersja` |
 | `zones` | wszystkie warstwy | ścieżki w strefach: `data`, `security`, `release`, `dependencies`, `factory`, `shared`, `code` |
 | `zone_tests` | wszystkie warstwy | testy spoza ścieżek strefy, które ją sprawdzają (reguła 3), np. `shared: ["e2e/**"]`, gdy e2e sprawdzają układ strony |
-| `files` | wszystkie warstwy | klasy plików: `source` (kod), `tests`, `lockfiles`, `generated`, `translations` (reguły 3, 4 i bramki) |
+| `files` | wszystkie warstwy | klasy plików: `source` (kod), `tests`, `lockfiles`, `generated`, `translations` (reguły 3, 4, bramki i diff dla recenzentów) |
 | `disable_markers` | wszystkie warstwy | znaczniki wyłączeń (`eslint-disable`, `@ts-ignore`…), których nowe wystąpienia odbierają Low |
 | `assertion_markers` | wszystkie warstwy | znaczniki asercji w testach (`expect(`, `assert`); ich ubytek daje High |
 | `protected_files` | wszystkie warstwy | pliki, których agenci nie zapisują |
@@ -153,23 +242,13 @@ Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy skła
 | `exceptions` | projekt | wyjątek od bramki jakości dla ścieżki: `path`, `gate`, `max`, `reason` |
 | `reviewers` | `base` (`perspectives`), projekt (`extra`) | perspektywy recenzji: podstawowe zawsze, dodatkowe z katalogu albo z `.factory/perspectives/` |
 | `models` | `base`, projekt | model na etapie: `planner`, `implementer`, `risk_assessor`, `reviewers.default` i wybrane perspektywy |
-| `human_gates` | projekt | etykiety kierujące PR do człowieka, np. `playtest: [feel]` |
-| `wip_limit`, `daily_runs` | `base`, projekt | równoległe zadania i dzienny limit przebiegów z Claude (plan, implementacja, recenzja); zadanie ponad `wip_limit`, ponad dzienny limit albo ze wspólnymi plikami z zadaniem w toku czeka w kolejce |
+| `wip_limit`, `daily_runs` | `base`, projekt | zadania w toku naraz i dzienny limit przebiegów z Claude ([Kolejka i limity](#kolejka-i-limity)) |
 | `shadow` | tylko `base` | progi Bramki 1: `gate_prs`, `min_agreement`, `max_false_low`, `revert_days` |
-| `schedules` | projekt | agenci cykliczni: `nightly`, `weekly` albo `off` |
+| `evidence`, `human_gates`, `schedules` | projekt | zrzuty i podgląd w PR, etykiety do człowieka, agenci cykliczni; **taśma ich jeszcze nie używa** |
 
-Wzorce ścieżek są względne od korzenia repo i znają tylko `*` (w obrębie katalogu), `**` (dowolna głębokość, także zero katalogów) i `?`. Wzorzec zaczynający się od `*` trzeba w YAML-u ująć w cudzysłów.
+Wzorce ścieżek są względne od korzenia repo i znają tylko `*` (w obrębie katalogu), `**` (dowolna głębokość, także zero katalogów) i `?`. Wzorzec zaczynający się od `*` trzeba w YAML-u ująć w cudzysłów. Błąd walidacji wskazuje plik i pole, np. `factory.yml: zones.data[1]: nieprawidłowy wzorzec "/abs/**": …`. Z `--json` skrypt wypisuje konfigurację złożoną z warstw.
 
-Walidacja (Node 22.18+):
-
-```bash
-npm ci
-npm run validate -- ścieżka/do/factory.yml
-```
-
-Błąd wskazuje plik i pole, np. `factory.yml: zones.data[1]: nieprawidłowy wzorzec "/abs/**": …`. Z `--json` skrypt wypisuje konfigurację złożoną z warstw.
-
-## Skrypt reguł ryzyka
+### Skrypt reguł ryzyka
 
 `scripts/risk-rules.ts` ocenia zmianę między dwiema wersjami repo projektu i zwraca poziom z uzasadnieniem każdej reguły oraz wynik bramek jakości. Ten sam diff daje zawsze ten sam wynik.
 
@@ -181,7 +260,7 @@ node scripts/risk-rules.ts --repo ścieżka/do/projektu --base origin/main --hea
 - `factory.yml` jest czytany z punktu rozgałęzienia, a nie z samej zmiany. Zmiana `factory.yml` i tak jest High.
 - **Reguła 1:** każdy zmieniony plik (przy zmianie nazwy stara i nowa ścieżka) trafia do najwyższej pasującej strefy.
 - **Reguła 2:** poziom przychodzi od oceniacza ryzyka w `evidence.json`. Bez tej oceny zmiana nie dostanie Low. Ryzyko produktowe „wysokie” ze specu (`product_risk`) daje High bez względu na ocenę.
-- **Reguła 3:** dotyczy kodu (`files.source`) w przypisanej strefie. Strefa ma testy, gdy w repo jest plik z `files.tests` pasujący do jej wzorców. Testy w osobnym katalogu trzeba przypisać do strefy w `factory.yml`, np. `code: ["e2e/**"]`.
+- **Reguła 3:** dotyczy kodu (`files.source`) w przypisanej strefie. Strefa ma testy, gdy w repo jest plik z `files.tests` pasujący do jej wzorców albo do jej wzorców w `zone_tests`.
 - **Reguła 4:** liczy dodane i usunięte linie oraz pliki bez testów, lockfile'ów, plików generowanych i tłumaczeń. Zmiana ponad progi Medium dostaje High (bezpieczna wartość domyślna) i znacznik podziału: wraca do planera, a do właściciela trafia dopiero, gdy planer stwierdzi, że podziału nie da się zrobić (`split_impossible`).
 - **Reguła 5:** Low wymaga zielonego CI, dowodu dla każdego kryterium akceptacji, testu regresji przy poprawce błędu, `approve` każdej perspektywy z panelu z pewnością co najmniej `min_confidence` i braku nowych znaczników wyłączeń w kodzie. Każdy brak daje Medium, także cytat recenzenta, którego nie ma w diffie. `approve` z uwagą o wadze `high` lub `critical` liczy się jak `request_changes`. High dają: nierozstrzygnięta uwaga `high` lub `critical`, usunięty plik testów, gdy testowany kod został (usunięcie testów razem z kodem to Medium), ubytek asercji, pokrycie zmienionych linii poniżej `min_diff_coverage` (gdy CI je liczy) i uwagi nierozstrzygnięte po `max_review_rounds` rundach poprawek.
 - **Bramki:** długość pliku liczy skrypt (linie bez pustych i komentarzy). Długość funkcji, złożoność i zagnieżdżenie bierze z raportu `eslint --format json`. Liczą się tylko zmienione pliki.
@@ -213,15 +292,14 @@ node scripts/risk-rules.ts --repo ścieżka/do/projektu --base origin/main --hea
 
 Werdykt recenzenta (`reviews[]`) ma stały format: perspektywa, `verdict` (`approve` albo `request_changes`), pewność 0–1, `summary` (co sprawdzone i dlaczego taki werdykt), uwagi z wagą i cytatem z diffu w `evidence` oraz sygnały ryzyka dla oceniacza.
 
-## Agenci
+### Agenci
 
 | Agent | Kiedy | Wyjście |
 | --- | --- | --- |
 | `spec-writer` (skill) | rozmowa o pomyśle w aplikacji Claude | issue ze specem i etykietą `ready` |
-| `planner` (skill) | issue z etykietą `ready` | plan w komentarzu i blok JSON: `planned`, `blocked` albo `split` |
-| `implementer` (skill) | issue z etykietą `planned` | PR z gałęzi `factory/*` i blok JSON z dowodem dla każdego kryterium |
-| `review` (skill) | PR z zielonym CI | uruchamia recenzentów i zbiera ich werdykty |
-| `review-<perspektywa>` (subagenci) | w panelu recenzji | werdykt JSON; tylko `Read`, `Grep` i `Glob`, każdy w świeżym kontekście |
+| `planner` (skill) | issue z etykietą `ready` | plan w komentarzu i blok JSON: `planned`, `blocked` albo `split`; pliki, testy, dowody, nowe zależności |
+| `implementer` (skill) | plan, `/change` albo runda poprawek | zmiany w plikach i blok JSON: `done` albo `blocked`, dowód dla każdego kryterium |
+| `review-<perspektywa>` (subagenci) | po implementacji, równolegle | werdykt JSON; tylko `Read`, `Grep` i `Glob`, każdy w świeżym kontekście |
 | `risk-assessor` (skill) | po panelu | reguła 2: poziom i uzasadnienie w JSON |
 
 Agenci nie ustawiają etykiet ani checków. Zwracają blok JSON, a workflowy działają dopiero na jego sprawdzonej wersji:
@@ -230,7 +308,9 @@ Agenci nie ustawiają etykiet ani checków. Zwracają blok JSON, a workflowy dzi
 node scripts/agents/output.ts <plan|implementation|verdict|behavior> odpowiedź-agenta.md
 ```
 
-Recenzenci mają jedno źródło: wspólny protokół `skills/review/protocol.md` i kryteria w `skills/review/perspectives/<perspektywa>.md`. Pliki `agents/review-*.md` generuje `npm run agents`, a test pilnuje, żeby były aktualne.
+Recenzenci mają jedno źródło: wspólny protokół `skills/review/protocol.md` i kryteria w `skills/review/perspectives/<perspektywa>.md`. Pliki `agents/review-*.md` generuje `npm run agents`, a test pilnuje, żeby były aktualne. Diff dla recenzentów nie zawiera lockfile'ów i plików generowanych. Zamiast nich recenzenci dostają streszczenie: liczbę linii, a dla `package-lock.json` dodane, usunięte i zmienione pakiety z wersją, z oznaczeniem hostów spoza rejestru npm.
+
+Implementer zmienia pliki narzędziami do edycji, nazwy i usunięcia robi przez `git mv` i `git rm`, a z komend uruchamia tylko te z `commands`. Patch z plikami chronionymi albo z `.github/` (także po zmianie nazwy) odrzuca skrypt.
 
 ### Spec z telefonu
 
@@ -238,12 +318,7 @@ Spec pisze skill `spec-writer` w rozmowie z Claude. Zadaje najwyżej 5 pytań o 
 
 Spec ma sekcje: Cel, Scenariusz, Kryteria akceptacji (sprawdzalne maszynowo), Poza zakresem, Założenia, Ryzyko produktowe (`niskie` albo `wysokie`) i Projekt. Szablon i przykład są w [`skills/spec-writer/SKILL.md`](skills/spec-writer/SKILL.md). Test pilnuje, żeby szablon, przykład i planer znały te same sekcje (`SPEC_SECTIONS` w `scripts/workflow/spec.ts`).
 
-**Domyślnie: sesja Claude Code w repo projektu.** Z telefonu: zakładka Code w aplikacji Claude, nowa sesja na repo projektu i np. „Mam pomysł: …”. Projekt ma do tego dwie rzeczy:
-
-1. kopię skilla: katalog [`skills/spec-writer/`](skills/spec-writer/) jako `.claude/skills/spec-writer/`. Sesje w chmurze czytają skille z checkoutu repo, a pluginów z `.claude/settings.json` nie instalują (sprawdzone w repo testowym 7 listopada 2026);
-2. regułę z [`templates/claude/CLAUDE.md`](templates/claude/CLAUDE.md) w `CLAUDE.md` projektu: pomysł idzie do spec-writera i issue, a nie do implementacji w sesji. Bez niej sesja Code od razu koduje.
-
-Po zmianie skilla w fabryce kopię w projekcie trzeba podmienić. To zmiana w strefie `factory`, więc zatwierdzasz ją Ty.
+**Domyślnie: sesja Claude Code w repo projektu** (z telefonu: zakładka Code w aplikacji Claude). Sesje w chmurze czytają skille z checkoutu repo, a pluginów z `.claude/settings.json` nie instalują, dlatego projekt trzyma kopię skilla w `.claude/skills/spec-writer/` i regułę z [`templates/claude/CLAUDE.md`](templates/claude/CLAUDE.md) w swoim `CLAUDE.md`. Po zmianie skilla w fabryce kopię w projekcie trzeba podmienić. To zmiana w strefie `factory`, więc zatwierdzasz ją Ty.
 
 **Opcjonalnie: zwykły czat w aplikacji Claude.** Rozmowa startuje szybciej, ale skille w czacie są przypisane do konta, więc fabryka ich tam nie wgra. Robisz to sam, raz i ponownie po każdej zmianie skilla:
 
@@ -277,9 +352,9 @@ paths: ["src/components/**", "**/*.css"]   # opcjonalnie; albo zones: [shared]
 Kryteria: na co recenzent patrzy i czego nie ocenia.
 ```
 
-Bez `paths` i `zones` perspektywa ocenia każdy PR. Skład panelu dla zmiany podaje `node scripts/review/panel.ts --base origin/main`, a reguły ryzyka wymagają werdyktu dokładnie od tych perspektyw. Pliki `.factory/` są w strefie `factory` (High) i są czytane z wersji bazowej, więc zmiana nie poluzuje własnej recenzji. Katalog roboczy panelu `.factory/review/` dopisz do `.gitignore` projektu.
+Bez `paths` i `zones` perspektywa ocenia każdy PR. Skład panelu dla zmiany podaje `node scripts/review/panel.ts --base origin/main`, a reguły ryzyka wymagają werdyktu dokładnie od tych perspektyw. Pliki `.factory/` są w strefie `factory` (High) i są czytane z wersji bazowej, więc zmiana nie poluzuje własnej recenzji.
 
-**Najpierw tanie strażniki.** Recenzent LLM kosztuje przy każdym PR. Gdzie się da, lepiej od początku mieć deterministyczny test w CI, a jego wynik dołączyć do artefaktów jako dowód. Przykłady: limit rozmiaru paczki, próg Lighthouse, test dostępności axe w testach e2e. Recenzent z perspektywy korzysta z tych raportów, a sama perspektywa przydaje się, gdy projekt dojrzeje.
+**Najpierw tanie strażniki.** Recenzent LLM kosztuje przy każdym PR. Gdzie się da, lepiej od początku mieć deterministyczny test w CI. Przykłady: limit rozmiaru paczki, próg Lighthouse, test dostępności axe w testach e2e, test, który nie przepuszcza kolorów zapisanych poza tokenami. Perspektywa LLM przydaje się, gdy projekt dojrzeje.
 
 ### Modele
 
@@ -295,53 +370,51 @@ models:
     security: opus       # najwyższa stawka
 ```
 
-Projekt nadpisuje w `factory.yml` tylko to, co chce zmienić, np. `models.reviewers.ux-visual: haiku`. Wartość to alias (`opus`, `sonnet`, `haiku`) albo pełny identyfikator modelu. Model można ustawić tylko dla włączonej perspektywy. Workflowy podają model każdemu jobowi.
+Projekt nadpisuje w `factory.yml` tylko to, co chce zmienić, np. `models.reviewers.ux-visual: haiku`. Wartość to alias (`opus`, `sonnet`, `haiku`) albo pełny identyfikator modelu. Model można ustawić tylko dla włączonej perspektywy.
 
-## Taśma w GitHub Actions
+### Workflowy i bezpieczeństwo
 
-Projekt podłącza taśmę w czterech krokach:
-
-1. kopiuje [`templates/workflows/factory.yml`](templates/workflows/factory.yml) do `.github/workflows/factory.yml`;
-2. kopiuje [`skills/spec-writer/`](skills/spec-writer/) do `.claude/skills/spec-writer/` i dopisuje [`templates/claude/CLAUDE.md`](templates/claude/CLAUDE.md) do `CLAUDE.md` projektu, żeby spec powstawał w sesji Claude Code, także z telefonu;
-3. dodaje sekret `CLAUDE_CODE_OAUTH_TOKEN` (Settings → Secrets and variables → Actions);
-4. w Settings → Actions → General → Workflow permissions zaznacza „Allow GitHub Actions to create and approve pull requests”, bez czego workflow nie otworzy PR.
-
-Dalej wszystko dzieje się w issue i PR, także z telefonu.
+Wspólne workflowy to `workflow_call` w tym repo: `uses: gibkigonzo/factory/.github/workflows/<name>.yml@main` (w Etapie 0 `@main`, potem tag). Mogą je wywoływać także repozytoria prywatne. Szablon dla projektu łączy je w jeden workflow.
 
 | Etap | Uruchamia go | Co robi |
 | --- | --- | --- |
-| `plan.yml` | etykieta `ready` na issue | plan w komentarzu, etykieta `planned`, `blocked` albo `split`; przy `planned` uruchamia implementację albo stawia zadanie w kolejce (`queued`) |
-| `implement.yml` | plan, `/change` w PR albo pętla poprawek | instalacja zatwierdzonych zależności, patch od implementera, sprawdzenie ścieżek, PR z gałęzi `factory/<numer>-<nazwa>`; uruchamia recenzję. Przy blokadzie: etykieta `blocked` i komentarz, bez PR |
-| `review.yml` | implementacja | komendy z `factory.yml` (CI), skład panelu, recenzenci równolegle; pętla poprawek odsyła PR do implementera. Lockfile'y i pliki generowane recenzenci dostają jako streszczenie (pakiety, wersje, hosty spoza rejestru), nie w diffie |
+| `plan.yml` | etykieta `ready` na issue | plan w komentarzu, etykieta `planned`, `blocked` albo `split`; przy `planned` uruchamia implementację albo stawia zadanie w kolejce (`queued`, `needs-approval`) |
+| `implement.yml` | plan, kolejka, `/change` w PR albo pętla poprawek | dzienny limit, instalacja zatwierdzonych zależności, patch od implementera, sprawdzenie ścieżek, PR z gałęzi `factory/<numer>-<nazwa>`; uruchamia recenzję. Przy blokadzie: etykieta `blocked` i komentarz, bez PR |
+| `review.yml` | implementacja | komendy z `factory.yml` (CI), skład panelu, recenzenci równolegle; pętla poprawek odsyła PR do implementera |
 | `risk.yml` | po recenzji, w tym samym uruchomieniu | oceniacz ryzyka, reguły, check `factory/risk`, etykieta `risk:*`, raport w PR |
 | `merge.yml` | po ocenie ryzyka, w tym samym uruchomieniu | w Etapie 0 tylko werdykt trybu cienia w nowym komentarzu |
 | `journal.yml` | po werdykcie, po zamknięciu PR fabryki, raz dziennie | dziennik trybu cienia w przypiętym issue; po scaleniu PR fabryki zamyka jego issue |
-| `queue.yml` | po zamknięciu PR fabryki, raz dziennie | uruchamia implementację czekających zadań, które zmieszczą się w limicie |
-| `commands.yml` | komentarz od właściciela | `/approve` (w issue z `needs-approval`: zgoda na nowe zależności), `/veto`, `/reject`, `/change <opis>`, `/split`; `/reject` i zgoda uruchamiają kolejkę |
+| `queue.yml` | po zamknięciu PR fabryki, po `/reject`, po zgodzie na zależności, raz dziennie | uruchamia implementację czekających zadań, które mieszczą się w limitach |
+| `commands.yml` | komentarz od właściciela | `/approve`, `/veto`, `/reject`, `/change <opis>`, `/split` |
+
+**Ustawienia** (wejścia w szablonie): `factory_ref` (wersja fabryki; w Etapie 0 `main`), `runs_on` (np. `'["self-hosted", "vps"]'` dla własnego runnera w repo prywatnym), `trusted` (dodatkowe zaufane konta), `max_parallel` (recenzenci naraz). Modele i limity bierze z `factory.yml`.
 
 **Bezpieczeństwo:**
 
 - Joby z Claude mają tylko prawo odczytu i repo bez poświadczeń git. Zwracają JSON (`--json-schema`) albo patch.
 - Komentarze, etykiety, gałąź, commit, push, PR i check robią osobne joby bez Claude, na podstawie sprawdzonego wyjścia.
-- Implementer nie zmieni plików z `protected_files` ani `.github/`: patch odrzuca skrypt, zanim trafi do repo.
+- Implementer nie zmieni plików z `protected_files` ani `.github/`: patch odrzuca skrypt, zanim trafi do repo. Nowe pakiety instaluje workflow po Twojej zgodzie, nie implementer.
 - Etapy łączy `workflow_dispatch`, bo zdarzenia z `GITHUB_TOKEN` nie uruchamiają innych workflowów. W Etapie 0 zmiany podpisuje `github-actions[bot]`; własna aplikacja GitHub fabryki przyjdzie w Etapie 1.
 - Na taśmę wchodzą tylko zdarzenia od właściciela repo, kont z wejścia `trusted` i workflowów fabryki. Komendy wydaje tylko człowiek.
-- `factory.yml` i perspektywy projektu w recenzji i ocenie pochodzą z gałęzi bazowej.
+- `factory.yml` i perspektywy projektu w recenzji i ocenie pochodzą z gałęzi bazowej, więc PR nie poluzuje własnej oceny.
 - Dziennik i kolejkę uruchamia też `pull_request_target` przy zamknięciu PR z gałęzi `factory/*` tego repo. Nie pobierają kodu z PR: czytają gałąź główną i API.
 
-**Ustawienia** (wejścia w szablonie): `factory_ref` (wersja fabryki; w Etapie 0 `main`), `runs_on` (np. `'["self-hosted", "vps"]'` dla własnego runnera w repo prywatnym), `trusted`, `max_parallel` (recenzenci naraz). Modele bierze z `models` w `factory.yml`, a dzienny limit z `daily_runs`. Limit liczy przebiegi z Claude po nazwie przebiegu (`run-name` w szablonie: `factory plan`, `factory implement`, `factory review`) i sprawdza go implementacja nowego zadania. Zadanie ponad limit czeka w kolejce do porannego przeglądu, a rundy poprawek otwartego PR limitu nie sprawdzają.
+Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML: Claude bez prawa zapisu, akcje przypięte do commitów, żadnych wyrażeń wklejonych w skrypty, uprawnienia szablonu pokrywają uprawnienia jobów, merger, dziennik i kolejka bez Claude.
 
-Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML: Claude bez prawa zapisu, akcje przypięte do commitów, żadnych wyrażeń wklejonych w skrypty, uprawnienia szablonu pokrywają uprawnienia jobów, merger i dziennik bez Claude.
+### Plugin w Claude Code
+
+To repo jest też marketplace'em pluginu Claude Code ze skillami fabryki: `/plugin marketplace add gibkigonzo/factory`, potem `/plugin install factory@factory`. Przydaje się w lokalnej pracy z Claude Code. Taśma w GitHub Actions pluginu nie potrzebuje: czyta skille wprost z tego repo.
 
 ## Struktura repo
 
 ```
 .claude-plugin/       plugin.json i marketplace.json (plugin = całe repo)
-skills/               skille: spec-writer, planner, implementer, review, risk-assessor; później po-scout, factory-init
+skills/               skille: spec-writer, planner, implementer, review (protokół i perspektywy), risk-assessor
 agents/               recenzenci review-<perspektywa>, generowani z skills/review, tylko do odczytu
-hooks/                hooks.json: blokada chronionych plików, Stop dopiero po zielonych testach
-scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, skład panelu, wyjście agentów, merger
-presets/              warstwy reguł: base, typescript, web, nuxt; później gdscript, godot
-templates/            szablony dla projektów: workflow taśmy (templates/workflows/factory.yml), reguła dla CLAUDE.md projektu (templates/claude/CLAUDE.md), przykładowy factory.yml
+scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, skład panelu, wyjście agentów,
+                      kolejka, pętla poprawek, budżet, merger i dziennik trybu cienia
+presets/              warstwy reguł: base, typescript, web, nuxt
+templates/            szablony dla projektów: workflow taśmy, reguła dla CLAUDE.md, przykładowy factory.yml
 .github/workflows/    wspólne workflowy typu workflow_call
+hooks/                miejsce na hooki pluginu (jeszcze puste)
 ```

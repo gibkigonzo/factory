@@ -33,8 +33,10 @@ describe('poprawny kontrakt', () => {
     const result = loadConfig(TEMPLATE, 'templates/factory.yml');
     assert.ok(result.ok, result.ok ? '' : result.errors.join('\n'));
     assert.deepEqual(result.config.extends, ['base', 'typescript', 'web']);
-    assert.equal(result.config.wip_limit, 4);
-    assert.equal(result.config.evidence.preview_deploy, true);
+    assert.equal(result.config.wip_limit, 2);
+    assert.deepEqual(result.config.zone_tests.shared, ['e2e/**']);
+    assert.match(result.config.dependencies.add ?? '', /--ignore-scripts/);
+    assert.match(result.config.commands.setup ?? '', /playwright install/, 'setup instaluje przeglądarki do e2e');
   });
 
   it('minimalny kontrakt dostaje progi z base i puste listy zamiast braków', () => {

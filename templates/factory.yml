@@ -1,27 +1,35 @@
-# Kontrakt projektu z fabryką: jak zbudować, sprawdzić i pokazać projekt
-# oraz które ścieżki należą do której strefy ryzyka.
+# Kontrakt projektu z fabryką: jak zbudować i sprawdzić projekt oraz które ścieżki należą do której strefy ryzyka.
 # Zmiana tego pliku jest zawsze High, więc decyduje o niej właściciel.
-# Opis pól: README fabryki, sekcja „Kontrakt projektu”.
+# Opis pól: README fabryki, sekcja „Kontrakt projektu”. Sprawdzenie: npm run validate -- ścieżka/do/factory.yml
 
 project: moja-strona
-extends: [base, typescript, web]   # base zawsze pierwsza, potem presety języka i frameworka
+extends: [base, typescript, web]   # base zawsze pierwsza, potem presety języka i frameworka (np. nuxt)
 
-commands:                          # wymagane: test i build
-  setup: npm ci
+commands:                          # wymagane: test i build; CI uruchamia wszystkie po kolei
+  # setup instaluje wszystko, czego potrzebują pozostałe komendy, także przeglądarki do e2e:
+  # implementer uruchamia tylko komendy z tej listy i tylko dosłownie.
+  setup: npm ci && npx playwright install --with-deps chromium
   lint: npm run lint
   typecheck: npm run typecheck
   test: npm test
   e2e: npx playwright test
   build: npm run build
 
-evidence:
-  screenshots: npx playwright test --project=screenshots
-  preview_deploy: true             # link do podglądu w każdym PR
+# Nowe pakiety z planu instaluje workflow po Twoim /approve w issue. Bez tej sekcji plan z nową zależnością
+# skończy się blokadą. --ignore-scripts: bez skryptów instalacyjnych pakietów.
+dependencies:
+  add: npm install --save-exact --ignore-scripts
+  add_dev: npm install --save-dev --save-exact --ignore-scripts
 
 zones:                             # dopisuje ścieżki do stref z base i presetów
   data: ["migrations/**", "src/db/schema/**"]
   security: ["src/payments/**"]
   shared: ["src/lib/**", "src/store/**"]
+
+# Testy spoza ścieżek strefy, które ją sprawdzają (reguła „brak testów”), np. e2e całej strony.
+zone_tests:
+  code: ["e2e/**"]
+  shared: ["e2e/**"]
 
 risk:
   medium_veto_hours: 24            # 0 = Medium traktowane jak High
@@ -30,17 +38,17 @@ risk:
 # ux-visual, accessibility-web, web-performance, devils-advocate. Własną dodaj jako
 # .factory/perspectives/<nazwa>.md. Dodatkowa perspektywa ocenia tylko zmiany, których dotyczy.
 # reviewers:
-#   extra: [ux-visual]
+#   extra: [accessibility-web]
 
 # Modele na etapach: wartości startowe są w base, tu nadpisujesz tylko to, co chcesz zmienić.
 # models:
 #   implementer: opus
 #   reviewers:
-#     ux-visual: haiku
+#     accessibility-web: haiku
 
-protected_files: ["backup/**"]     # dopisuje do listy z base
+protected_files: ["backup/**"]     # dopisuje do listy z base; agenci tych plików nie zmienią
 
-wip_limit: 4
+wip_limit: 2                       # zadania w toku naraz; zadania na tych samych plikach i tak idą po kolei
 
 # Wyjątek od bramki jakości dla konkretnej ścieżki, zawsze z powodem:
 # exceptions:
