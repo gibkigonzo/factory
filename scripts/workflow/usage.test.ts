@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
-import { parseUsageBlocks, parseUsageList, readUsage, sumUsage, usageBlock } from './usage.ts';
+import { parseUsageBlocks, parseUsageList, readUsage, sessionError, sumUsage, usageBlock } from './usage.ts';
 import type { Usage } from './usage.ts';
 import { planComment, prBody } from './render.ts';
 
@@ -40,6 +40,12 @@ describe('zużycie etapów', () => {
     });
     assert.equal(readUsage([{ type: 'system' }], 'plan'), undefined);
     assert.equal(readUsage(null, 'plan'), undefined);
+  });
+
+  it('błąd sesji trafia do logu, bo akcja ukrywa pełne wyjście', () => {
+    assert.equal(sessionError([RESULT]), undefined);
+    assert.equal(sessionError([{ type: 'result', subtype: 'success', is_error: true, result: 'Claude AI usage limit\nreached' }]), 'Claude AI usage limit reached');
+    assert.equal(sessionError({ type: 'result', subtype: 'success', is_error: true }), 'bez opisu (success)');
   });
 
   it('sumuje na etap w kolejności taśmy', () => {

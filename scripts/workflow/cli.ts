@@ -24,7 +24,7 @@ import { admit, queueState, release } from './queue.ts';
 import { renderReport } from './report.ts';
 import type { PanelSummary } from './report.ts';
 import { parseSpec } from './spec.ts';
-import { isStage, parseUsageBlocks, parseUsageList, readUsage, sumUsage } from './usage.ts';
+import { isStage, parseUsageBlocks, parseUsageList, readUsage, sessionError, sumUsage } from './usage.ts';
 import type { Usage } from './usage.ts';
 
 class UsageError extends Error {}
@@ -132,10 +132,13 @@ function usage(v: Values): string {
   const stage = required(v.stage, '--stage');
   if (!isStage(stage)) throw new UsageError(`usage: etap ${['plan', 'implement', 'review', 'assess'].join('|')}`);
   const file = required(v.file, '--file');
-  const record = existsSync(file) ? readUsage(json(file), stage) : undefined;
+  const raw = existsSync(file) ? json(file) : undefined;
+  const record = raw === undefined ? undefined : readUsage(raw, stage);
   if (!record) return `zużycie: brak wyniku w ${file}`;
   writeFileSync(required(v.out, '--out'), JSON.stringify([record]));
-  return `zużycie ${stage}: ${record.cost} USD, tury ${record.turns}, tokeny wyjścia ${record.output}`;
+  const error = sessionError(raw);
+  const line = `zużycie ${stage}: ${record.cost} USD, tury ${record.turns}, tokeny wyjścia ${record.output}`;
+  return error ? `${line}\n::warning::Sesja Claude zakończyła się błędem: ${error}` : line;
 }
 
 function marked(kind: 'plan' | 'implementation', v: Values): string {
