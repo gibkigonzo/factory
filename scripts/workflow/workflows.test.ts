@@ -147,6 +147,10 @@ describe('workflowy fabryki', () => {
       assert.equal(first['continue-on-error'], true, name);
       assert.ok(retry?.uses?.startsWith(CLAUDE), name);
       assert.deepEqual(retry.with, first.with, `${name}: ponowna próba z tymi samymi ustawieniami`);
+      assert.equal(first.with?.path_to_bun_executable, '${{ steps.bun.outputs.path }}', `${name}: Bun z npm, nie z GitHub Releases`);
+      const bun = steps.find((step) => (step as { id?: string }).id === 'bun')!;
+      assert.equal((bun as { 'continue-on-error'?: boolean })['continue-on-error'], true, `${name}: bez Buna z npm akcja pobiera go sama`);
+      assert.ok(steps.indexOf(bun) < steps.indexOf(first));
       assert.match(String(retry.if), /steps\.started\.outputs\.retry == 'true'/, name);
       assert.ok(steps.some((step) => step.run?.includes('cli.ts" started')), name);
       assert.ok(steps.some((step) => /steps\.started\.outputs\.retry != 'true'/.test(String(step.if)) && step.run?.includes('exit 1')), name);
