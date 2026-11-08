@@ -66,6 +66,17 @@ export function readUsage(raw: unknown, stage: Stage): Usage | undefined {
   return usage;
 }
 
+/** Treść błędu sesji (np. limit subskrypcji), gdy wynik ma is_error; claude-code-action ukrywa pełne wyjście. */
+export function sessionError(raw: unknown): string | undefined {
+  const messages = Array.isArray(raw) ? raw : [raw];
+  const result = [...messages].reverse().find((m) => (m as { type?: unknown } | null)?.type === 'result') as
+    | { is_error?: unknown; result?: unknown; subtype?: unknown }
+    | undefined;
+  if (!result || result.is_error !== true) return undefined;
+  const text = typeof result.result === 'string' && result.result.trim() ? result.result.trim() : `bez opisu (${String(result.subtype)})`;
+  return text.replace(/\s+/g, ' ').slice(0, 300);
+}
+
 /** Suma rekordów na etap, w kolejności taśmy. */
 export function sumUsage(records: readonly Usage[]): Usage[] {
   const totals = new Map<Stage, Usage>();

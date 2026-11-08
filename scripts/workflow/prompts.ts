@@ -39,7 +39,7 @@ export function implementPrompt(ctx: PromptContext & { change?: boolean }): stri
   const lines = [
     `Issue #${ctx.issue}: \`${ctx.work}/issue.md\`.`,
     `Plan planera (JSON): \`${ctx.work}/plan.json\`.`,
-    `\`factory.yml\` złożony z warstw (JSON): \`${ctx.work}/config.json\`. Komendę \`setup\` workflow uruchomił już przed Tobą.`,
+    `\`factory.yml\` złożony z warstw (JSON): \`${ctx.work}/config.json\`. Komendę \`setup\` i instalację nowych zależności z planu workflow uruchomił już przed Tobą.`,
     'Gałąź, commit, push i PR robi workflow. Ty zmieniasz pliki w katalogu roboczym i uruchamiasz komendy z `commands`.',
     'Krótki opis zmian dla opisu PR wpisz w pole `summary`.',
   ];

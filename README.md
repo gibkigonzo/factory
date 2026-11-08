@@ -43,14 +43,20 @@ flowchart TD
   M2["Merger scala po 24 h bez /veto"]:::script
   H4(["Decydujesz Ty"]):::human
   H5(["Komendy w komentarzu: /change, /veto, /reject, /split, /approve"]):::human
+  H6(["/approve w issue: zgoda na nowe zależności z planu"]):::human
+  L{"Pętla poprawek: czerwone CI albo prośba o zmiany, runda poniżej limitu?"}:::script
 
   H1 --> A1 --> S1 --> A2 --> S2
   S2 -->|"blocked albo split"| H2
   H2 -->|"etykieta ready"| S1
   S2 -->|"planned"| A3 --> S3
+  S2 -->|"nowe zależności"| H6 --> A3
+  A3 -->|"blokada: bez PR"| H2
   S3 --> S4 & S5
-  S5 --> A4 --> A5 --> S6
-  S4 --> S6
+  S5 --> A4 --> L
+  S4 --> L
+  L -->|"tak: uwagi w PR"| A3
+  L -->|"nie"| A5 --> S6
   S6 --> D
   D -->|"Etap 0"| S7 --> H3 --> S8
   D -->|"Etap 1, Low"| M1
@@ -65,10 +71,16 @@ flowchart TD
 
 W Etapie 0 (tryb cienia) fabryka niczego nie scala. Przy każdym PR zapisuje, co by zrobiła, a decyduje właściciel. Merger włącza się w Etapie 1, po przejściu Bramki 1.
 
+### Pętla poprawek, blokady i nowe zależności
+
+- **Pętla poprawek.** Czerwone CI albo `request_changes` recenzenta odsyła PR do implementera z komentarzem „Runda poprawek N z M” (uwagi od najpoważniejszej), do `risk.max_review_rounds` rund. Przy czerwonym CI recenzenci nie ruszają, bo poprawka i tak zmieni diff; oceniają je dopiero w ostatniej rundzie. Ocena ryzyka i werdykt powstają po pętli. Uwagi nierozstrzygnięte po ostatniej rundzie dają High.
+- **Blokada.** Gdy implementer nie może dokończyć zadania (brak narzędzia, zależności, uprawnień), kończy ze statusem `blocked` i opisem. Workflow nie otwiera wtedy PR i nie puszcza recenzji: issue dostaje etykietę `blocked` i komentarz z powodem. Tak samo, gdy implementer nie zmienił żadnego pliku.
+- **Nowe zależności.** Planer wpisuje pakiety z wersją do `dependencies` w planie. Plan z nimi czeka z etykietą `needs-approval` na `/approve` w issue. Potem workflow instaluje je komendami z `dependencies` w `factory.yml`, zanim ruszy implementer. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji, a obcy pakiet mógłby go odczytać.
+
 ### Tryb cienia
 
 1. Po ocenie ryzyka `merge.yml` dodaje w PR komentarz z werdyktem fabryki. Low: scaliłaby od razu. Medium: czekałaby 24 h na `/veto`. High: przekazałaby decyzję Tobie. Zmiana za duża albo zablokowana przez bramki jakości: odesłałaby ją do podziału albo do poprawek.
-2. Na komentarz reagujesz 👍 (zgoda) albo 👎 (niezgoda). Każda runda poprawek dostaje nowy komentarz, więc ocena dotyczy konkretnego werdyktu. O samym PR decydujesz jak zwykle: merge, `/reject` albo revert.
+2. Na komentarz reagujesz 👍 (zgoda) albo 👎 (niezgoda). Werdykt powstaje po pętli poprawek, a każda kolejna ocena (np. po `/change`) dostaje nowy komentarz, więc reakcja dotyczy konkretnego werdyktu. O samym PR decydujesz jak zwykle: merge, `/reject` albo revert.
 3. `journal.yml` prowadzi przypięte issue „Tryb cienia” (etykieta `factory:journal`): stan Bramki 1, metryki i listę PR-ów fabryki. Reakcje nie uruchamiają workflowów, więc dziennik odświeża się po każdym werdykcie, po zamknięciu PR fabryki i raz dziennie. Na żądanie: Actions → factory → Run workflow → `journal`.
 
 Metryki liczy skrypt, nie model:
@@ -127,6 +139,7 @@ Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy skła
 | `project`, `extends` | projekt | nazwa projektu; presety, `base` zawsze pierwszy |
 | `commands` | projekt | komendy CI; wymagane `test` i `build`, reszta dowolna (`lint`, `e2e`, `scene_check`…) |
 | `evidence` | projekt | `screenshots` (komenda) i `preview_deploy` (podgląd w PR) |
+| `dependencies` | projekt | `add` i `add_dev`: komendy instalacji nowych zależności z planu, np. `npm install --save-exact --ignore-scripts`; workflow dokleja `nazwa@wersja` |
 | `zones` | wszystkie warstwy | ścieżki w strefach: `data`, `security`, `release`, `dependencies`, `factory`, `shared`, `code` |
 | `zone_tests` | wszystkie warstwy | testy spoza ścieżek strefy, które ją sprawdzają (reguła 3), np. `shared: ["e2e/**"]`, gdy e2e sprawdzają układ strony |
 | `files` | wszystkie warstwy | klasy plików: `source` (kod), `tests`, `lockfiles`, `generated`, `translations` (reguły 3, 4 i bramki) |
@@ -297,13 +310,13 @@ Dalej wszystko dzieje się w issue i PR, także z telefonu.
 | Etap | Uruchamia go | Co robi |
 | --- | --- | --- |
 | `plan.yml` | etykieta `ready` na issue | plan w komentarzu, etykieta `planned`, `blocked` albo `split`; przy `planned` uruchamia implementację albo stawia zadanie w kolejce (`queued`) |
-| `implement.yml` | plan albo `/change` w PR | patch od implementera, sprawdzenie ścieżek, PR z gałęzi `factory/<numer>-<nazwa>`; uruchamia recenzję |
-| `review.yml` | implementacja | komendy z `factory.yml` (CI), skład panelu, recenzenci równolegle |
+| `implement.yml` | plan, `/change` w PR albo pętla poprawek | instalacja zatwierdzonych zależności, patch od implementera, sprawdzenie ścieżek, PR z gałęzi `factory/<numer>-<nazwa>`; uruchamia recenzję. Przy blokadzie: etykieta `blocked` i komentarz, bez PR |
+| `review.yml` | implementacja | komendy z `factory.yml` (CI), skład panelu, recenzenci równolegle; pętla poprawek odsyła PR do implementera |
 | `risk.yml` | po recenzji, w tym samym uruchomieniu | oceniacz ryzyka, reguły, check `factory/risk`, etykieta `risk:*`, raport w PR |
 | `merge.yml` | po ocenie ryzyka, w tym samym uruchomieniu | w Etapie 0 tylko werdykt trybu cienia w nowym komentarzu |
 | `journal.yml` | po werdykcie, po zamknięciu PR fabryki, raz dziennie | dziennik trybu cienia w przypiętym issue; po scaleniu PR fabryki zamyka jego issue |
 | `queue.yml` | po zamknięciu PR fabryki, raz dziennie | uruchamia implementację czekających zadań, które zmieszczą się w limicie |
-| `commands.yml` | komentarz od właściciela | `/approve`, `/veto`, `/reject`, `/change <opis>`, `/split` |
+| `commands.yml` | komentarz od właściciela | `/approve` (w issue z `needs-approval`: zgoda na nowe zależności), `/veto`, `/reject`, `/change <opis>`, `/split`; `/reject` i zgoda uruchamiają kolejkę |
 
 **Bezpieczeństwo:**
 

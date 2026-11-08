@@ -203,7 +203,7 @@ describe('teksty publikowane przez workflow', () => {
   });
 
   it('opis PR zamyka issue i ma dowody', () => {
-    const body = prBody({ issue: 4, bugfix: false, acceptance: [{ criterion: 'a', evidence: 'test: b' }], assumptions: [], summary: 'Nowy formularz.' });
+    const body = prBody({ issue: 4, status: 'done', bugfix: false, acceptance: [{ criterion: 'a', evidence: 'test: b' }], assumptions: [], summary: 'Nowy formularz.' });
     assert.match(body, /^<!-- factory:implementation -->\nCloses #4\n\nNowy formularz\./);
     assert.match(body, /- a → test: b/);
     const parsed = parseOutput('implementation', body, 'pr.md');
@@ -258,9 +258,10 @@ describe('CLI dla workflowów', () => {
   it('zaplanowane zadanie w kolejce nie zapowiada startu implementera', () => {
     const planned = { decision: 'planned', summary: 's', expected_level: 'Low', size: { lines: 1, files: 1 } };
     assert.match(planComment(planned), /## Plan fabryki: plan gotowy, implementer rusza/);
-    const queued = planComment(planned, 'Czeka na #6: wspólne pliki `a.vue`.');
+    const queued = planComment(planned, 'Czeka na #6: wspólne pliki `a.vue`.', [], 'queue');
     assert.match(queued, /## Plan fabryki: plan gotowy, zadanie czeka w kolejce/);
     assert.match(queued, /_Czeka na #6/);
+    assert.match(planComment(planned, 'Napisz /approve.', [], 'approval'), /czeka na Twoją zgodę na nowe zależności/);
   });
 
   it('znajduje plan w komentarzach issue i blok implementacji w opisie PR', () => {

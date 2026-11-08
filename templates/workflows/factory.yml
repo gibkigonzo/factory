@@ -2,7 +2,8 @@
 # Wymaga sekretu CLAUDE_CODE_OAUTH_TOKEN (Settings → Secrets and variables → Actions).
 #
 # Przebieg: etykieta `ready` na issue → plan → implementacja (PR z gałęzi factory/*) → recenzja → ocena ryzyka
-# → werdykt mergera. Kolejne etapy uruchamiają się przez workflow_dispatch.
+# → werdykt mergera. Kolejne etapy uruchamiają się przez workflow_dispatch. Czerwone CI albo prośba recenzenta
+# o zmiany odsyła PR do implementera (do risk.max_review_rounds rund); werdykt powstaje po tej pętli.
 # Komendy w komentarzach: /approve, /veto, /reject, /change, /split.
 # W Etapie 0 (tryb cienia) fabryka niczego nie scala: o każdym PR decydujesz Ty, a werdykt fabryki oceniasz 👍 albo 👎.
 # Dziennik z metrykami prowadzi przypięte issue „Tryb cienia”.
@@ -80,10 +81,11 @@ jobs:
       runs_on: ubuntu-latest
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-    permissions:
+    permissions:     # zapis tylko dla joba pętli poprawek (bez Claude): komentarz z uwagami i kolejna runda
       contents: read
-      issues: read
-      pull-requests: read
+      issues: write
+      pull-requests: write
+      actions: write
 
   risk:
     needs: review

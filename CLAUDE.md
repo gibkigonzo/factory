@@ -107,6 +107,12 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Zadania ze wspólnymi plikami (z planu i z otwartego PR) nie idą równolegle. Drugie czeka z etykietą `queued`, tak samo jak zadanie ponad `wip_limit`, i rusza samo po zamknięciu PR fabryki.
 - Testy spoza ścieżek strefy liczą się dla niej przez `zone_tests` w `factory.yml`, np. e2e dla układu strony.
 
+### Pętla poprawek i zależności (8 listopada 2026)
+
+- Czerwone CI albo `request_changes` odsyła PR do implementera automatycznie, do `risk.max_review_rounds` rund. Werdykt powstaje po pętli. Przy czerwonym CI recenzenci nie ruszają, chyba że to ostatnia runda.
+- Implementer, który nie może dokończyć zadania, zgłasza `status: blocked`; wtedy nie ma PR ani recenzji, tylko etykieta `blocked` i komentarz.
+- Nowe zależności planer wpisuje do planu, właściciel zatwierdza je `/approve` w issue, a instaluje je workflow komendą z `dependencies` w `factory.yml`. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji.
+
 ## Otwarte pytania
 
 - Czy routines Claude Code reagują na zdarzenia issues i jakie mają limity?

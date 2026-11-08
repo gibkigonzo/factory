@@ -71,8 +71,8 @@ interface RawPr {
   files?: { path: string }[];
 }
 
-/** Etykiety, przy których issue nie jest ani w toku, ani w kolejce. */
-const STOPPED = ['blocked', 'rejected', 'split'];
+/** Etykiety, przy których issue nie jest ani w toku, ani w kolejce. `needs-approval`: plan czeka na zgodę właściciela. */
+const STOPPED = ['blocked', 'rejected', 'split', 'needs-approval'];
 
 function read<T>(path: string, fallback: T): T {
   return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as T) ?? fallback : fallback;

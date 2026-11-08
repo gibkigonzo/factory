@@ -21,6 +21,20 @@ const CRITERION: Spec = {
   required: ['criterion', 'evidence'],
 };
 
+/** Nowa zależność z planu. Nazwa i wersja bez znaków powłoki, bo workflow dokleja je do komendy instalacji. */
+export const DEPENDENCY_NAME = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
+export const DEPENDENCY_VERSION = /^\d+(\.\d+){0,2}$/;
+
+const DEPENDENCY: Spec = {
+  kind: 'object',
+  fields: {
+    name: { kind: 'string', pattern: DEPENDENCY_NAME, hint: 'nazwa pakietu, np. tailwindcss albo @scope/pakiet' },
+    version: { kind: 'string', pattern: DEPENDENCY_VERSION, hint: 'wersja albo jej początek, np. 4, 4.1 albo 4.1.3' },
+    dev: { kind: 'boolean' },
+  },
+  required: ['name', 'version'],
+};
+
 /** Plan planera: decyzja, szacowany rozmiar, pliki, prognoza poziomu i plan dowodów. */
 export const PLAN_SPEC: Spec = {
   kind: 'object',
@@ -34,6 +48,7 @@ export const PLAN_SPEC: Spec = {
     tests: texts,
     acceptance: { kind: 'list', item: CRITERION },
     assumptions: texts,
+    dependencies: { kind: 'list', item: DEPENDENCY },
     questions: texts,
     sub_issues: {
       kind: 'list',
@@ -43,18 +58,20 @@ export const PLAN_SPEC: Spec = {
   required: ['decision', 'summary', 'size', 'files', 'expected_level', 'acceptance', 'assumptions'],
 };
 
-/** Blok JSON w opisie PR implementera: dowody kryteriów i założenia. */
+/** Blok JSON w opisie PR implementera: stan, dowody kryteriów i założenia. */
 export const IMPLEMENTATION_SPEC: Spec = {
   kind: 'object',
   fields: {
     issue: { kind: 'integer', min: 1 },
+    status: { kind: 'enum', values: ['done', 'blocked'] },
+    blocker: text,
     summary: text,
     bugfix: { kind: 'boolean' },
     regression_test: text,
     acceptance: { kind: 'list', item: CRITERION },
     assumptions: texts,
   },
-  required: ['issue', 'bugfix', 'acceptance', 'assumptions'],
+  required: ['issue', 'status', 'bugfix', 'acceptance', 'assumptions'],
 };
 
 export const OUTPUTS = {
@@ -94,6 +111,9 @@ function semanticProblems(kind: OutputKind, value: Record<string, unknown>): Iss
     if (value.decision === 'planned' && length('questions') > 0) {
       return [{ path: 'questions', message: 'plan z decyzją planned nie może mieć otwartych pytań' }];
     }
+  }
+  if (kind === 'implementation' && value.status === 'blocked' && !value.blocker) {
+    return [{ path: 'blocker', message: 'status blocked wymaga opisu blokady' }];
   }
   if (kind === 'implementation' && value.bugfix === true && value.regression_test === undefined) {
     return [{ path: 'regression_test', message: 'poprawka błędu wymaga testu regresji' }];
