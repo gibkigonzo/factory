@@ -300,7 +300,7 @@ Dalej wszystko dzieje się w issue i PR, także z telefonu.
 | `review.yml` | implementacja | komendy z `factory.yml` (CI), skład panelu, recenzenci równolegle |
 | `risk.yml` | po recenzji, w tym samym uruchomieniu | oceniacz ryzyka, reguły, check `factory/risk`, etykieta `risk:*`, raport w PR |
 | `merge.yml` | po ocenie ryzyka, w tym samym uruchomieniu | w Etapie 0 tylko werdykt trybu cienia w nowym komentarzu |
-| `journal.yml` | po werdykcie, po zamknięciu PR fabryki, raz dziennie | dziennik trybu cienia w przypiętym issue |
+| `journal.yml` | po werdykcie, po zamknięciu PR fabryki, raz dziennie | dziennik trybu cienia w przypiętym issue; po scaleniu PR fabryki zamyka jego issue |
 | `commands.yml` | komentarz od właściciela | `/approve`, `/veto`, `/reject`, `/change <opis>`, `/split` |
 
 **Bezpieczeństwo:**

@@ -88,6 +88,14 @@ describe('workflowy fabryki', () => {
     assert.ok(text.indexOf('headRefName') < text.indexOf('closingIssuesReferences'), 'najpierw gałąź');
   });
 
+  it('dziennik zamyka issue tylko po scaleniu PR i tylko na podstawie gałęzi factory/<numer>-…', () => {
+    const job = workflows.journal!.data.jobs['close-issue'] as Job & { if?: string };
+    assert.match(String(job.if), /pull_request_target/);
+    assert.match(String(job.if), /merged == true/);
+    assert.deepEqual(job.permissions, { issues: 'write' });
+    assert.match(String(job.steps?.[0]?.run), /s#\^factory\/\(\[0-9\]\+\)-\.\*#\\1#p/);
+  });
+
   it('strażnik zaufanych kont jest taki sam we wszystkich etapach', () => {
     const guards = ['plan', 'implement', 'review'].map((name) => JSON.stringify(workflows[name]!.data.jobs.guard));
     assert.equal(new Set(guards).size, 1);

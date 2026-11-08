@@ -2,6 +2,7 @@
 # Liczy go skrypt z danych o PR-ach fabryki (gałęzie factory/*): werdykty, reakcje 👍/👎, merge, revert.
 # Reakcje nie uruchamiają workflowów, więc projekt odświeża dziennik po każdym werdykcie,
 # po zamknięciu PR fabryki i raz dziennie. Kodu z PR nie pobiera: czyta tylko gałąź główną i API.
+# Po scaleniu PR fabryki zamyka jego issue: GitHub nie zawsze łączy PR z issue przez „Closes #N”.
 name: factory-journal
 
 on:
@@ -14,6 +15,27 @@ on:
 permissions: {}
 
 jobs:
+  close-issue:
+    if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Zamknięcie issue scalonego PR fabryki
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          # Numer z gałęzi factory/<numer>-…, którą nadaje fabryka; inne gałęzie pomija.
+          ISSUE=$(sed -nE 's#^factory/([0-9]+)-.*#\1#p' <<<"$BRANCH")
+          if [ -z "$ISSUE" ]; then echo "Gałąź $BRANCH nie wskazuje issue."; exit 0; fi
+          if [ "$(gh issue view "$ISSUE" --json state --jq .state)" = OPEN ]; then
+            gh issue close "$ISSUE" --reason completed --comment "Zamknięte po scaleniu PR #$PR."
+          fi
+
   collect:
     runs-on: ubuntu-latest
     timeout-minutes: 10
