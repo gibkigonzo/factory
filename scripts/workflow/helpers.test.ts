@@ -159,6 +159,8 @@ describe('zasady dla zmian implementera', () => {
   it('implementer uruchamia tylko komendy z factory.yml, bez znaków psujących cytowanie', () => {
     const tools = implementerTools(config).split(',');
     assert.ok(tools.includes('Bash(npm test:*)'));
+    assert.ok(tools.includes('Bash(git mv:*)') && tools.includes('Bash(git rm:*)'), 'zmiana nazwy i usunięcie pliku');
+    assert.ok(!tools.some((t) => /^Bash\((git (push|commit|reset|checkout)|rm|mv|npm install) /.test(t)));
     assert.ok(tools.every((t) => !t.startsWith('Bash(') || /^Bash\((npm|git) /.test(t)));
     const quoted = { ...config, commands: { ...config.commands, e2e: 'npx playwright test --grep "hero"' } };
     assert.ok(!implementerTools(quoted).includes('playwright'));
