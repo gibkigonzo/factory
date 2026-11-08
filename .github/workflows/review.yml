@@ -153,8 +153,11 @@ jobs:
           include-hidden-files: true
 
   reviewer:
-    needs: panel
-    if: needs.panel.outputs.matrix != '' && needs.panel.outputs.matrix != '[]'
+    # Recenzenci czekają na CI, żeby oprzeć uwagi na jego wyniku, a nie na domysłach.
+    needs: [panel, ci]
+    if: >-
+      always() && needs.panel.result == 'success' &&
+      needs.panel.outputs.matrix != '' && needs.panel.outputs.matrix != '[]'
     strategy:
       fail-fast: false
       max-parallel: ${{ fromJSON(inputs.max_parallel) }}
@@ -189,6 +192,11 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: factory-review-input
+          path: .factory/work
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: factory-ci
+          merge-multiple: true
           path: .factory/work
 
       - name: Prompt recenzenta
