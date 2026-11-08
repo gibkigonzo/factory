@@ -60,6 +60,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.pr != '' && format('refs/pull/{0}/head', inputs.pr) || '' }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -85,8 +86,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ inputs.issue }}
           NOTE: ${{ inputs.note }}
+          PR: ${{ inputs.pr }}
         run: |
-          node "$F/scripts/config/cli.ts" factory.yml --json > "$W/config.json"
+          if [ -n "$PR" ]; then
+            # Kontrakt z gałęzi bazowej, nie z PR: narzędzia implementera nie mogą pochodzić z pliku, który sam zmienił.
+            BASE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)
+            mkdir -p "$RUNNER_TEMP/base"
+            git archive "origin/$BASE" factory.yml .factory/perspectives 2>/dev/null | tar -x -C "$RUNNER_TEMP/base" \
+              || git show "origin/$BASE:factory.yml" > "$RUNNER_TEMP/base/factory.yml"
+            node "$F/scripts/config/cli.ts" "$RUNNER_TEMP/base/factory.yml" --json > "$W/config.json"
+          else
+            node "$F/scripts/config/cli.ts" factory.yml --json > "$W/config.json"
+          fi
           gh issue view "$ISSUE" --json title,body --jq '"# " + .title + "\n\n" + .body' > "$W/issue.md"
           gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$ISSUE/comments" | jq -s add \
             | node "$F/scripts/workflow/cli.ts" find-plan --issue "$ISSUE" > "$W/plan.json"

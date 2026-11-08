@@ -78,6 +78,10 @@ describe('workflowy fabryki', () => {
     }
   });
 
+  it('kontrakt dla implementera i recenzji przy PR pochodzi z gałęzi bazowej, nie z PR', () => {
+    for (const name of ['implement', 'review']) assert.match(workflows[name]!.text, /git archive "origin\/\$BASE" factory\.yml/, name);
+  });
+
   it('strażnik zaufanych kont jest taki sam we wszystkich etapach', () => {
     const guards = ['plan', 'implement', 'review'].map((name) => JSON.stringify(workflows[name]!.data.jobs.guard));
     assert.equal(new Set(guards).size, 1);
