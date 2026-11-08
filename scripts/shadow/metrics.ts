@@ -2,7 +2,7 @@
 
 import type { FactoryConfig } from '../config/spec.ts';
 import { STAGES } from '../workflow/usage.ts';
-import type { Stage } from '../workflow/usage.ts';
+import type { Stage, Usage } from '../workflow/usage.ts';
 import type { PrRecord } from './collect.ts';
 
 /** Ile ocen w grupie trzeba, żeby wnioskować o progu pewności. */
@@ -25,7 +25,16 @@ export interface Metrics {
   medianHoursToMerge?: number;
   calibration: { threshold: number; above: Group; below: Group; enoughData: boolean };
   /** Średni koszt na PR (równowartość cen API) z PR-ów, które mają pomiar zużycia. */
-  cost?: { prs: number; perPr: number; outputPerPr: number; stages: { stage: Stage; perPr: number }[] };
+  cost?: {
+    prs: number;
+    perPr: number;
+    outputPerPr: number;
+    stages: { stage: Stage; perPr: number }[];
+    /** Średni koszt recenzenta danej perspektywy, liczony z PR-ów, w których oceniał. */
+    reviewers: { name: string; perPr: number }[];
+    /** Udział rodzajów wyjścia w znakach: rozumowanie, tekst i wywołania narzędzi. */
+    output?: { thinking: number; text: number; tools: number };
+  };
   gate: { passed: boolean; missing: string[] };
 }
 
@@ -91,7 +100,28 @@ function cost(records: readonly PrRecord[]): Metrics['cost'] {
       stage,
       perPr: avg(all.filter((u) => u.stage === stage).map((u) => u.cost)),
     })),
+    reviewers: reviewerCosts(measured),
+    ...outputShares(all),
   };
+}
+
+function reviewerCosts(records: readonly PrRecord[]): { name: string; perPr: number }[] {
+  const byName = new Map<string, number[]>();
+  for (const record of records) {
+    const perPr = new Map<string, number>();
+    for (const u of record.usage!) if (u.stage === 'review' && u.name) perPr.set(u.name, (perPr.get(u.name) ?? 0) + u.cost);
+    for (const [name, cost] of perPr) byName.set(name, [...(byName.get(name) ?? []), cost]);
+  }
+  return [...byName]
+    .map(([name, costs]) => ({ name, perPr: costs.reduce((a, b) => a + b, 0) / costs.length }))
+    .sort((a, b) => b.perPr - a.perPr);
+}
+
+function outputShares(all: readonly Usage[]): { output?: { thinking: number; text: number; tools: number } } {
+  const sum = { thinking: 0, text: 0, tools: 0 };
+  for (const u of all) if (u.chars) for (const k of ['thinking', 'text', 'tools'] as const) sum[k] += u.chars[k];
+  const total = sum.thinking + sum.text + sum.tools;
+  return total > 0 ? { output: { thinking: sum.thinking / total, text: sum.text / total, tools: sum.tools / total } } : {};
 }
 
 export function percent(value: number | undefined): string {

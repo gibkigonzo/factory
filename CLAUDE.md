@@ -53,7 +53,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 
 - Warstwy składają się w kolejności `base` → presety z `extends` → `factory.yml`. Listy się sumują, pojedyncze wartości nadpisuje późniejsza warstwa.
 - Projekt nie zmienia progów z `base` (rozmiar, poziomy stref, pewność recenzentów, bramki jakości). Może dodać wyjątek od bramki jakości dla ścieżki, zawsze z powodem.
-- „Koszt” to dzienny limit uruchomień taśmy (`daily_runs`).
+- „Koszt” to dzienny limit przebiegów z Claude (`daily_runs`): plan, implementacja i recenzja, liczone po nazwie przebiegu. Nowe zadanie ponad limit czeka w kolejce do jutra; rundy poprawek otwartego PR limitu nie sprawdzają.
 - Schemat jest w `scripts/config/spec.ts`, opis pól w README.
 
 ### Perspektywy i modele (7 listopada 2026)

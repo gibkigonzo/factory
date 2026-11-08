@@ -64,6 +64,12 @@ export function renderJournal(records: readonly PrRecord[], config: FactoryConfi
       ? [
           `- PR z pomiarem: ${m.cost.prs}, średnio ${usd(m.cost.perPr)} i ${tokens(m.cost.outputPerPr)} tokenów wyjścia na PR`,
           `- Etapy, średnio na PR: ${m.cost.stages.map((s) => `${STAGE_NAMES[s.stage]} ${usd(s.perPr)}`).join(' · ')}`,
+          ...(m.cost.reviewers.length
+            ? [`- Recenzenci, średnio na PR: ${m.cost.reviewers.map((r) => `${r.name} ${usd(r.perPr)}`).join(' · ')}`]
+            : []),
+          ...(m.cost.output
+            ? [`- Wyjście (znaki): rozumowanie ${percent(m.cost.output.thinking)} · tekst ${percent(m.cost.output.text)} · narzędzia, w tym kod ${percent(m.cost.output.tools)}`]
+            : []),
         ]
       : ['- Brak pomiarów: zużycie zapisują etapy uruchomione po włączeniu pomiaru.']),
     '',

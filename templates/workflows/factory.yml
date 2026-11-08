@@ -10,6 +10,13 @@
 # Kolejka: zadanie ponad wip_limit albo ze wspólnymi plikami z zadaniem w toku czeka z etykietą `queued`
 # i rusza samo po zamknięciu PR fabryki (albo przy dziennym przeglądzie).
 name: factory
+# Nazwa przebiegu mówi, który etap ruszył. Dzienny limit (daily_runs) liczy po niej tylko etapy z Claude:
+# plan, implement i review. Kolejka, dziennik i komendy go nie zużywają.
+run-name: >-
+  ${{ github.event_name == 'workflow_dispatch' &&
+      format('factory {0}{1}{2}', inputs.stage, inputs.issue && format(' #{0}', inputs.issue) || '', inputs.pr && format(' PR #{0}', inputs.pr) || '') ||
+      github.event_name == 'issues' && github.event.label.name == 'ready' && format('factory plan #{0}', github.event.issue.number) ||
+      format('factory {0}', github.event_name) }}
 
 on:
   issues:

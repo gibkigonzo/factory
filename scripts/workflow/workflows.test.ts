@@ -131,6 +131,19 @@ describe('workflowy fabryki', () => {
     assert.match(text, /--add-label blocked/);
   });
 
+  it('recenzenci dostają diff bez lockfile i plików generowanych, a ich streszczenie obok', () => {
+    assert.match(workflows.review!.text, /cli\.ts" review-diff --base/);
+    assert.doesNotMatch(workflows.review!.text, /git diff --no-color -M[^\n]*> "\$W\/diff\.patch"/);
+  });
+
+  it('limit dzienny: liczy etapy z Claude, sprawdza tylko nowe zadania, a zadanie ponad limit trafia do kolejki', () => {
+    const { text, data } = workflows.implement!;
+    const budget = (data.jobs.implement!.steps ?? []).find((step) => (step as { id?: string }).id === 'budget') as Step & { if?: string };
+    assert.match(String(budget.if), /inputs\.pr == ''/);
+    assert.match(budget.run!, /cli\.ts" budget --runs/);
+    assert.match(text, /if \[ "\$OVER" = true \]; then[\s\S]*?--add-label queued[\s\S]*?exit 0/);
+  });
+
   it('plan z nowymi zależnościami czeka na /approve, a /reject i zgoda uruchamiają kolejkę', () => {
     assert.match(workflows.plan!.text, /--add-label needs-approval/);
     assert.match(workflows.plan!.text, /--remove-label factory:approved/);
@@ -178,6 +191,12 @@ describe('wzorzec workflowu projektu', () => {
         }
       }
     }
+  });
+
+  it('nazwa przebiegu mówi, który etap ruszył, bo po niej liczy się dzienny limit', () => {
+    const runName = String((template as Workflow & { 'run-name'?: string })['run-name']);
+    assert.match(runName, /format\('factory \{0\}\{1\}\{2\}', inputs\.stage/);
+    assert.match(runName, /github\.event\.label\.name == 'ready' && format\('factory plan #\{0\}'/);
   });
 
   it('przekazuje tylko sekret CLAUDE_CODE_OAUTH_TOKEN, nie wszystkie', () => {
