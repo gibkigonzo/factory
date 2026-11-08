@@ -121,7 +121,11 @@ jobs:
         if: steps.budget.outputs.skip != 'true'
         run: |
           SETUP=$(jq -r '.commands.setup // empty' "$W/config.json")
-          if [ -n "$SETUP" ]; then bash -c "$SETUP"; fi
+          # Projekt zakładany od zera nie ma jeszcze manifestu (np. package.json). Implementer ma setup
+          # w dozwolonych komendach i uruchomi go sam, więc tu nieudany setup tylko ostrzega.
+          if [ -n "$SETUP" ] && ! bash -c "$SETUP"; then
+            echo "::warning::Komenda setup nie przeszła; implementer rusza bez niej i może uruchomić ją sam."
+          fi
 
       - name: Implementer
         id: claude
