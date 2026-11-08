@@ -103,6 +103,29 @@ describe('dowody dla reguł ryzyka', () => {
     ]);
   });
 
+  it('parafraza kryterium dostaje dowód z tej samej pozycji, gdy liczby się zgadzają', () => {
+    const spec = {
+      acceptance: [
+        'Sekcja `pasek` przy 768 px ma wysokość 53 px ±10%, a przy 375 px jej nie ma',
+        'Logo to sam napis tekstowy, a nagłówek nie ładuje żadnych plików graficznych',
+        'Po kliknięciu „Wyślij” formularz w mniej niż 1 s pokazuje potwierdzenie',
+      ],
+    };
+    const proofs = (...criteria: string[]) => ({
+      issue: 1, bugfix: false, assumptions: [],
+      acceptance: criteria.map((criterion, i) => ({ criterion, evidence: `test: ${i}` })),
+    });
+    const evidence = (implementation: ReturnType<typeof proofs>) =>
+      buildEvidence({ spec, implementation, reviews: [], rounds: 0 }).acceptance?.map((a) => a.evidence);
+    const paraphrased = ['pasek: 53 px ±10% przy 768, brak przy 375', 'Logo to sam napis; nagłówek nie ładuje plików graficznych'];
+    assert.deepEqual(evidence(proofs(...paraphrased, 'Potwierdzenie po kliknięciu „Wyślij” w mniej niż 1 s')), ['test: 0', 'test: 1', 'test: 2']);
+    assert.deepEqual(evidence(proofs(...paraphrased, 'Potwierdzenie po kliknięciu „Wyślij” w mniej niż 2 s')), ['test: 0', 'test: 1', undefined], 'inna liczba');
+    assert.deepEqual(evidence(proofs(...paraphrased, 'Przycisk ma tło #0055ff')), ['test: 0', 'test: 1', undefined], 'inne kryterium');
+    assert.deepEqual(evidence(proofs(...paraphrased)), [undefined, undefined, undefined], 'inna liczba kryteriów');
+    const swapped = proofs(spec.acceptance[1]!, spec.acceptance[0]!, 'pasek: 53 px ±10% przy 768, brak przy 375');
+    assert.deepEqual(evidence(swapped), ['test: 1', 'test: 0', undefined], 'dowód dopasowany dosłownie nie liczy się drugi raz');
+  });
+
   it('brak wyniku CI nie udaje sukcesu', () => {
     assert.equal(buildEvidence({ spec: parseSpec(SPEC), reviews: [], rounds: 0 }).ci, undefined);
   });

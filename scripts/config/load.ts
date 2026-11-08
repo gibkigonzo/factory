@@ -189,10 +189,12 @@ function checkZoneNames(layers: Layer[], errors: string[]): void {
   if (!isObject(levels)) return;
   const known = Object.keys(levels);
   for (const layer of layers) {
-    const zones = layer.data.zones;
-    if (!isObject(zones)) continue;
-    for (const zone of Object.keys(zones).filter((z) => !known.includes(z))) {
-      errors.push(`${layer.file}: zones.${zone}: nieznana strefa „${zone}”; dostępne: ${known.join(', ')}`);
+    for (const field of ['zones', 'zone_tests']) {
+      const zones = layer.data[field];
+      if (!isObject(zones)) continue;
+      for (const zone of Object.keys(zones).filter((z) => !known.includes(z))) {
+        errors.push(`${layer.file}: ${field}.${zone}: nieznana strefa „${zone}”; dostępne: ${known.join(', ')}`);
+      }
     }
   }
 }
@@ -227,6 +229,7 @@ function withDefaults(merged: Obj): FactoryConfig {
   const defaults = {
     evidence: { preview_deploy: false },
     zones: {},
+    zone_tests: {},
     files: Object.fromEntries(FILE_CLASSES.map((c) => [c, []])),
     disable_markers: [],
     assertion_markers: [],

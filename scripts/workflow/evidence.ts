@@ -2,7 +2,7 @@
 // Kryteria akceptacji pochodzą ze specu w issue; implementer podaje tylko dowody do nich.
 
 import type { Evidence, Review } from '../risk/types.ts';
-import { looseCriterion, normalizeCriterion } from './spec.ts';
+import { looseCriterion, normalizeCriterion, sameCriterion } from './spec.ts';
 import type { IssueSpec } from './spec.ts';
 
 export interface CiResult {
@@ -36,14 +36,26 @@ function unique<T>(items: readonly T[], key: (item: T) => string): Map<string, T
 
 function acceptance(spec: IssueSpec, implementation?: Implementation): NonNullable<Evidence['acceptance']> {
   const proofs = implementation?.acceptance ?? [];
-  const exact = new Map(proofs.map((a) => [normalizeCriterion(a.criterion), a.evidence]));
+  const exact = new Map(proofs.map((a) => [normalizeCriterion(a.criterion), a]));
   // Bez końcowego dopisku w nawiasie, np. „(test)”, ale tylko gdy dopasowanie jest jednoznaczne po obu stronach:
   // „przycisk (desktop)” i „przycisk (mobile)” nadal wymagają osobnych dowodów.
   const loose = unique(proofs, (a) => looseCriterion(a.criterion));
   const specLoose = unique(spec.acceptance, looseCriterion);
-  return spec.acceptance.map((criterion) => {
+  const matched = spec.acceptance.map((criterion) => {
     const key = looseCriterion(criterion);
-    const evidence = exact.get(normalizeCriterion(criterion)) ?? (specLoose.has(key) ? loose.get(key)?.evidence : undefined);
+    return exact.get(normalizeCriterion(criterion)) ?? (specLoose.has(key) ? loose.get(key) : undefined);
+  });
+  // Agent przeformułował kryterium: przy tej samej liczbie kryteriów dowód z tej samej pozycji,
+  // o ile nie dopasował się do innego kryterium, ma te same liczby i co najmniej połowę wspólnych słów.
+  if (proofs.length === spec.acceptance.length) {
+    const used = new Set(matched);
+    matched.forEach((proof, i) => {
+      const candidate = proofs[i]!;
+      if (!proof && !used.has(candidate) && sameCriterion(spec.acceptance[i]!, candidate.criterion)) matched[i] = candidate;
+    });
+  }
+  return spec.acceptance.map((criterion, i) => {
+    const evidence = matched[i]?.evidence;
     return evidence ? { criterion, evidence } : { criterion };
   });
 }

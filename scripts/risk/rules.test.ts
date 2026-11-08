@@ -89,6 +89,17 @@ describe('reguła 3: brak testów', () => {
     assert.equal(testsRule([changed('src/components/A.vue')], repo, mapped).level, 'Low');
   });
 
+  it('zone_tests wskazuje testy, które sprawdzają strefę spoza jej ścieżek', () => {
+    const repo = ['qa/home.spec.ts', 'qa/README.md'];
+    const files = [changed('src/components/A.vue'), changed('src/app.ts')];
+    assert.equal(testsRule(files, repo, config).level, 'High');
+    const mapped = configWith('zone_tests:\n  code: ["qa/**"]\n  shared: ["qa/**"]\n');
+    assert.equal(testsRule(files, repo, mapped).level, 'Low');
+    const onlyCode = configWith('zone_tests:\n  code: ["qa/**"]\n');
+    assert.deepEqual(testsRule(files, repo, onlyCode).reasons, ['strefa shared nie ma testów: Medium → High (src/app.ts)']);
+    assert.equal(testsRule(files, ['qa/README.md'], mapped).level, 'High', 'liczą się tylko pliki testów');
+  });
+
   it('nie dotyczy plików, które nie są kodem, samych testów ani ścieżek spoza mapy', () => {
     const files = [changed('docs/guide.md'), changed('src/components/A.test.ts'), changed('scripts/x.ts')];
     assert.equal(testsRule(files, [], config).level, 'Low');

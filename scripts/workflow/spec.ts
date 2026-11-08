@@ -49,3 +49,17 @@ export function normalizeCriterion(text: string): string {
 export function looseCriterion(text: string): string {
   return normalizeCriterion(text.replace(/\s*\([^()]*\)\s*$/, ''));
 }
+
+function words(text: string): Set<string> {
+  return new Set((normalizeCriterion(text).match(/\d+(?:[.,]\d+)*|[\p{L}\p{N}]+/gu) ?? []).map((w) => w.replace(',', '.')));
+}
+
+/** Parafraza tego samego kryterium: te same liczby (wymiary, progi, kolory) i co najmniej połowa wspólnych słów. */
+export function sameCriterion(a: string, b: string): boolean {
+  const x = words(a);
+  const y = words(b);
+  const numbers = (set: Set<string>) => [...set].filter((w) => /\d/.test(w)).sort().join(' ');
+  if (x.size === 0 || y.size === 0 || numbers(x) !== numbers(y)) return false;
+  const common = [...x].filter((w) => y.has(w)).length;
+  return (2 * common) / (x.size + y.size) >= 0.5;
+}

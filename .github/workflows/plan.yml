@@ -162,13 +162,15 @@ jobs:
           printf '%s' "$PLAN" > plan.json
           DECISION=$(jq -r .decision plan.json)
           DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
-          for label in ready planned blocked split; do gh label create "$label" --force >/dev/null; done
+          for label in ready planned blocked split queued; do gh label create "$label" --force >/dev/null; done
 
+          # Kolejka: implementer rusza w limicie WIP i bez wspólnych plików z zadaniami w toku albo czekającymi.
           NOTE=""
           if [ "$DECISION" = planned ]; then
-            OPEN=$(gh pr list --state open --json headRefName --jq '[.[] | select(.headRefName | startswith("factory/"))] | length')
-            if [ "$OPEN" -ge "$LIMIT" ]; then
-              NOTE="Kolejka jest pełna ($OPEN z $LIMIT zadań w toku). Implementer ruszy, gdy uruchomisz etap implement ręcznie."
+            bash factory/scripts/workflow/queue-raw.sh queue
+            ADMIT=$(node factory/scripts/workflow/cli.ts queue-admit --raw queue --issue "$ISSUE" --plan plan.json --limit "$LIMIT")
+            if [ "$(jq -r .start <<<"$ADMIT")" != true ]; then
+              NOTE="$(jq -r .reason <<<"$ADMIT") Implementer ruszy sam, gdy zadanie się zwolni."
             fi
           fi
           printf '%s' "$USAGE" > usage.json
@@ -178,8 +180,13 @@ jobs:
 
           case "$DECISION" in
             planned)
-              gh issue edit "$ISSUE" --add-label planned
-              if [ -z "$NOTE" ]; then gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=implement -f issue="$ISSUE"; fi
+              if [ -n "$NOTE" ]; then
+                gh issue edit "$ISSUE" --add-label planned --add-label queued
+              else
+                gh issue edit "$ISSUE" --add-label planned
+                gh issue edit "$ISSUE" --remove-label queued >/dev/null 2>&1 || true
+                gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=implement -f issue="$ISSUE"
+              fi
               ;;
             blocked)
               gh issue edit "$ISSUE" --add-label blocked

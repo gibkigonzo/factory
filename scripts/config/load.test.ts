@@ -86,6 +86,7 @@ describe('błędny kontrakt: komunikat wskazuje pole', () => {
 
   it('nieznana strefa wymienia dostępne', () => {
     assertError(`${MINIMAL}zones:\n  ui: ["src/ui/**"]\n`, 'factory.yml: zones.ui: nieznana strefa „ui”; dostępne: data, security');
+    assertError(`${MINIMAL}zone_tests:\n  ui: ["e2e/**"]\n`, 'factory.yml: zone_tests.ui: nieznana strefa „ui”; dostępne: data, security');
   });
 
   it('wartość spoza listy dozwolonych', () => {

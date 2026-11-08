@@ -17,6 +17,7 @@ import { toJsonSchema } from './jsonschema.ts';
 import { branchName, DENIED_FOR_READERS, implementerTools, pathProblems, READ_ONLY_TOOLS } from './patch.ts';
 import { assessPrompt, implementPrompt, planPrompt, reviewPrompt } from './prompts.ts';
 import { latestMarked, planComment, PLAN_MARKER, prBody, PR_MARKER } from './render.ts';
+import { admit, queueState, release } from './queue.ts';
 import { renderReport } from './report.ts';
 import type { PanelSummary } from './report.ts';
 import { parseSpec } from './spec.ts';
@@ -63,6 +64,7 @@ function options(args: string[]) {
       file: { type: 'string' },
       stage: { type: 'string' },
       dir: { type: 'string' },
+      limit: { type: 'string' },
     },
   });
 }
@@ -176,6 +178,14 @@ function run(command: string | undefined, rest: string[]): string {
     }
     case 'journal-issues':
       return factoryIssues(required(v.raw, '--raw')).join('\n');
+    case 'queue-admit': {
+      const issue = Number(required(v.issue, '--issue'));
+      const plan = json(required(v.plan, '--plan')) as { files?: string[] };
+      const state = queueState(required(v.raw, '--raw'), issue);
+      return JSON.stringify(admit({ issue, files: plan.files ?? [] }, state.active, limit(v), state.waiting));
+    }
+    case 'queue-release':
+      return release(queueState(required(v.raw, '--raw')), limit(v)).join('\n');
     case 'find-plan':
       return marked('plan', v);
     case 'find-implementation':
@@ -198,6 +208,12 @@ function run(command: string | undefined, rest: string[]): string {
     default:
       throw new UsageError(`nieznana podkomenda: ${command ?? '(brak)'}`);
   }
+}
+
+function limit(v: Values): number {
+  const value = Number(required(v.limit, '--limit'));
+  if (!Number.isInteger(value) || value < 1) throw new UsageError(`--limit: oczekiwano liczby całkowitej ≥ 1, jest: ${v.limit}`);
+  return value;
 }
 
 function modelFor(stage: string | undefined, cfg: FactoryConfig): string {

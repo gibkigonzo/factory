@@ -90,6 +90,7 @@ export const SCHEMA: Extract<Spec, { kind: 'object' }> = {
     commands: { kind: 'map', key: /^[a-z][a-z0-9_]*$/, keyHint: 'małe litery, cyfry i „_”', value: text },
     evidence: { kind: 'object', fields: { screenshots: text, preview_deploy: { kind: 'boolean' } } },
     zones: namedMap(globs),
+    zone_tests: namedMap(globs),
     files,
     disable_markers: { kind: 'list', item: text },
     assertion_markers: { kind: 'list', item: text },
@@ -146,7 +147,7 @@ export const BASE_ONLY: Record<string, string> = {
 };
 
 /** Pola presetu języka lub frameworka. */
-export const PRESET_FIELDS = ['zones', 'files', 'disable_markers', 'assertion_markers', 'protected_files'] as const;
+export const PRESET_FIELDS = ['zones', 'zone_tests', 'files', 'disable_markers', 'assertion_markers', 'protected_files'] as const;
 
 export const REQUIRED: Record<LayerKind, readonly string[]> = {
   base: [
@@ -196,6 +197,8 @@ export interface FactoryConfig {
   commands: Record<string, string>;
   evidence: { screenshots?: string; preview_deploy: boolean };
   zones: Record<string, string[]>;
+  /** Testy spoza ścieżek strefy, które ją sprawdzają, np. e2e dla stron i układu (reguła 3). */
+  zone_tests: Record<string, string[]>;
   files: Record<FileClass, string[]>;
   disable_markers: string[];
   assertion_markers: string[];
