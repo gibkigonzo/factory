@@ -26,6 +26,13 @@ describe('reguła 1: strefy', () => {
     assert.equal(level('server/middleware/log.ts'), 'High');
   });
 
+  it('plik testów spoza mapy stref liczy się jak code, inna ścieżka spoza mapy dostaje Medium', () => {
+    const result = zonesRule([changed('e2e/header.spec.ts'), changed('tests/naming.test.ts')], config);
+    assert.equal(result.level, 'Low');
+    assert.deepEqual(result.reasons, ['e2e/header.spec.ts: strefa code', 'tests/naming.test.ts: strefa code']);
+    assert.equal(zonesRule([changed('e2e/header.spec.ts'), changed('scripts/x.sh')], config).level, 'Medium');
+  });
+
   it('ścieżka spoza mapy stref dostaje Medium', () => {
     const result = zonesRule([changed('scripts/deploy.sh')], config);
     assert.equal(result.level, 'Medium');

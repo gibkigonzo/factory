@@ -32,9 +32,17 @@ function listed(items: readonly string[]): string[] {
   return [...items.slice(0, MAX_LISTED), `…i ${items.length - MAX_LISTED} więcej`];
 }
 
+/** Strefa dla reguły 1: plik testów spoza mapy stref liczy się jak `code`, bo ryzyko samych testów
+ * (usunięcie, ubytek asercji) sprawdza reguła 5. Inna ścieżka spoza mapy dostaje `risk.unassigned`. */
+function ruleZone(path: string, config: FactoryConfig): ZoneMatch {
+  const match = zoneOf(path, config);
+  if (match.zone || !matchesAny(path, config.files.tests) || !config.risk.zone_levels.code) return match;
+  return { zone: 'code', level: config.risk.zone_levels.code };
+}
+
 /** Reguła 1: strefy. Przy zmianie nazwy liczy się stara i nowa ścieżka. */
 export function zonesRule(files: readonly ChangedFile[], config: FactoryConfig): RuleResult {
-  const matches = touchedPaths(files).map((path) => ({ path, ...zoneOf(path, config) }));
+  const matches = touchedPaths(files).map((path) => ({ path, ...ruleZone(path, config) }));
   const level = maxLevel(matches.map((m) => m.level));
   const top = matches.filter((m) => m.level === level).map((m) => `${m.path}: ${m.zone ? `strefa ${m.zone}` : 'poza mapą stref'}`);
   const reasons = matches.length === 0 ? ['brak zmienionych plików'] : listed(top);
