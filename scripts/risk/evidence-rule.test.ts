@@ -110,6 +110,17 @@ describe('reguła 5: usunięte testy, spadek pokrycia i nierozstrzygnięte uwagi
     ]);
   });
 
+  it('przeniesienie testów z przepisaniem: nowe testy z co najmniej tyloma asercjami dają Medium zamiast High', () => {
+    const old = changed('e2e/naglowek.spec.ts', { status: 'deleted', additions: 0, deletions: 3, removedLines: ['expect(a).toBe(1);', 'expect(b).toBe(2);', 'x'] });
+    const moved = changed('e2e/header.spec.ts', { status: 'added', addedLines: ['expect(a).toBe(1);', 'expect(b).toBe(2);', 'expect(c).toBe(3);'] });
+    assert.deepEqual([result({}, [old, moved]).level, result({}, [old, moved]).reasons], [
+      'Medium',
+      ['usunięty plik testów, ale zmiana dodaje testy z co najmniej tyloma asercjami (3 ≥ 2): e2e/naglowek.spec.ts'],
+    ]);
+    const fewer = changed('e2e/header.spec.ts', { status: 'added', addedLines: ['expect(a).toBe(1);'] });
+    assert.equal(result({}, [old, fewer]).level, 'High', 'mniej asercji po przeniesieniu to dalej High');
+  });
+
   it('ubyło asercji w teście', () => {
     const file = changed('src/a.test.ts', {
       addedLines: ['expect(a).toBe(1);'],

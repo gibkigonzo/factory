@@ -134,16 +134,28 @@ export function stem(path: string): string {
   return name.replace(/\.[^.]+$/, '').replace(/[._-](test|spec)$/, '').replace(/^test[_-]/, '');
 }
 
-/** Usunięty plik testów daje High, chyba że ta sama zmiana usuwa też testowany kod. */
+/**
+ * Usunięty plik testów daje High, chyba że ta sama zmiana usuwa też testowany kod (Medium) albo dodaje testy
+ * z co najmniej taką liczbą asercji, jaką miały usunięte (Medium). Drugi przypadek to zwykle przeniesienie
+ * z przepisaniem, którego git nie rozpozna jako zmiany nazwy. Medium zostawia człowiekowi czas na weto.
+ */
 function testProblems(files: readonly ChangedFile[], config: FactoryConfig): { high: string[]; medium: string[] } {
   const isTest = (path: string) => matchesAny(path, config.files.tests);
   const deletedCode = new Set(files.filter((f) => f.status === 'deleted' && !isTest(f.path)).map((f) => stem(f.path)));
+  const tests = files.filter((f) => isTest(f.path));
+  const assertions = (lines: readonly string[]) => config.assertion_markers.reduce((sum, marker) => sum + occurrences(lines, marker), 0);
+  const removedAssertions = tests.filter((f) => f.status === 'deleted').reduce((sum, f) => sum + assertions(f.removedLines), 0);
+  const addedTests = tests.filter((f) => f.status === 'added');
+  const addedAssertions = addedTests.reduce((sum, f) => sum + assertions(f.addedLines), 0);
+  const replaced = addedTests.length > 0 && addedAssertions >= removedAssertions;
   const high: string[] = [];
   const medium: string[] = [];
-  for (const file of files.filter((f) => isTest(f.path))) {
+  for (const file of tests) {
     if (file.status === 'deleted') {
       if (deletedCode.has(stem(file.path))) medium.push(`usunięty plik testów razem z testowanym kodem: ${file.path}`);
-      else high.push(`usunięty plik testów, a testowany kod został: ${file.path}`);
+      else if (replaced) {
+        medium.push(`usunięty plik testów, ale zmiana dodaje testy z co najmniej tyloma asercjami (${addedAssertions} ≥ ${removedAssertions}): ${file.path}`);
+      } else high.push(`usunięty plik testów, a testowany kod został: ${file.path}`);
       continue;
     }
     const removed = -config.assertion_markers.reduce((sum, marker) => sum + netAdded(file, marker), 0);
