@@ -138,6 +138,29 @@ describe('workflowy fabryki', () => {
     assert.doesNotMatch(workflows.review!.text, /git diff --no-color -M[^\n]*> "\$W\/diff\.patch"/);
   });
 
+  it('zrzuty ekranu: komenda projektu nie zatrzymuje recenzji, recenzent dostaje zrzuty, a galeria działa bez Claude i bez kodu PR', () => {
+    const { data } = workflows.review!;
+    type Full = Step & { id?: string; if?: string; 'continue-on-error'?: boolean };
+    const ci = (data.jobs.ci!.steps ?? []) as Full[];
+    const shots = ci.find((step) => step.id === 'shots')!;
+    assert.equal(shots['continue-on-error'], true);
+    assert.match(shots.run!, /cli\.ts" screenshots --config "\$W\/config\.json"/);
+    assert.ok(ci.indexOf(ci.find((step) => step.run?.includes('cli.ts" ci '))!) < ci.indexOf(shots), 'zrzuty po CI, na zainstalowanym projekcie');
+
+    const download = (data.jobs.reviewer!.steps ?? []).find((step) => step.with?.pattern === 'factory-screenshots');
+    assert.equal(download?.with?.path, '.factory/work/screenshots');
+
+    const gallery = data.jobs.gallery! as Job & { needs?: string[] };
+    assert.ok(!usesClaude(gallery));
+    assert.deepEqual(gallery.permissions, { contents: 'write', 'pull-requests': 'write' });
+    for (const step of gallery.steps ?? []) {
+      if (step.uses?.startsWith('actions/checkout@')) assert.equal(step.with?.repository, 'gibkigonzo/factory', 'tylko skrypty fabryki, nie kod PR');
+    }
+    const publish = (gallery.steps ?? []).map((step) => step.run ?? '').join('\n');
+    assert.ok(publish.indexOf('cli.ts" gallery') < publish.indexOf('gallery-push.sh'), 'pliki sprawdzone przed publikacją');
+    assert.ok(!(data.jobs.loop as Job & { needs?: string[] }).needs?.includes('gallery'), 'galeria nie wstrzymuje pętli ani oceny ryzyka');
+  });
+
   it('limit dzienny: liczy etapy z Claude, sprawdza tylko nowe zadania, a zadanie ponad limit trafia do kolejki', () => {
     const { text, data } = workflows.implement!;
     const budget = (data.jobs.implement!.steps ?? []).find((step) => (step as { id?: string }).id === 'budget') as Step & { if?: string };

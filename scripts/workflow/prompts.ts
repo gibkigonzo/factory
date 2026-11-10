@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseFrontmatter, ROOT } from '../agents/files.ts';
+import { screenshotsTask } from './screenshots.ts';
 
 export interface PromptContext {
   /** Katalog z danymi dla agenta, np. .factory/work. */
@@ -54,6 +55,7 @@ export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: st
     `Opis PR z dowodami implementera: \`${ctx.work}/pr.md\`.`,
     `Artefakty weryfikacji (mogą być puste): \`${ctx.work}/artifacts/\`.`,
     `Wynik CI taśmy: \`${ctx.work}/ci.json\` (brak pliku: CI nie zadziałało). Komendy CI są w \`commands\` w \`${ctx.work}/config.json\`.`,
+    ...screenshotsTask(`${ctx.work}/screenshots`),
   ];
   if (ctx.criteria) lines.unshift(`Plik kryteriów Twojej perspektywy: \`${ctx.criteria}\`.`);
   return [body(`agents/${ctx.agent}.md`), task(lines)].join('\n\n');

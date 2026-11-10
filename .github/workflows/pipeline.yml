@@ -74,8 +74,8 @@ jobs:
       workflow: ${{ inputs.workflow }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-    permissions:     # zapis tylko dla joba pętli poprawek (bez Claude): komentarz z uwagami i kolejna runda
-      contents: read
+    permissions:     # zapis tylko dla jobów bez Claude: pętla poprawek (uwagi, kolejna runda) i galeria zrzutów
+      contents: write
       issues: write
       pull-requests: write
       actions: write

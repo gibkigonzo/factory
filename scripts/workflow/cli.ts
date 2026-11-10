@@ -29,6 +29,7 @@ import { nextRound, roundComment } from './loop.ts';
 import { admit, queueState, release } from './queue.ts';
 import { renderReport } from './report.ts';
 import type { PanelSummary } from './report.ts';
+import { collectScreenshots, galleryComment, runScreenshots, screenshotsOk } from './screenshots.ts';
 import { parseSpec } from './spec.ts';
 import { isStage, parseUsageBlocks, parseUsageList, readUsage, sessionError, sessionStarted, sumUsage } from './usage.ts';
 import type { Usage } from './usage.ts';
@@ -80,6 +81,9 @@ function options(args: string[]) {
       name: { type: 'string' },
       base: { type: 'string' },
       summary: { type: 'string' },
+      url: { type: 'string' },
+      sha: { type: 'string' },
+      'run-url': { type: 'string' },
     },
   });
 }
@@ -250,6 +254,25 @@ function run(command: string | undefined, rest: string[]): string {
       return modelFor(p[0], config(v.config));
     case 'check-paths':
       return checkPaths(config(v.config));
+    case 'screenshots': {
+      // Bez komendy w factory.yml nic się nie dzieje; czerwona komenda nie przerywa joba.
+      const command = config(v.config).evidence?.screenshots;
+      if (!command) return JSON.stringify({ configured: false });
+      const result = runScreenshots(command, required(v.out, '--out'), process.cwd());
+      return JSON.stringify({ configured: true, ok: result.ok, shots: result.shots.length, rejected: result.rejected.length });
+    }
+    case 'gallery': {
+      const dir = required(v.dir, '--dir');
+      const base = required(v.url, '--url').replace(/\/+$/, '');
+      const comment = galleryComment(collectScreenshots(dir), {
+        url: (file) => `${base}/${encodeURIComponent(file)}`,
+        sha: required(v.sha, '--sha'),
+        ok: screenshotsOk(dir),
+        runUrl: v['run-url'],
+      });
+      writeFileSync(required(v.out, '--out'), comment);
+      return `Galeria: ${comment.length} znaków`;
+    }
     case 'ci': {
       const result = runCommands(config(v.config).commands, process.cwd(), v.skip!.split(',').filter(Boolean));
       writeFileSync(required(v.out, '--out'), JSON.stringify(result, null, 2));
