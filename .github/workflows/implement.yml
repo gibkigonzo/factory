@@ -77,9 +77,11 @@ jobs:
         run: |
           mv .factory-src "$RUNNER_TEMP/factory"
           npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
-          mkdir -p .factory/work && printf '.factory/work/\nnode_modules/\n' >> .git/info/exclude
+          mkdir -p .factory/work/screenshots && printf '.factory/work/\nnode_modules/\n' >> .git/info/exclude
           echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
           echo "W=.factory/work" >> "$GITHUB_ENV"
+          # Katalog dla komendy evidence.screenshots, którą implementer może uruchomić; poza patchem (.git/info/exclude).
+          echo "FACTORY_SCREENSHOTS=$GITHUB_WORKSPACE/.factory/work/screenshots" >> "$GITHUB_ENV"
           corepack enable || true
 
       - name: Dane dla implementera

@@ -36,7 +36,7 @@ export function planPrompt(ctx: PromptContext): string {
   ].join('\n\n');
 }
 
-export function implementPrompt(ctx: PromptContext & { change?: boolean }): string {
+export function implementPrompt(ctx: PromptContext & { change?: boolean; screenshots?: string }): string {
   const lines = [
     `Issue #${ctx.issue}: \`${ctx.work}/issue.md\`.`,
     `Plan planera (JSON): \`${ctx.work}/plan.json\`.`,
@@ -44,6 +44,11 @@ export function implementPrompt(ctx: PromptContext & { change?: boolean }): stri
     'Gałąź, commit, push i PR robi workflow. Ty zmieniasz pliki w katalogu roboczym i uruchamiasz komendy z `commands`.',
     'Krótki opis zmian dla opisu PR wpisz w pole `summary`.',
   ];
+  if (ctx.screenshots) {
+    lines.push(
+      `Komenda zrzutów z \`evidence.screenshots\`: \`${ctx.screenshots}\`. Zmienną \`FACTORY_SCREENSHOTS\` (katalog \`${ctx.work}/screenshots\`) workflow już ustawił, więc uruchamiasz ją dosłownie. Gdy zmiana dotyczy wyglądu, obejrzyj narzędziem Read zrzuty zmienionych sekcji (\`<nazwa>@<szerokość>.png\`) obok wzorca (\`.ref.png\`) i popraw różnice, zanim oddasz zmianę.`,
+    );
+  }
   if (ctx.change) lines.push(`Poprawka po uwagach właściciela lub recenzentów: \`${ctx.work}/change.md\`.`);
   return [body('skills/implementer/SKILL.md'), task(lines)].join('\n\n');
 }

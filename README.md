@@ -172,7 +172,7 @@ W Etapie 1 merger zrobi to, co dziś opisuje werdykt: Low scali od razu, Medium 
 ### Pętla poprawek, blokady i nowe zależności
 
 - **Pętla poprawek.** Czerwone CI albo `request_changes` recenzenta odsyła PR do implementera z komentarzem „Runda poprawek N z M” (uwagi od najpoważniejszej), do `risk.max_review_rounds` rund. Przy czerwonym CI recenzenci nie ruszają, bo poprawka i tak zmieni diff; oceniają je dopiero w ostatniej rundzie. Ocena ryzyka i werdykt powstają po pętli. Uwagi nierozstrzygnięte po ostatniej rundzie dają High.
-- **Blokada.** Gdy implementer nie może dokończyć zadania (brak narzędzia, zależności, uprawnień), kończy ze statusem `blocked` i opisem. Workflow nie otwiera wtedy PR i nie puszcza recenzji: issue dostaje etykietę `blocked` i komentarz z powodem. Tak samo, gdy implementer nie zmienił żadnego pliku.
+- **Blokada.** Gdy implementer nie może dokończyć zadania (brak narzędzia, zależności, uprawnień), kończy ze statusem `blocked` i opisem. Workflow nie otwiera wtedy PR i nie puszcza recenzji: issue dostaje etykietę `blocked` i komentarz z powodem. Tak samo, gdy implementer nie zmienił żadnego pliku. Brak sprawdzenia, które i tak zrobi CI (np. komenda spoza `commands`), nie jest blokadą: implementer oddaje zmianę i pisze w założeniach, czego nie uruchomił.
 - **Awaria startu.** Bun dla akcji Claude pochodzi z rejestru npm, bo pobieranie z GitHub Releases bywa niedostępne. Gdy sesja Claude mimo to nie wystartuje (brak wyniku albo błąd bez kosztu), etap czeka minutę i próbuje jeszcze raz. Błąd po rozpoczęciu pracy nie jest ponawiany.
 - **Nowe zależności.** Planer wpisuje pakiety z wersją do `dependencies` w planie. Plan z nimi czeka z etykietą `needs-approval` na `/approve` w issue. Potem workflow instaluje je komendami z `dependencies` w `factory.yml`, zanim ruszy implementer. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji, a obcy pakiet mógłby go odczytać.
 
@@ -195,6 +195,7 @@ evidence:
 - Lepiej działają zrzuty sekcji niż całej strony: duży obraz model widzi pomniejszony i gubi szczegóły.
 - Limity: 150 plików, 5 MB na plik i 100 MB razem. Plik spoza wzorca nazw, plik inny niż PNG albo ponad limit taśma pomija i wymienia w PR.
 - Czerwona komenda nie zatrzymuje recenzji. Recenzent i komentarz w PR mówią wtedy, że zrzutów może brakować.
+- Implementer może uruchomić tę komendę sam (katalog w `FACTORY_SCREENSHOTS` ustawia workflow) i przed oddaniem zmiany obejrzeć zrzuty zmienionych sekcji obok wzorca.
 - Recenzenci dostają spis zrzutów. Perspektywa `ux-visual` (włączasz ją w `reviewers.extra`) wybiera z niego sekcje, których dotyczy zmiana, i porównuje je ze wzorcem przy każdej szerokości. Gdy brakuje zrzutów zmienionych sekcji, daje pewność poniżej 0,8, więc zmiana nie dostanie Low.
 - Komentarz „Zrzuty ekranu” w PR pokazuje wzorzec obok wykonania, także na telefonie, w zwijanym bloku dla każdej szerokości. Taśma aktualizuje go w każdej rundzie. Obrazy leżą na gałęzi `factory-screenshots`, która ma jeden commit bez historii i tylko zrzuty otwartych PR. Gałąź możesz usunąć w każdej chwili, a taśma założy ją od nowa.
 
