@@ -193,10 +193,10 @@ evidence:
 
 - Komenda zapisuje pliki PNG w katalogu ze zmiennej `FACTORY_SCREENSHOTS`. `<nazwa>@<szerokość>.png` to wykonanie, a `<nazwa>@<szerokość>.ref.png` to wzorzec tej samej sekcji przy tej samej szerokości, np. wycinek makiety. Nazwa ma małe litery, cyfry, `-` i `_`. Wzorzec i szerokość są opcjonalne.
 - Lepiej działają zrzuty sekcji niż całej strony: duży obraz model widzi pomniejszony i gubi szczegóły.
-- Limity: 60 plików, 5 MB na plik i 60 MB razem. Plik spoza wzorca nazw, plik inny niż PNG albo ponad limit taśma pomija i wymienia w PR.
+- Limity: 150 plików, 5 MB na plik i 100 MB razem. Plik spoza wzorca nazw, plik inny niż PNG albo ponad limit taśma pomija i wymienia w PR.
 - Czerwona komenda nie zatrzymuje recenzji. Recenzent i komentarz w PR mówią wtedy, że zrzutów może brakować.
 - Recenzenci dostają spis zrzutów. Perspektywa `ux-visual` (włączasz ją w `reviewers.extra`) wybiera z niego sekcje, których dotyczy zmiana, i porównuje je ze wzorcem przy każdej szerokości. Gdy brakuje zrzutów zmienionych sekcji, daje pewność poniżej 0,8, więc zmiana nie dostanie Low.
-- Komentarz „Zrzuty ekranu” w PR pokazuje wzorzec obok wykonania, także na telefonie. Taśma aktualizuje go w każdej rundzie. Obrazy leżą na gałęzi `factory-screenshots`, która ma jeden commit bez historii i tylko zrzuty otwartych PR. Gałąź możesz usunąć w każdej chwili, a taśma założy ją od nowa.
+- Komentarz „Zrzuty ekranu” w PR pokazuje wzorzec obok wykonania, także na telefonie, w zwijanym bloku dla każdej szerokości. Taśma aktualizuje go w każdej rundzie. Obrazy leżą na gałęzi `factory-screenshots`, która ma jeden commit bez historii i tylko zrzuty otwartych PR. Gałąź możesz usunąć w każdej chwili, a taśma założy ją od nowa.
 
 ### Tryb cienia
 

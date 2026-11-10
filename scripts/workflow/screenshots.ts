@@ -9,9 +9,9 @@ import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readdirSync, rea
 import { join, resolve } from 'node:path';
 
 export const SCREENSHOT_NAME = /^([a-z0-9][a-z0-9_-]{0,63})(?:@(\d{2,5}))?(\.ref)?\.png$/;
-export const MAX_FILES = 60;
+export const MAX_FILES = 150;
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
-export const MAX_TOTAL_BYTES = 60 * 1024 * 1024;
+export const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
 /** Wynik komendy zapisany obok zrzutów. Pliki zrzutów i tak są sprawdzane od nowa. */
 export const INDEX = 'index.json';
 export const SCREENSHOTS_MARKER = '<!-- factory:screenshots -->';
@@ -137,7 +137,8 @@ export interface GalleryOptions {
   runUrl?: string;
 }
 
-/** Komentarz w PR z parami wzorzec–wykonanie, żeby właściciel porównał je sam, także z telefonu. */
+/** Komentarz w PR z parami wzorzec–wykonanie, żeby właściciel porównał je sam, także z telefonu. Szerokości są
+ * w zwijanych blokach, więc długa lista sekcji nie zasłania reszty PR. */
 export function galleryComment(collected: Collected, options: GalleryOptions): string {
   const { shots, rejected } = collected;
   const lines = [SCREENSHOTS_MARKER, '### Zrzuty ekranu', ''];
@@ -154,13 +155,22 @@ export function galleryComment(collected: Collected, options: GalleryOptions): s
     };
     lines.push(
       `Commit \`${options.sha.slice(0, 7)}\`. ${withReference ? 'Wzorzec obok wykonania przy tej samej szerokości. ' : ''}Kliknięty obraz otwiera się w pełnym rozmiarze.`,
-      '',
-      withReference ? '| Zrzut | Wzorzec | Wykonanie |' : '| Zrzut | Wykonanie |',
-      withReference ? '| --- | --- | --- |' : '| --- | --- |',
-      ...shots.map((s) =>
-        withReference ? `| ${label(s)} | ${image(s.reference)} | ${image(s.actual)} |` : `| ${label(s)} | ${image(s.actual)} |`,
-      ),
     );
+    const widths = [...new Set(shots.map((s) => s.width ?? 0))].sort((a, b) => a - b);
+    for (const width of widths) {
+      const group = shots.filter((s) => (s.width ?? 0) === width);
+      const title = `${width ? `${width} px` : 'Bez szerokości'}: ${group.length} ${group.length === 1 ? 'zrzut' : 'zrzuty'}`;
+      lines.push(
+        '',
+        `<details${widths.length === 1 ? ' open' : ''}><summary>${title}</summary>`,
+        '',
+        withReference ? '| Zrzut | Wzorzec | Wykonanie |' : '| Zrzut | Wykonanie |',
+        withReference ? '| --- | --- | --- |' : '| --- | --- |',
+        ...group.map((s) => (withReference ? `| ${s.name} | ${image(s.reference)} | ${image(s.actual)} |` : `| ${s.name} | ${image(s.actual)} |`)),
+        '',
+        '</details>',
+      );
+    }
   }
   if (rejected.length) {
     // Nazwy plików pochodzą z kodu PR: w komentarzu tylko bezpieczne znaki.

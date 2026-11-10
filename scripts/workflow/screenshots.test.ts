@@ -112,11 +112,13 @@ describe('zrzuty ekranu', () => {
     assert.match(pairs, /Commit `abcdef1`/);
     assert.match(pairs, /komenda zrzutów zakończyła się błędem[^\n]*\[przebieg\]\(https:\/\/example\.test\/run\/1\)/i);
     assert.match(pairs, /\| Zrzut \| Wzorzec \| Wykonanie \|/);
-    assert.ok(pairs.includes('| newsletter, 375 px | <a href="https://example.test/pr-1/abc/newsletter%40375.ref.png"><img src="https://example.test/pr-1/abc/newsletter%40375.ref.png"'));
+    assert.ok(pairs.includes('| newsletter | <a href="https://example.test/pr-1/abc/newsletter%40375.ref.png"><img src="https://example.test/pr-1/abc/newsletter%40375.ref.png"'));
     assert.match(pairs, /\| hero \| — \| <a href/);
+    assert.ok(pairs.indexOf('<details><summary>Bez szerokości: 1 zrzut</summary>') < pairs.indexOf('<details><summary>375 px: 1 zrzut</summary>'));
     assert.ok(pairs.includes('`?x??http???e???.gif` (to nie PNG)'));
     const single = galleryComment({ shots: [{ name: 'hero', actual: 'hero.png' }], rejected: [] }, { url, sha: 'abc1234' });
     assert.match(single, /\| Zrzut \| Wykonanie \|/);
+    assert.match(single, /<details open><summary>Bez szerokości: 1 zrzut<\/summary>/, 'jedna grupa jest rozwinięta');
     assert.doesNotMatch(single, /Wzorzec|błędem/);
     assert.match(galleryComment({ shots: [], rejected: [] }, { url, sha: 'abc1234' }), /nie zostawiła żadnego zrzutu/);
   });
