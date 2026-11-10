@@ -131,6 +131,15 @@ describe('workflowy fabryki', () => {
     assert.ok(data.jobs.blocked && !usesClaude(data.jobs.blocked));
     assert.match(text, /git diff --cached --name-only --no-renames > "\$W\/paths\.txt"/, 'git mv pliku chronionego nie omija sprawdzenia');
     assert.match(text, /--add-label blocked/);
+    const env = steps.findIndex((step) => step.run?.includes('FACTORY_SCREENSHOTS=$GITHUB_WORKSPACE/.factory/work/screenshots'));
+    assert.ok(env >= 0 && env < steps.indexOf(claude), 'katalog zrzutów ustawiony przed implementerem, poza patchem');
+  });
+
+  it('ocena ryzyka liczy diff od punktu rozgałęzienia zapisanego w recenzji, także gdy PR scalono w trakcie', () => {
+    assert.match(workflows.review!.text, /git merge-base "origin\/\$BASE" HEAD > "\$W\/base\.sha"/);
+    assert.match(workflows.review!.text, /panel\.ts" --base "\$\(cat "\$W\/base\.sha"\)"/);
+    assert.match(workflows.risk!.text, /FORK=\$\(cat "\$W\/base\.sha"/);
+    assert.match(workflows.risk!.text, /risk-rules\.ts" --base "\$FORK"/);
   });
 
   it('recenzenci dostają diff bez lockfile i plików generowanych, a ich streszczenie obok', () => {

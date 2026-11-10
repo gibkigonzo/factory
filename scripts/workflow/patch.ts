@@ -32,7 +32,9 @@ const UNSAFE = /["'`$,\\]/;
 
 /** Narzędzia implementera: odczyt, edycja i tylko komendy z factory.yml. */
 export function implementerTools(config: FactoryConfig): string {
-  const commands = Object.values(config.commands)
+  // Komenda zrzutów z evidence.screenshots: implementer porównuje swoje zrzuty ze wzorcem przed oddaniem zmiany.
+  const screenshots = config.evidence?.screenshots ? [config.evidence.screenshots] : [];
+  const commands = [...Object.values(config.commands), ...screenshots]
     .filter((command) => !UNSAFE.test(command))
     .map((command) => `Bash(${command}:*)`);
   // git mv i git rm: zmiana nazwy i usunięcie pliku. Pliki chronione i .github/ i tak odrzuca sprawdzenie ścieżek patcha.

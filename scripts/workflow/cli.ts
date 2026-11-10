@@ -93,7 +93,10 @@ type Values = ReturnType<typeof options>['values'];
 function prompt(stage: string | undefined, v: Values): string {
   const ctx = { work: v.work!, issue: v.issue ? Number(v.issue) : undefined, pr: v.pr ? Number(v.pr) : undefined };
   if (stage === 'plan') return planPrompt(ctx);
-  if (stage === 'implement') return implementPrompt({ ...ctx, change: v.change });
+  if (stage === 'implement') {
+    const cfg = optionalJson(join(ctx.work, 'config.json')) as FactoryConfig | undefined;
+    return implementPrompt({ ...ctx, change: v.change, screenshots: cfg?.evidence?.screenshots });
+  }
   if (stage === 'review') return reviewPrompt({ ...ctx, agent: required(v.agent, '--agent'), criteria: v.criteria });
   if (stage === 'assess') return assessPrompt(ctx);
   throw new UsageError('prompt: etap plan, implement, review albo assess');

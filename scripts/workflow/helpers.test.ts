@@ -164,6 +164,8 @@ describe('zasady dla zmian implementera', () => {
     assert.ok(tools.every((t) => !t.startsWith('Bash(') || /^Bash\((npm|git) /.test(t)));
     const quoted = { ...config, commands: { ...config.commands, e2e: 'npx playwright test --grep "hero"' } };
     assert.ok(!implementerTools(quoted).includes('playwright'));
+    const shots = { ...config, evidence: { ...config.evidence, screenshots: 'npm run screenshots' } };
+    assert.ok(implementerTools(shots).split(',').includes('Bash(npm run screenshots:*)'), 'komenda zrzutów z evidence.screenshots');
   });
 });
 
@@ -173,6 +175,8 @@ describe('prompty etapów', () => {
     assert.match(plan, /# Planer/);
     assert.match(plan, /`\.factory\/work\/issue\.md`/);
     assert.match(implementPrompt({ work: 'w', issue: 5, change: true }), /`w\/change\.md`/);
+    assert.match(implementPrompt({ work: 'w', issue: 5, screenshots: 'npm run screenshots' }), /`npm run screenshots`[^\n]*`w\/screenshots`/);
+    assert.doesNotMatch(implementPrompt({ work: 'w', issue: 5 }), /FACTORY_SCREENSHOTS/);
     assert.match(reviewPrompt({ work: 'w', agent: 'review-project', criteria: 'w/perspectives/brand.md' }), /`w\/perspectives\/brand\.md`/);
     assert.match(reviewPrompt({ work: 'w', agent: 'review-tests' }), /Wynik CI taśmy: `w\/ci\.json`/);
     assert.match(assessPrompt({ work: 'w' }), /# Oceniacz ryzyka/);
