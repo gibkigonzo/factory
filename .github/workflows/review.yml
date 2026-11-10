@@ -184,9 +184,12 @@ jobs:
           git archive "origin/$BASE" factory.yml .factory/perspectives 2>/dev/null | tar -x -C "$RUNNER_TEMP/base" \
             || git show "origin/$BASE:factory.yml" > "$RUNNER_TEMP/base/factory.yml"
           node "$F/scripts/config/cli.ts" "$RUNNER_TEMP/base/factory.yml" --json > "$W/config.json"
-          node "$F/scripts/review/panel.ts" --base "origin/$BASE" --head HEAD --out "$W" > "$W/panel.json"
+          # Punkt rozgałęzienia zapisany raz: ocena ryzyka liczy od niego ten sam diff, także gdy PR scalono w trakcie recenzji
+          # (wtedy merge-base z gałęzią główną to sama głowa PR, a diff byłby pusty).
+          git merge-base "origin/$BASE" HEAD > "$W/base.sha"
+          node "$F/scripts/review/panel.ts" --base "$(cat "$W/base.sha")" --head HEAD --out "$W" > "$W/panel.json"
           # Lockfile'y i pliki generowane zamiast w diffie są w streszczeniu skipped.md (pakiety, wersje, hosty).
-          node "$F/scripts/workflow/cli.ts" review-diff --base "$(git merge-base "origin/$BASE" HEAD)" --config "$W/config.json" \
+          node "$F/scripts/workflow/cli.ts" review-diff --base "$(cat "$W/base.sha")" --config "$W/config.json" \
             --out "$W/diff.patch" --summary "$W/skipped.md"
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$W/pr.md"
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body \

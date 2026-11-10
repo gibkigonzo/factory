@@ -135,6 +135,13 @@ describe('workflowy fabryki', () => {
     assert.ok(env >= 0 && env < steps.indexOf(claude), 'katalog zrzutów ustawiony przed implementerem, poza patchem');
   });
 
+  it('ocena ryzyka liczy diff od punktu rozgałęzienia zapisanego w recenzji, także gdy PR scalono w trakcie', () => {
+    assert.match(workflows.review!.text, /git merge-base "origin\/\$BASE" HEAD > "\$W\/base\.sha"/);
+    assert.match(workflows.review!.text, /panel\.ts" --base "\$\(cat "\$W\/base\.sha"\)"/);
+    assert.match(workflows.risk!.text, /FORK=\$\(cat "\$W\/base\.sha"/);
+    assert.match(workflows.risk!.text, /risk-rules\.ts" --base "\$FORK"/);
+  });
+
   it('recenzenci dostają diff bez lockfile i plików generowanych, a ich streszczenie obok', () => {
     assert.match(workflows.review!.text, /cli\.ts" review-diff --base/);
     assert.doesNotMatch(workflows.review!.text, /git diff --no-color -M[^\n]*> "\$W\/diff\.patch"/);
