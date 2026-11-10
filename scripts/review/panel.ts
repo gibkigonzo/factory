@@ -22,11 +22,13 @@ export interface PanelMember {
   reason: string;
   /** Plik z kryteriami dla recenzenta perspektywy projektu. */
   criteria?: string;
+  /** Recenzent dostaje zrzuty ekranu (perspektywa z `screenshots: true`). */
+  screenshots?: boolean;
 }
 
 function member(entry: PanelEntry, model: string, out?: string): PanelMember {
   const { def, reason } = entry;
-  const base = { name: def.name, title: def.title, source: def.source, model, reason };
+  const base = { name: def.name, title: def.title, source: def.source, model, reason, ...(def.screenshots ? { screenshots: true } : {}) };
   if (def.source === 'catalog') return { ...base, agent: `review-${def.name}` };
   const criteria = out ? join(out, 'perspectives', `${def.name}.md`) : def.file;
   return { ...base, agent: 'review-project', criteria };

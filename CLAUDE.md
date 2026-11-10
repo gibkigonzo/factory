@@ -118,9 +118,9 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 ### Zrzuty ekranu (10 listopada 2026)
 
 - Projekt podaje w `evidence.screenshots` komendę, która po CI zapisuje PNG w `$FACTORY_SCREENSHOTS`: `<nazwa>@<szerokość>.png` to wykonanie, `.ref.png` to wzorzec. Zrzuty robi deterministyczny kod projektu; czerwona komenda nie zatrzymuje recenzji.
-- Recenzenci dostają spis zrzutów, a `ux-visual` sam wybiera sekcje, których dotyczy zmiana, i porównuje je ze wzorcem.
-- Komentarz w PR pokazuje pary wzorzec–wykonanie. Obrazy leżą na gałęzi `factory-screenshots` (jeden commit, tylko otwarte PR); job galerii działa bez Claude i bez kodu PR.
-- Później, gdy projekt tego potrzebuje: regresja wizualna względem gałęzi bazowej i zrzuty pojedynczych komponentów.
+- Taśma robi te same zrzuty na punkcie rozgałęzienia i porównuje piksele. `ux-visual` (perspektywa z `screenshots: true`) dostaje tylko sekcje zmienione przez PR; gdy wygląd się nie zmienił, werdykt wystawia skrypt bez modelu. Inni recenzenci zrzutów nie dostają (10 listopada 2026, koszt).
+- Komentarz w PR ma linki do obrazów wzorzec|wykonanie, a nie obrazy w treści: GitHub nie pokazuje w komentarzach obrazów z repo prywatnego. Obrazy leżą na gałęzi `factory-screenshots` (jeden commit, tylko otwarte PR); job galerii działa bez Claude i bez kodu PR.
+- Później, gdy projekt tego potrzebuje: zrzuty pojedynczych komponentów.
 
 ## Otwarte pytania
 

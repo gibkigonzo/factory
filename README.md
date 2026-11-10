@@ -10,7 +10,7 @@ Fabryka oprogramowania oparta na Claude Code i GitHub Actions. Zamienia rozmowę
 - **Plan.** Planer rozpisuje podejście, pliki, testy i dowody dla każdego kryterium. Gdy czegoś nie wie, pyta. Za duże zadanie dzieli na mniejsze issue.
 - **Implementacja w PR.** Implementer pisze kod i testy na gałęzi `factory/<numer>-<nazwa>` i podaje dowód dla każdego kryterium. Gdy nie może dokończyć zadania, zgłasza blokadę zamiast oddawać połowiczny PR.
 - **Recenzja.** CI uruchamia komendy projektu. Pięć perspektyw (poprawność, testy, bezpieczeństwo, utrzymanie, zgodność ze specem) ocenia PR, każda w świeżym kontekście. Projekt może dodać własne perspektywy.
-- **Zrzuty ekranu.** Komenda projektu robi po CI zrzuty sekcji obok wzorca. Recenzent wyglądu porównuje je ze wzorcem, a Ty widzisz te same pary w komentarzu PR.
+- **Zrzuty ekranu.** Komenda projektu robi po CI zrzuty sekcji obok wzorca, przed zmianą i po niej. Recenzent wyglądu ocenia tylko sekcje, które zmienił PR, a Ty dostajesz w PR linki do tych samych par.
 - **Pętla poprawek.** Czerwone CI albo prośba recenzenta o zmiany odsyła PR do implementera z listą uwag, do 3 rund.
 - **Ocena ryzyka.** Deterministyczne reguły (strefy plików, testy, rozmiar, dowody) i ocena modelu, która może poziom tylko podnieść. Wynik: Low, Medium albo High, raport w PR czytelny na telefonie.
 - **Tryb cienia i dziennik.** Werdykt fabryki w PR oceniasz 👍 albo 👎. Przypięte issue „Tryb cienia” pokazuje zgodność, rundy poprawek, czas i koszt na PR, etap i recenzenta.
@@ -21,7 +21,6 @@ Fabryka oprogramowania oparta na Claude Code i GitHub Actions. Zamienia rozmowę
 **Jeszcze nie:**
 - automatyczny merge (Etap 1): wymaga rulesetu na `main` i aplikacji GitHub fabryki; w repo prywatnym ruleset wymaga GitHub Pro;
 - podgląd wdrożenia w PR (`evidence.preview_deploy`), etykiety kierujące do człowieka (`human_gates`), agenci cykliczni (`schedules`): pola są w kontrakcie, ale taśma ich jeszcze nie używa;
-- regresja wizualna, czyli porównanie zrzutów z gałęzią bazową;
 - presety i CI dla Godota, hooki pluginu;
 - sesja `factory-init`, która ustala konwencje projektu. Na razie konwencje (np. podejście do stylów, język nazw w kodzie) zapisujesz sam w `CLAUDE.md` projektu. Bez nich agent wybierze styl sam, a recenzent nie będzie miał czego pilnować.
 
@@ -196,8 +195,10 @@ evidence:
 - Limity: 150 plików, 5 MB na plik i 100 MB razem. Plik spoza wzorca nazw, plik inny niż PNG albo ponad limit taśma pomija i wymienia w PR.
 - Czerwona komenda nie zatrzymuje recenzji. Recenzent i komentarz w PR mówią wtedy, że zrzutów może brakować.
 - Implementer może uruchomić tę komendę sam (katalog w `FACTORY_SCREENSHOTS` ustawia workflow) i przed oddaniem zmiany obejrzeć zrzuty zmienionych sekcji obok wzorca.
-- Recenzenci dostają spis zrzutów. Perspektywa `ux-visual` (włączasz ją w `reviewers.extra`) wybiera z niego sekcje, których dotyczy zmiana, i porównuje je ze wzorcem przy każdej szerokości. Gdy brakuje zrzutów zmienionych sekcji, daje pewność poniżej 0,8, więc zmiana nie dostanie Low.
-- Komentarz „Zrzuty ekranu” w PR pokazuje wzorzec obok wykonania, także na telefonie, w zwijanym bloku dla każdej szerokości. Taśma aktualizuje go w każdej rundzie. Obrazy leżą na gałęzi `factory-screenshots`, która ma jeden commit bez historii i tylko zrzuty otwartych PR. Gałąź możesz usunąć w każdej chwili, a taśma założy ją od nowa.
+- **Tylko sekcje zmienione przez PR.** Taśma uruchamia tę samą komendę na punkcie rozgałęzienia, w osobnym katalogu roboczym z komendą `setup`, i porównuje piksele zrzutów przed i po zmianie. Robi to skrypt, nie model. CI trwa przez to kilka minut dłużej, ale nie zużywa Claude.
+- **Recenzent wyglądu** `ux-visual` (włączasz go w `reviewers.extra`) dostaje tylko zmienione sekcje i porównuje je ze wzorcem przy każdej szerokości. Gdy żadna sekcja się nie zmieniła, werdykt wystawia skrypt bez sesji Claude. Bez zrzutów bazy, np. przy pierwszej wersji komendy, recenzent dostaje wszystkie zrzuty i sam wybiera te, których dotyczy zmiana. Gdy brakuje zrzutów zmienionych sekcji, daje pewność poniżej 0,8, więc zmiana nie dostanie Low. Zrzuty dostaje tylko perspektywa z `screenshots: true` we frontmatterze, a pozostali recenzenci nie płacą za ich spis.
+- **Galeria w PR.** Komentarz „Zrzuty ekranu” ma linki: na wierzchu sekcje zmienione względem gałęzi głównej, reszta zwinięta. Link otwiera jeden obraz z wzorcem po lewej albo u góry i wykonaniem obok albo pod spodem. Linki zamiast obrazów w treści, bo GitHub nie pokazuje w komentarzach obrazów z repo prywatnego. Taśma aktualizuje komentarz w każdej rundzie.
+- Obrazy galerii leżą na gałęzi `factory-screenshots`, która ma jeden commit bez historii i tylko zrzuty otwartych PR. Gałąź możesz usunąć w każdej chwili, a taśma założy ją od nowa.
 
 ### Tryb cienia
 
@@ -352,7 +353,7 @@ Pięć perspektyw z `base` ocenia każdy PR: `correctness`, `tests`, `security`,
 
 | Perspektywa z katalogu | Ocenia | Kiedy działa |
 | --- | --- | --- |
-| `ux-visual` | zrzuty i podgląd względem specu albo wzorca | diff dotyka plików widoku, stylów albo zasobów |
+| `ux-visual` | zrzuty sekcji zmienionych przez PR względem wzorca i specu | diff dotyka plików widoku, stylów albo zasobów |
 | `accessibility-web` | semantyka, teksty alternatywne, etykiety, kontrast, klawiatura | diff dotyka plików widoku albo stylów |
 | `web-performance` | obrazy, rozmiar paczki, ładowanie, przesunięcia układu | diff dotyka kodu, stylów, zasobów albo konfiguracji builda |
 | `devils-advocate` | szuka wejścia, które wywróci zmianę | diff dotyka stref `data`, `security`, `release` albo `dependencies` |
@@ -365,6 +366,7 @@ name: brand
 title: Zgodność z marką
 description: Sprawdza kolory i typografię marki.
 paths: ["src/components/**", "**/*.css"]   # opcjonalnie; albo zones: [shared]
+screenshots: true                            # opcjonalnie: recenzent dostaje zrzuty sekcji zmienionych przez PR
 ---
 
 Kryteria: na co recenzent patrzy i czego nie ocenia.

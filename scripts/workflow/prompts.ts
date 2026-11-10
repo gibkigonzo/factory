@@ -60,7 +60,8 @@ export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: st
     `Opis PR z dowodami implementera: \`${ctx.work}/pr.md\`.`,
     `Artefakty weryfikacji (mogą być puste): \`${ctx.work}/artifacts/\`.`,
     `Wynik CI taśmy: \`${ctx.work}/ci.json\` (brak pliku: CI nie zadziałało). Komendy CI są w \`commands\` w \`${ctx.work}/config.json\`.`,
-    ...screenshotsTask(`${ctx.work}/screenshots`),
+    // Zrzuty pobiera tylko recenzent perspektywy, która ich używa (screenshots: true); inni nie mają katalogu.
+    ...screenshotsTask(`${ctx.work}/screenshots`, `${ctx.work}/screenshots-base`),
   ];
   if (ctx.criteria) lines.unshift(`Plik kryteriów Twojej perspektywy: \`${ctx.criteria}\`.`);
   return [body(`agents/${ctx.agent}.md`), task(lines)].join('\n\n');

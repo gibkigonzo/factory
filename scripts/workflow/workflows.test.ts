@@ -147,17 +147,30 @@ describe('workflowy fabryki', () => {
     assert.doesNotMatch(workflows.review!.text, /git diff --no-color -M[^\n]*> "\$W\/diff\.patch"/);
   });
 
-  it('zrzuty ekranu: komenda projektu nie zatrzymuje recenzji, recenzent dostaje zrzuty, a galeria działa bez Claude i bez kodu PR', () => {
+  it('zrzuty ekranu: komenda projektu nie zatrzymuje recenzji, recenzent wyglądu dostaje zmienione sekcje, a galeria działa bez Claude i bez kodu PR', () => {
     const { data } = workflows.review!;
-    type Full = Step & { id?: string; if?: string; 'continue-on-error'?: boolean };
+    type Full = Step & { id?: string; if?: string; name?: string; 'continue-on-error'?: boolean };
     const ci = (data.jobs.ci!.steps ?? []) as Full[];
     const shots = ci.find((step) => step.id === 'shots')!;
     assert.equal(shots['continue-on-error'], true);
     assert.match(shots.run!, /cli\.ts" screenshots --config "\$W\/config\.json"/);
     assert.ok(ci.indexOf(ci.find((step) => step.run?.includes('cli.ts" ci '))!) < ci.indexOf(shots), 'zrzuty po CI, na zainstalowanym projekcie');
+    const base = ci.find((step) => step.name === 'Zrzuty ekranu gałęzi bazowej')!;
+    assert.equal(base['continue-on-error'], true, 'bez zrzutów bazy recenzent bierze wszystkie');
+    assert.match(base.run!, /git worktree add --detach "\$RUNNER_TEMP\/base-tree" "\$FORK"/);
+    assert.match(base.run!, /screenshots --setup/);
+    assert.equal(base.env?.FORK, '${{ steps.base.outputs.fork }}');
+    assert.equal(base.env?.GH_TOKEN, undefined, 'kod gałęzi bazowej bez tokenu');
 
-    const download = (data.jobs.reviewer!.steps ?? []).find((step) => step.with?.pattern === 'factory-screenshots');
-    assert.equal(download?.with?.path, '.factory/work/screenshots');
+    const reviewer = (data.jobs.reviewer!.steps ?? []) as Full[];
+    for (const pattern of ['factory-screenshots', 'factory-screenshots-base']) {
+      const download = reviewer.find((step) => step.with?.pattern === pattern)!;
+      assert.equal(download.if, 'matrix.member.screenshots', `${pattern}: tylko perspektywa, która ocenia zrzuty`);
+    }
+    const visual = reviewer.find((step) => step.id === 'visual')!;
+    assert.match(visual.run!, /cli\.ts" screenshots-unchanged/);
+    assert.equal(reviewer.find((step) => step.id === 'claude')!.if, "steps.visual.outputs.skip != 'true'", 'bez zmian wyglądu bez sesji Claude');
+    assert.match(String(reviewer.find((step) => step.name === 'Sprawdzenie werdyktu')!.env?.OUTPUT), /steps\.visual\.outputs\.verdict/);
 
     const gallery = data.jobs.gallery! as Job & { needs?: string[] };
     assert.ok(!usesClaude(gallery));
@@ -167,6 +180,8 @@ describe('workflowy fabryki', () => {
     }
     const publish = (gallery.steps ?? []).map((step) => step.run ?? '').join('\n');
     assert.ok(publish.indexOf('cli.ts" gallery') < publish.indexOf('gallery-push.sh'), 'pliki sprawdzone przed publikacją');
+    assert.match(publish, /gallery --dir "\$SHOTS" --before "\$RUNNER_TEMP\/shots-base" --publish "\$PUBLISH"/);
+    assert.match(publish, /gallery-push\.sh" "[^"]+" "\$PUBLISH"/, 'na gałąź trafiają tylko obrazy galerii');
     assert.ok(!(data.jobs.loop as Job & { needs?: string[] }).needs?.includes('gallery'), 'galeria nie wstrzymuje pętli ani oceny ryzyka');
   });
 

@@ -33,6 +33,8 @@ describe('katalog perspektyw', () => {
   it('perspektywy podstawowe działają zawsze, dodatkowe mają warunki', () => {
     for (const name of configWith().reviewers.perspectives) assert.equal(byName(name).paths, undefined);
     assert.ok(byName('ux-visual').paths?.includes('**/*.vue'));
+    assert.equal(byName('ux-visual').screenshots, true, 'recenzent wyglądu dostaje zrzuty');
+    assert.ok(!byName('correctness').screenshots);
     assert.deepEqual(byName('devils-advocate').zones, ['data', 'security', 'release', 'dependencies']);
   });
 });
