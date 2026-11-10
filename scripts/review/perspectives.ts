@@ -20,6 +20,8 @@ export interface PerspectiveDef {
   description: string;
   paths?: string[];
   zones?: string[];
+  /** Perspektywa ocenia zrzuty ekranu: jej recenzent dostaje zrzuty sekcji zmienionych przez PR. */
+  screenshots?: boolean;
   source: 'catalog' | 'project';
   file: string;
   /** Pełna treść pliku: frontmatter i kryteria. */
@@ -37,6 +39,7 @@ export const PERSPECTIVE_SPEC: Spec = {
     description: text,
     paths: { kind: 'list', item: { kind: 'glob' } },
     zones: { kind: 'list', item: NAME },
+    screenshots: { kind: 'boolean' },
   },
   required: ['name', 'title', 'description'],
 };
@@ -53,7 +56,7 @@ export function parsePerspective(
   if (issues.length === 0 && data.name !== expected) issues.push({ path: 'name', message: `nazwa musi być taka jak nazwa pliku: „${expected}”` });
   if (body.trim() === '') issues.push({ path: '', message: 'brak kryteriów pod frontmatterem' });
   if (issues.length > 0) return { ok: false, errors: issues.map((i) => `${file}: ${i.path ? `${i.path}: ` : ''}${i.message}`) };
-  return { ok: true, def: { ...(data as Pick<PerspectiveDef, 'name' | 'title' | 'description' | 'paths' | 'zones'>), source, file, text: content } };
+  return { ok: true, def: { ...(data as Pick<PerspectiveDef, 'name' | 'title' | 'description' | 'paths' | 'zones' | 'screenshots'>), source, file, text: content } };
 }
 
 function parseAll(files: { path: string; content: string }[], source: PerspectiveDef['source']) {

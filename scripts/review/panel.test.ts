@@ -78,6 +78,8 @@ describe('skład panelu na repo git', () => {
       ],
     );
     assert.deepEqual(panel.skipped, [{ name: 'devils-advocate', reason: 'diff nie dotyka plików ani stref tej perspektywy' }]);
+    const screenshots = panel.run.filter((m: { screenshots?: boolean }) => m.screenshots).map((m: { name: string }) => m.name);
+    assert.deepEqual(screenshots, ['ux-visual'], 'zrzuty dostaje tylko perspektywa, która ich używa');
     const brand = panel.run.find((m: { name: string }) => m.name === 'brand');
     assert.equal(brand.criteria, join(out, 'perspectives/brand.md'));
   });

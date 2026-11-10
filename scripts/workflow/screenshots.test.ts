@@ -4,11 +4,32 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
+import { parseOutput } from '../agents/output.ts';
+import { decodePng, encodePng } from './png.ts';
 import { reviewPrompt } from './prompts.ts';
-import { collectScreenshots, galleryComment, INDEX, MAX_FILES, runScreenshots, screenshotsTask, SCREENSHOTS_MARKER } from './screenshots.ts';
+import {
+  collectScreenshots,
+  compareScreenshots,
+  galleryComment,
+  INDEX,
+  MAX_FILES,
+  runScreenshots,
+  screenshotsTask,
+  SCREENSHOTS_MARKER,
+  unchangedVerdict,
+  writeGallery,
+} from './screenshots.ts';
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]);
 const temp = () => mkdtempSync(join(tmpdir(), 'factory-shots-'));
+/** Prawdziwy PNG w jednolitym kolorze: porównanie pikseli i składanie obrazów go odczytują. */
+const image = (shade: number, width = 4, height = 4) => encodePng({ width, height, data: Buffer.alloc(width * height * 4, shade * 25).fill(255, 3, 4) });
+/** Katalog zrzutów z plikiem INDEX udanej komendy. */
+const shots = (dir: string, files: Record<string, Buffer>) => {
+  mkdirSync(dir, { recursive: true });
+  for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content);
+  if (!existsSync(join(dir, INDEX))) writeFileSync(join(dir, INDEX), '{"ok":true}');
+};
 const cli = (...args: string[]) => spawnSync(process.execPath, [new URL('./cli.ts', import.meta.url).pathname, ...args], { encoding: 'utf8' });
 
 describe('zrzuty ekranu', () => {
@@ -75,71 +96,140 @@ describe('zrzuty ekranu', () => {
       assert.equal(JSON.parse(readFileSync(join(out, INDEX), 'utf8')).ok, true);
       assert.equal(runScreenshots('exit 3', out, dir).ok, false, 'czerwona komenda');
       assert.deepEqual(readdirSync(out), [INDEX], 'każde uruchomienie zaczyna od pustego katalogu');
+      assert.equal(runScreenshots(command, out, dir, { setup: 'exit 1' }).ok, false, 'nieudany setup: bez zrzutów');
+      assert.deepEqual(readdirSync(out), [INDEX]);
+      assert.equal(runScreenshots(command, out, dir, { setup: 'true' }).ok, true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('recenzent dostaje spis par; bez komendy zrzutów prompt o nich milczy', () => {
+  it('porównanie z gałęzią bazową: zmienione, nowe, bez zmian i usunięte sekcje; bez bazy brak oceny', () => {
     const dir = temp();
     try {
-      const shots = join(dir, 'screenshots');
-      assert.deepEqual(screenshotsTask(shots), []);
-      mkdirSync(shots);
-      assert.deepEqual(screenshotsTask(shots), [], 'pusty katalog z pobrania artefaktu');
-      writeFileSync(join(shots, INDEX), '{"ok":false}');
-      assert.match(screenshotsTask(shots)[0]!, /zakończyła się błędem i nie zostawiła żadnego zrzutu/);
-      writeFileSync(join(shots, 'newsletter@375.png'), PNG);
-      writeFileSync(join(shots, 'newsletter@375.ref.png'), PNG);
-      writeFileSync(join(shots, 'footer@375.ref.png'), PNG);
-      const [line] = screenshotsTask(shots);
-      assert.match(line!, /części zrzutów może brakować/);
-      assert.ok(line!.includes(`  - footer, 375 px: wykonanie brak, wzorzec \`${shots}/footer@375.ref.png\``));
-      assert.ok(line!.includes(`  - newsletter, 375 px: wykonanie \`${shots}/newsletter@375.png\`, wzorzec \`${shots}/newsletter@375.ref.png\``));
-      assert.ok(reviewPrompt({ work: dir, agent: 'review-ux-visual' }).includes(`\`${shots}/newsletter@375.png\``));
+      const head = join(dir, 'head');
+      const base = join(dir, 'base');
+      shots(head, { 'a@375.png': image(1), 'a@375.ref.png': image(9), 'b@375.png': image(2), 'c@375.png': image(3), 'e@375.ref.png': image(9) });
+      shots(base, { 'a@375.png': image(1), 'b@375.png': image(5), 'd@375.png': image(4), 'e@375.png': image(4) });
+      const compared = compareScreenshots(head, base, false);
+      assert.equal(compared.base, true);
+      assert.deepEqual(
+        compared.shots.map((s) => `${s.name}:${s.change}`),
+        ['a:unchanged', 'b:changed', 'c:new', 'd:removed', 'e:removed'],
+      );
+      assert.equal(compareScreenshots(head, join(dir, 'brak'), false).base, false, 'bez zrzutów bazy');
+      writeFileSync(join(base, INDEX), '{"ok":false}');
+      assert.equal(compareScreenshots(head, base, false).base, false, 'czerwona komenda na bazie');
+      writeFileSync(join(base, INDEX), '{"ok":true}');
+      writeFileSync(join(head, INDEX), '{"ok":false}');
+      assert.equal(compareScreenshots(head, base, false).base, false, 'czerwona komenda po zmianie');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
   });
 
-  it('galeria w PR: wzorzec obok wykonania, bez wzorca jedna kolumna, nazwy odrzuconych plików bez znaków Markdown', () => {
-    const url = (file: string) => `https://example.test/pr-1/abc/${encodeURIComponent(file)}`;
-    const pairs = galleryComment(
-      { shots: [{ name: 'newsletter', width: 375, actual: 'newsletter@375.png', reference: 'newsletter@375.ref.png' }, { name: 'hero', actual: 'hero.png' }], rejected: [{ file: '[x](http://e)`|.gif', reason: 'to nie PNG' }] },
-      { url, sha: 'abcdef1234567', ok: false, runUrl: 'https://example.test/run/1' },
-    );
-    assert.ok(pairs.startsWith(SCREENSHOTS_MARKER));
-    assert.match(pairs, /Commit `abcdef1`/);
-    assert.match(pairs, /komenda zrzutów zakończyła się błędem[^\n]*\[przebieg\]\(https:\/\/example\.test\/run\/1\)/i);
-    assert.match(pairs, /\| Zrzut \| Wzorzec \| Wykonanie \|/);
-    assert.ok(pairs.includes('| newsletter | <a href="https://example.test/pr-1/abc/newsletter%40375.ref.png"><img src="https://example.test/pr-1/abc/newsletter%40375.ref.png"'));
-    assert.match(pairs, /\| hero \| — \| <a href/);
-    assert.ok(pairs.indexOf('<details><summary>Bez szerokości: 1 zrzut</summary>') < pairs.indexOf('<details><summary>375 px: 1 zrzut</summary>'));
-    assert.ok(pairs.includes('`?x??http???e???.gif` (to nie PNG)'));
-    const single = galleryComment({ shots: [{ name: 'hero', actual: 'hero.png' }], rejected: [] }, { url, sha: 'abc1234' });
-    assert.match(single, /\| Zrzut \| Wykonanie \|/);
-    assert.match(single, /<details open><summary>Bez szerokości: 1 zrzut<\/summary>/, 'jedna grupa jest rozwinięta');
-    assert.doesNotMatch(single, /Wzorzec|błędem/);
-    assert.match(galleryComment({ shots: [], rejected: [] }, { url, sha: 'abc1234' }), /nie zostawiła żadnego zrzutu/);
-  });
-
-  it('CLI: bez evidence.screenshots nic nie robi, a galeria sprawdza pliki od nowa', () => {
+  it('recenzent wyglądu dostaje tylko zmienione sekcje; bez komendy zrzutów prompt o nich milczy', () => {
     const dir = temp();
     try {
-      writeFileSync(join(dir, 'none.json'), JSON.stringify({ evidence: { preview_deploy: false } }));
+      const head = join(dir, 'screenshots');
+      const base = join(dir, 'screenshots-base');
+      assert.deepEqual(screenshotsTask(head, base), []);
+      mkdirSync(head);
+      assert.deepEqual(screenshotsTask(head, base), [], 'pusty katalog z pobrania artefaktu');
+      writeFileSync(join(head, INDEX), '{"ok":false}');
+      assert.match(screenshotsTask(head, base)[0]!, /zakończyła się błędem i nie zostawiła żadnego zrzutu/);
+
+      writeFileSync(join(head, INDEX), '{"ok":true}');
+      shots(head, { 'newsletter@375.png': image(1), 'newsletter@375.ref.png': image(9), 'footer@375.png': image(2), 'footer@375.ref.png': image(9) });
+      const [all] = screenshotsTask(head, base);
+      assert.match(all!, /Porównanie z gałęzią główną się nie udało/);
+      assert.ok(all!.includes(`  - footer, 375 px: wykonanie \`${head}/footer@375.png\`, wzorzec \`${head}/footer@375.ref.png\``));
+
+      shots(base, { 'newsletter@375.png': image(5), 'footer@375.png': image(2) });
+      const [changed] = screenshotsTask(head, base);
+      assert.ok(changed!.includes(`  - newsletter, 375 px: wykonanie \`${head}/newsletter@375.png\``));
+      assert.ok(!changed!.includes('footer@375.png'), 'sekcja bez zmian poza spisem');
+      assert.match(changed!, /1 zrzut jest identyczny jak przed zmianą/);
+      assert.ok(reviewPrompt({ work: dir, agent: 'review-ux-visual' }).includes(`\`${head}/newsletter@375.png\``));
+      assert.equal(unchangedVerdict(head, base, 'ux-visual'), undefined, 'wygląd się zmienił: ocenia recenzent');
+
+      shots(base, { 'newsletter@375.png': image(1) });
+      assert.match(screenshotsTask(head, base)[0]!, /Wszystkie zrzuty z CI \(2\) są identyczne/);
+      const verdict = unchangedVerdict(head, base, 'ux-visual')!;
+      assert.equal(verdict.verdict, 'approve');
+      assert.ok(parseOutput('verdict', JSON.stringify(verdict), 'v').ok, 'werdykt zgodny ze schematem');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('galeria: linki do obrazów wzorzec|wykonanie, zmienione sekcje na wierzchu, reszta zwinięta', () => {
+    const dir = temp();
+    try {
+      const head = join(dir, 'head');
+      const base = join(dir, 'base');
+      const out = join(dir, 'publish');
+      shots(head, { 'newsletter@375.png': image(1, 3, 2), 'newsletter@375.ref.png': image(9, 3, 2), 'hero@375.png': image(2), 'hero@768.png': image(2), 'logo.ref.png': image(9) });
+      shots(base, { 'newsletter@375.png': image(5, 3, 2), 'hero@375.png': image(2), 'hero@768.png': image(2), 'stopka@375.png': image(7) });
+      const compared = compareScreenshots(head, base);
+      const files = writeGallery(compared, head, out);
+      assert.deepEqual(readdirSync(out).sort(), ['hero@375.png', 'hero@768.png', 'logo.ref.png', 'newsletter@375.png']);
+      const pair = decodePng(readFileSync(join(out, 'newsletter@375.png')));
+      assert.deepEqual([pair.width, pair.height], [3 + 12 + 3, 2], 'wzorzec obok wykonania');
+      assert.deepEqual([...pair.data.subarray(0, 4)], [225, 225, 225, 255], 'wzorzec po lewej');
+
+      const url = (file: string) => `https://example.test/x/${encodeURIComponent(file)}`;
+      const comment = galleryComment({ ...compared, ok: false, rejected: [{ file: '[x](http://e)`|.gif', reason: 'to nie PNG' }] }, files, { url, sha: 'abcdef1234567', runUrl: 'https://example.test/run/1' });
+      assert.ok(comment.startsWith(SCREENSHOTS_MARKER));
+      assert.doesNotMatch(comment, /<img/, 'bez obrazów w treści: repo prywatne');
+      assert.match(comment, /Commit `abcdef1`/);
+      assert.match(comment, /komenda zrzutów zakończyła się błędem[^\n]*\[przebieg\]\(https:\/\/example\.test\/run\/1\)/i);
+      assert.ok(comment.indexOf('**Zmienione względem gałęzi głównej (2):**') < comment.indexOf('<details><summary>Bez zmian: 2 zrzuty</summary>'));
+      assert.ok(comment.indexOf('<details><summary>Bez zmian') < comment.indexOf('<details><summary>Sekcji jeszcze nie ma na stronie (sam wzorzec): 1</summary>'));
+      assert.ok(comment.includes('- newsletter: [375 px](https://example.test/x/newsletter%40375.png)'));
+      assert.ok(comment.includes('- stopka: 375 px: sekcji już nie ma'));
+      assert.ok(comment.includes('- hero: [375 px](https://example.test/x/hero%40375.png) (tylko wykonanie) · [768 px]'));
+      assert.ok(comment.includes('- logo: [obraz](https://example.test/x/logo.ref.png) (tylko wzorzec)'));
+      assert.ok(comment.includes('`?x??http???e???.gif` (to nie PNG)'));
+
+      const same = compareScreenshots(head, head, false);
+      assert.match(galleryComment(same, files, { url, sha: 'abc1234' }), /\*\*Wygląd bez zmian względem gałęzi głównej\.\*\*/);
+      const noBase = compareScreenshots(head, undefined, false);
+      assert.match(galleryComment(noBase, files, { url, sha: 'abc1234' }), /Porównanie z gałęzią główną się nie udało, więc lista obejmuje wszystkie zrzuty\.\n\n- hero:/);
+      assert.match(galleryComment({ shots: [], rejected: [], base: false }, new Map(), { url, sha: 'abc1234' }), /nie zostawiła żadnego zrzutu/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('CLI: bez evidence.screenshots nic nie robi, galeria sprawdza pliki od nowa, werdykt bez modelu tylko bez zmian', () => {
+    const dir = temp();
+    try {
+      writeFileSync(join(dir, 'none.json'), JSON.stringify({ commands: {}, evidence: { preview_deploy: false } }));
       assert.deepEqual(JSON.parse(cli('screenshots', '--config', join(dir, 'none.json'), '--out', join(dir, 'shots')).stdout), { configured: false });
       assert.ok(!existsSync(join(dir, 'shots')));
 
-      writeFileSync(join(dir, 'set.json'), JSON.stringify({ evidence: { screenshots: `printf '\\211PNG\\r\\n\\032\\n' > "$FACTORY_SCREENSHOTS/a@375.png"; echo "log komendy"` } }));
-      const run = cli('screenshots', '--config', join(dir, 'set.json'), '--out', join(dir, 'shots'));
-      assert.deepEqual(JSON.parse(run.stdout), { configured: true, ok: true, shots: 1, rejected: 0 }, 'wyjście komendy nie miesza się z JSON');
-      assert.match(run.stderr, /log komendy/);
+      const command = `printf '\\211PNG\\r\\n\\032\\n' > "$FACTORY_SCREENSHOTS/a@375.png"; echo "log komendy"`;
+      writeFileSync(join(dir, 'set.json'), JSON.stringify({ commands: { setup: 'echo "log setup"' }, evidence: { screenshots: command } }));
+      const run = cli('screenshots', '--setup', '--config', join(dir, 'set.json'), '--out', join(dir, 'shots'));
+      assert.deepEqual(JSON.parse(run.stdout), { configured: true, ok: true, shots: 1, rejected: 0 }, 'wyjście komend nie miesza się z JSON');
+      assert.match(run.stderr, /log setup[\s\S]*log komendy/);
 
       writeFileSync(join(dir, 'shots', 'evil.sh'), '#!/bin/sh');
-      const gallery = cli('gallery', '--dir', join(dir, 'shots'), '--url', 'https://example.test/x/', '--sha', 'abc1234', '--out', join(dir, 'gallery.md'));
+      const gallery = cli('gallery', '--dir', join(dir, 'shots'), '--publish', join(dir, 'publish'), '--url', 'https://example.test/x/', '--sha', 'abc1234', '--out', join(dir, 'gallery.md'));
       assert.equal(gallery.status, 0, gallery.stderr);
       assert.ok(!existsSync(join(dir, 'shots', 'evil.sh')));
-      assert.match(readFileSync(join(dir, 'gallery.md'), 'utf8'), /src="https:\/\/example\.test\/x\/a%40375\.png"/);
+      assert.deepEqual(readdirSync(join(dir, 'publish')), ['a@375.png']);
+      assert.match(readFileSync(join(dir, 'gallery.md'), 'utf8'), /\[375 px\]\(https:\/\/example\.test\/x\/a%40375\.png\)/);
+
+      const work = join(dir, 'work');
+      shots(join(work, 'screenshots'), { 'a@375.png': image(1) });
+      shots(join(work, 'screenshots-base'), { 'a@375.png': image(1) });
+      const same = cli('screenshots-unchanged', '--work', work, '--name', 'ux-visual');
+      assert.equal(same.status, 0, same.stderr);
+      assert.equal(JSON.parse(same.stdout).perspective, 'ux-visual');
+      shots(join(work, 'screenshots-base'), { 'a@375.png': image(2) });
+      assert.equal(cli('screenshots-unchanged', '--work', work, '--name', 'ux-visual').status, 1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
