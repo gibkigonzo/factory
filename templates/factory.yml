@@ -34,6 +34,11 @@ zone_tests:
 risk:
   medium_veto_hours: 24            # 0 = Medium traktowane jak High
 
+# Zrzuty ekranu po CI: komenda zapisuje <nazwa>@<szerokość>.png (wykonanie) i <nazwa>@<szerokość>.ref.png (wzorzec)
+# w katalogu $FACTORY_SCREENSHOTS. Taśma pokazuje pary w PR i podaje je recenzentowi ux-visual.
+# evidence:
+#   screenshots: npx playwright test -c playwright.screenshots.config.ts
+
 # Dodatkowe perspektywy recenzji dopisz, gdy projekt ich potrzebuje. Z katalogu fabryki:
 # ux-visual, accessibility-web, web-performance, devils-advocate. Własną dodaj jako
 # .factory/perspectives/<nazwa>.md. Dodatkowa perspektywa ocenia tylko zmiany, których dotyczy.

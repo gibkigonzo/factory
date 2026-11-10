@@ -115,6 +115,13 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Implementer, który nie może dokończyć zadania, zgłasza `status: blocked`; wtedy nie ma PR ani recenzji, tylko etykieta `blocked` i komentarz.
 - Nowe zależności planer wpisuje do planu, właściciel zatwierdza je `/approve` w issue, a instaluje je workflow komendą z `dependencies` w `factory.yml`. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji.
 
+### Zrzuty ekranu (10 listopada 2026)
+
+- Projekt podaje w `evidence.screenshots` komendę, która po CI zapisuje PNG w `$FACTORY_SCREENSHOTS`: `<nazwa>@<szerokość>.png` to wykonanie, `.ref.png` to wzorzec. Zrzuty robi deterministyczny kod projektu; czerwona komenda nie zatrzymuje recenzji.
+- Recenzenci dostają spis zrzutów, a `ux-visual` sam wybiera sekcje, których dotyczy zmiana, i porównuje je ze wzorcem.
+- Komentarz w PR pokazuje pary wzorzec–wykonanie. Obrazy leżą na gałęzi `factory-screenshots` (jeden commit, tylko otwarte PR); job galerii działa bez Claude i bez kodu PR.
+- Później, gdy projekt tego potrzebuje: regresja wizualna względem gałęzi bazowej i zrzuty pojedynczych komponentów.
+
 ## Otwarte pytania
 
 - Czy routines Claude Code reagują na zdarzenia issues i jakie mają limity?

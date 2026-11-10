@@ -4,6 +4,8 @@
 # Pętla poprawek: czerwone CI albo request_changes odsyła PR do implementera z uwagami (job loop, bez Claude),
 # do risk.max_review_rounds rund. Wtedy wyjście ok jest false, więc ocena ryzyka i werdykt czekają na wynik pętli.
 # Przy czerwonym CI recenzenci nie ruszają, chyba że to ostatnia runda.
+# Zrzuty ekranu: komenda evidence.screenshots z factory.yml zapisuje PNG po CI. Recenzenci dostają ich spis,
+# a job gallery pokazuje pary wzorzec–wykonanie w komentarzu PR (obrazy na gałęzi factory-screenshots).
 name: factory-review
 
 on:
@@ -49,7 +51,7 @@ jobs:
     needs: guard
     if: needs.guard.outputs.ok == 'true'
     runs-on: ${{ fromJSON(startsWith(inputs.runs_on, '[') && inputs.runs_on || format('"{0}"', inputs.runs_on)) }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     permissions:
       contents: read
       pull-requests: read
@@ -57,6 +59,8 @@ jobs:
       status: ${{ steps.round.outputs.status }}
       round: ${{ steps.round.outputs.round }}
       final: ${{ steps.round.outputs.final }}
+      screenshots: ${{ steps.shots.outputs.configured }}
+      sha: ${{ steps.shots.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -115,6 +119,25 @@ jobs:
           name: factory-ci
           path: .factory/work/ci.json
           include-hidden-files: true
+
+      - name: Zrzuty ekranu
+        id: shots
+        continue-on-error: true   # brak zrzutów nie zatrzymuje recenzji; recenzent i galeria mówią, czego brakuje
+        run: |
+          # Bez evidence.screenshots w factory.yml krok nic nie robi. Komenda zapisuje PNG w $FACTORY_SCREENSHOTS.
+          RESULT=$(node "$F/scripts/workflow/cli.ts" screenshots --config "$W/config.json" --out "$RUNNER_TEMP/screenshots")
+          echo "Zrzuty ekranu: $RESULT" >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "configured=$(jq -r .configured <<<"$RESULT")"
+            echo "sha=$(git rev-parse HEAD)"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.shots.outputs.configured == 'true'
+        with:
+          name: factory-screenshots
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: ignore
 
   panel:
     needs: guard
@@ -226,6 +249,11 @@ jobs:
           pattern: factory-ci
           merge-multiple: true
           path: .factory/work
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: factory-screenshots   # tylko gdy projekt ma evidence.screenshots
+          merge-multiple: true
+          path: .factory/work/screenshots
 
       - name: Prompt recenzenta
         id: data
@@ -343,6 +371,64 @@ jobs:
           name: factory-usage-review-${{ matrix.member.name }}
           path: usage/
           if-no-files-found: ignore
+
+  gallery:
+    # Pary wzorzec–wykonanie w komentarzu PR, żeby właściciel porównał je sam, także z telefonu.
+    # Obrazy trafiają na gałąź factory-screenshots: jeden commit bez historii, tylko zrzuty otwartych PR.
+    # Job nie pobiera kodu PR i nie uruchamia Claude; pliki z artefaktu skrypt sprawdza od nowa.
+    needs: [guard, ci]
+    if: always() && needs.guard.outputs.ok == 'true' && needs.ci.outputs.screenshots == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write        # tylko gałąź factory-screenshots
+      pull-requests: write   # komentarz ze zrzutami
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Narzędzia fabryki
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+          echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: factory-screenshots
+          merge-multiple: true
+          path: ${{ runner.temp }}/shots
+
+      - name: Zrzuty w PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ inputs.pr }}
+          SHA: ${{ needs.ci.outputs.sha }}
+        run: |
+          SHOTS="$RUNNER_TEMP/shots"
+          mkdir -p "$SHOTS"
+          # Skrypt usuwa pliki spoza wzorca nazw, nie-PNG i ponad limit, więc na gałąź trafiają tylko zrzuty.
+          node "$F/scripts/workflow/cli.ts" gallery --dir "$SHOTS" --sha "$SHA" --out "$RUNNER_TEMP/gallery.md" \
+            --url "$GITHUB_SERVER_URL/$GH_REPO/raw/factory-screenshots/pr-$PR/$SHA" \
+            --run-url "$GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID"
+          OPEN=$(gh pr list --state open --limit 500 --json number --jq '[.[].number] | map(tostring) | join(" ")')
+          AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader" GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $AUTH" \
+            bash "$F/scripts/workflow/gallery-push.sh" "$GITHUB_SERVER_URL/$GH_REPO.git" "$SHOTS" "$PR" "$SHA" "$OPEN"
+          # Jeden komentarz na PR, aktualizowany w każdej rundzie.
+          ID=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- factory:screenshots -->"))) | .id' | tail -n 1)
+          if [ -n "$ID" ]; then
+            gh api -X PATCH "repos/$GH_REPO/issues/comments/$ID" -F body=@"$RUNNER_TEMP/gallery.md" > /dev/null
+          else
+            gh api "repos/$GH_REPO/issues/$PR/comments" -F body=@"$RUNNER_TEMP/gallery.md" > /dev/null
+          fi
 
   loop:
     needs: [guard, ci, panel, reviewer]

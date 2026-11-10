@@ -10,6 +10,7 @@ Fabryka oprogramowania oparta na Claude Code i GitHub Actions. Zamienia rozmowę
 - **Plan.** Planer rozpisuje podejście, pliki, testy i dowody dla każdego kryterium. Gdy czegoś nie wie, pyta. Za duże zadanie dzieli na mniejsze issue.
 - **Implementacja w PR.** Implementer pisze kod i testy na gałęzi `factory/<numer>-<nazwa>` i podaje dowód dla każdego kryterium. Gdy nie może dokończyć zadania, zgłasza blokadę zamiast oddawać połowiczny PR.
 - **Recenzja.** CI uruchamia komendy projektu. Pięć perspektyw (poprawność, testy, bezpieczeństwo, utrzymanie, zgodność ze specem) ocenia PR, każda w świeżym kontekście. Projekt może dodać własne perspektywy.
+- **Zrzuty ekranu.** Komenda projektu robi po CI zrzuty sekcji obok wzorca. Recenzent wyglądu porównuje je ze wzorcem, a Ty widzisz te same pary w komentarzu PR.
 - **Pętla poprawek.** Czerwone CI albo prośba recenzenta o zmiany odsyła PR do implementera z listą uwag, do 3 rund.
 - **Ocena ryzyka.** Deterministyczne reguły (strefy plików, testy, rozmiar, dowody) i ocena modelu, która może poziom tylko podnieść. Wynik: Low, Medium albo High, raport w PR czytelny na telefonie.
 - **Tryb cienia i dziennik.** Werdykt fabryki w PR oceniasz 👍 albo 👎. Przypięte issue „Tryb cienia” pokazuje zgodność, rundy poprawek, czas i koszt na PR, etap i recenzenta.
@@ -19,7 +20,8 @@ Fabryka oprogramowania oparta na Claude Code i GitHub Actions. Zamienia rozmowę
 
 **Jeszcze nie:**
 - automatyczny merge (Etap 1): wymaga rulesetu na `main` i aplikacji GitHub fabryki; w repo prywatnym ruleset wymaga GitHub Pro;
-- zrzuty ekranu i podgląd w PR (`evidence`), etykiety kierujące do człowieka (`human_gates`), agenci cykliczni (`schedules`): pola są w kontrakcie, ale taśma ich jeszcze nie używa;
+- podgląd wdrożenia w PR (`evidence.preview_deploy`), etykiety kierujące do człowieka (`human_gates`), agenci cykliczni (`schedules`): pola są w kontrakcie, ale taśma ich jeszcze nie używa;
+- regresja wizualna, czyli porównanie zrzutów z gałęzią bazową;
 - presety i CI dla Godota, hooki pluginu;
 - sesja `factory-init`, która ustala konwencje projektu. Na razie konwencje (np. podejście do stylów, język nazw w kodzie) zapisujesz sam w `CLAUDE.md` projektu. Bez nich agent wybierze styl sam, a recenzent nie będzie miał czego pilnować.
 
@@ -180,6 +182,22 @@ W Etapie 1 merger zrobi to, co dziś opisuje werdykt: Low scali od razu, Medium 
 - `daily_runs` to dzienny limit przebiegów z Claude: planu, implementacji i recenzji, liczonych po nazwie przebiegu. Kolejka, dziennik i komendy go nie zużywają. Limit sprawdza implementacja nowego zadania; zadanie ponad limit czeka w kolejce. Rundy poprawek otwartego PR limitu nie sprawdzają, bo pętla i tak kończy się po `max_review_rounds`.
 - Kolejka rusza po zamknięciu PR fabryki, po `/reject`, po zgodzie na zależności, po blokadzie albo awarii zadania w toku i raz dziennie o 04:17 UTC.
 
+### Zrzuty ekranu
+
+Odpowiadają na pytanie, czy zmiana wygląda jak wzorzec. Projekt podaje w `factory.yml` komendę, którą taśma uruchamia po CI:
+
+```yaml
+evidence:
+  screenshots: npx playwright test -c playwright.screenshots.config.ts
+```
+
+- Komenda zapisuje pliki PNG w katalogu ze zmiennej `FACTORY_SCREENSHOTS`. `<nazwa>@<szerokość>.png` to wykonanie, a `<nazwa>@<szerokość>.ref.png` to wzorzec tej samej sekcji przy tej samej szerokości, np. wycinek makiety. Nazwa ma małe litery, cyfry, `-` i `_`. Wzorzec i szerokość są opcjonalne.
+- Lepiej działają zrzuty sekcji niż całej strony: duży obraz model widzi pomniejszony i gubi szczegóły.
+- Limity: 150 plików, 5 MB na plik i 100 MB razem. Plik spoza wzorca nazw, plik inny niż PNG albo ponad limit taśma pomija i wymienia w PR.
+- Czerwona komenda nie zatrzymuje recenzji. Recenzent i komentarz w PR mówią wtedy, że zrzutów może brakować.
+- Recenzenci dostają spis zrzutów. Perspektywa `ux-visual` (włączasz ją w `reviewers.extra`) wybiera z niego sekcje, których dotyczy zmiana, i porównuje je ze wzorcem przy każdej szerokości. Gdy brakuje zrzutów zmienionych sekcji, daje pewność poniżej 0,8, więc zmiana nie dostanie Low.
+- Komentarz „Zrzuty ekranu” w PR pokazuje wzorzec obok wykonania, także na telefonie, w zwijanym bloku dla każdej szerokości. Taśma aktualizuje go w każdej rundzie. Obrazy leżą na gałęzi `factory-screenshots`, która ma jeden commit bez historii i tylko zrzuty otwartych PR. Gałąź możesz usunąć w każdej chwili, a taśma założy ją od nowa.
+
 ### Tryb cienia
 
 1. Po ocenie ryzyka `merge.yml` dodaje w PR komentarz z werdyktem fabryki. Low: scaliłaby od razu. Medium: czekałaby 24 h na `/veto`. High: przekazałaby decyzję Tobie. Zmiana za duża albo zablokowana przez bramki jakości: odesłałaby ją do podziału albo do poprawek.
@@ -242,7 +260,8 @@ Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy skła
 | `models` | `base`, projekt | model na etapie: `planner`, `implementer`, `risk_assessor`, `reviewers.default` i wybrane perspektywy |
 | `wip_limit`, `daily_runs` | `base`, projekt | zadania w toku naraz i dzienny limit przebiegów z Claude ([Kolejka i limity](#kolejka-i-limity)) |
 | `shadow` | tylko `base` | progi Bramki 1: `gate_prs`, `min_agreement`, `max_false_low`, `revert_days` |
-| `evidence`, `human_gates`, `schedules` | projekt | zrzuty i podgląd w PR, etykiety do człowieka, agenci cykliczni; **taśma ich jeszcze nie używa** |
+| `evidence.screenshots` | projekt | komenda, która po CI zapisuje zrzuty PNG ([Zrzuty ekranu](#zrzuty-ekranu)) |
+| `evidence.preview_deploy`, `human_gates`, `schedules` | projekt | podgląd wdrożenia w PR, etykiety do człowieka, agenci cykliczni; **taśma ich jeszcze nie używa** |
 
 Wzorce ścieżek są względne od korzenia repo i znają tylko `*` (w obrębie katalogu), `**` (dowolna głębokość, także zero katalogów) i `?`. Wzorzec zaczynający się od `*` trzeba w YAML-u ująć w cudzysłów. Błąd walidacji wskazuje plik i pole, np. `factory.yml: zones.data[1]: nieprawidłowy wzorzec "/abs/**": …`. Z `--json` skrypt wypisuje konfigurację złożoną z warstw.
 
@@ -379,7 +398,7 @@ Wspólne workflowy to `workflow_call` w tym repo. Projekt wywołuje tylko dyryge
 | `pipeline.yml` | każde zdarzenie workflowu projektu | dyrygent: rozdziela zdarzenia na etapy poniżej |
 | `plan.yml` | etykieta `ready` na issue | plan w komentarzu, etykieta `planned`, `blocked` albo `split`; przy `planned` uruchamia implementację albo stawia zadanie w kolejce (`queued`, `needs-approval`) |
 | `implement.yml` | plan, kolejka, `/change` w PR albo pętla poprawek | dzienny limit, instalacja zatwierdzonych zależności, patch od implementera, sprawdzenie ścieżek, PR z gałęzi `factory/<numer>-<nazwa>`; uruchamia recenzję. Przy blokadzie: etykieta `blocked` i komentarz, bez PR |
-| `review.yml` | implementacja | komendy z `factory.yml` (CI), skład panelu, recenzenci równolegle; pętla poprawek odsyła PR do implementera |
+| `review.yml` | implementacja | komendy z `factory.yml` (CI), zrzuty ekranu z komentarzem w PR, skład panelu, recenzenci równolegle; pętla poprawek odsyła PR do implementera |
 | `risk.yml` | po recenzji, w tym samym uruchomieniu | oceniacz ryzyka, reguły, check `factory/risk`, etykieta `risk:*`, raport w PR |
 | `merge.yml` | po ocenie ryzyka, w tym samym uruchomieniu | w Etapie 0 tylko werdykt trybu cienia w nowym komentarzu |
 | `journal.yml` | po werdykcie, po zamknięciu PR fabryki, raz dziennie | dziennik trybu cienia w przypiętym issue; po scaleniu PR fabryki zamyka jego issue |
@@ -396,9 +415,10 @@ Wspólne workflowy to `workflow_call` w tym repo. Projekt wywołuje tylko dyryge
 - Etapy łączy `workflow_dispatch`, bo zdarzenia z `GITHUB_TOKEN` nie uruchamiają innych workflowów. W Etapie 0 zmiany podpisuje `github-actions[bot]`; własna aplikacja GitHub fabryki przyjdzie w Etapie 1.
 - Na taśmę wchodzą tylko zdarzenia od właściciela repo, kont z wejścia `trusted` i workflowów fabryki. Komendy wydaje tylko człowiek.
 - `factory.yml` i perspektywy projektu w recenzji i ocenie pochodzą z gałęzi bazowej, więc PR nie poluzuje własnej oceny.
+- Zrzuty ekranu powstają z kodu PR. Job galerii nie pobiera tego kodu i nie uruchamia Claude: sprawdza pliki od nowa (nazwa, nagłówek PNG, limity). Prawo zapisu treści repo ma tylko po to, żeby wypchnąć obrazy na gałąź `factory-screenshots`.
 - Dziennik i kolejkę uruchamia też `pull_request_target` przy zamknięciu PR z gałęzi `factory/*` tego repo. Nie pobierają kodu z PR: czytają gałąź główną i API.
 
-Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML: Claude bez prawa zapisu, akcje przypięte do commitów, żadnych wyrażeń wklejonych w skrypty, uprawnienia w łańcuchu projekt → dyrygent → etap → job tylko maleją, dyrygent woła każdy etap, merger, dziennik i kolejka bez Claude.
+Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML: Claude bez prawa zapisu, akcje przypięte do commitów, żadnych wyrażeń wklejonych w skrypty, uprawnienia w łańcuchu projekt → dyrygent → etap → job tylko maleją, dyrygent woła każdy etap, merger, dziennik, kolejka i galeria zrzutów bez Claude.
 
 ### Plugin w Claude Code
 
