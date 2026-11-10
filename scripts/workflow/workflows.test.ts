@@ -182,6 +182,8 @@ describe('workflowy fabryki', () => {
     assert.ok(publish.indexOf('cli.ts" gallery') < publish.indexOf('gallery-push.sh'), 'pliki sprawdzone przed publikacją');
     assert.match(publish, /gallery --dir "\$SHOTS" --before "\$RUNNER_TEMP\/shots-base" --publish "\$PUBLISH"/);
     assert.match(publish, /gallery-push\.sh" "[^"]+" "\$PUBLISH"/, 'na gałąź trafiają tylko obrazy galerii');
+    assert.ok(publish.indexOf('-F body=@"$RUNNER_TEMP/gallery.md"') < publish.indexOf('-X DELETE'), 'nowy komentarz w każdej rundzie, potem usunięcie starego');
+    assert.doesNotMatch(publish, /-X PATCH/);
     assert.ok(!(data.jobs.loop as Job & { needs?: string[] }).needs?.includes('gallery'), 'galeria nie wstrzymuje pętli ani oceny ryzyka');
   });
 

@@ -462,27 +462,26 @@ jobs:
           GH_REPO: ${{ github.repository }}
           PR: ${{ inputs.pr }}
           SHA: ${{ needs.ci.outputs.sha }}
+          ROUND: ${{ needs.ci.outputs.round }}
         run: |
           SHOTS="$RUNNER_TEMP/shots" PUBLISH="$RUNNER_TEMP/publish"
           mkdir -p "$SHOTS"
           # Skrypt sprawdza pliki od nowa (nazwy, nagłówek PNG, limity) i do $PUBLISH zapisuje tylko obrazy galerii:
           # wzorzec obok wykonania w jednym pliku. Zmienione sekcje wskazuje porównanie z zrzutami gałęzi bazowej.
           node "$F/scripts/workflow/cli.ts" gallery --dir "$SHOTS" --before "$RUNNER_TEMP/shots-base" --publish "$PUBLISH" \
-            --sha "$SHA" --out "$RUNNER_TEMP/gallery.md" \
+            --sha "$SHA" --round "${ROUND:-0}" --out "$RUNNER_TEMP/gallery.md" \
             --url "$GITHUB_SERVER_URL/$GH_REPO/raw/factory-screenshots/pr-$PR/$SHA" \
             --run-url "$GITHUB_SERVER_URL/$GH_REPO/actions/runs/$GITHUB_RUN_ID"
           OPEN=$(gh pr list --state open --limit 500 --json number --jq '[.[].number] | map(tostring) | join(" ")')
           AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
           GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0="http.$GITHUB_SERVER_URL/.extraheader" GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $AUTH" \
             bash "$F/scripts/workflow/gallery-push.sh" "$GITHUB_SERVER_URL/$GH_REPO.git" "$PUBLISH" "$PR" "$SHA" "$OPEN"
-          # Jeden komentarz na PR, aktualizowany w każdej rundzie.
-          ID=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate \
-            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- factory:screenshots -->"))) | .id' | tail -n 1)
-          if [ -n "$ID" ]; then
-            gh api -X PATCH "repos/$GH_REPO/issues/comments/$ID" -F body=@"$RUNNER_TEMP/gallery.md" > /dev/null
-          else
-            gh api "repos/$GH_REPO/issues/$PR/comments" -F body=@"$RUNNER_TEMP/gallery.md" > /dev/null
-          fi
+          # W każdej rundzie nowy komentarz pod najnowszymi zdarzeniami PR (np. po /change), a poprzedni znika:
+          # jego linki prowadziłyby do obrazów, których na gałęzi już nie ma.
+          OLD=$(gh api "repos/$GH_REPO/issues/$PR/comments" --paginate \
+            --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- factory:screenshots -->"))) | .id')
+          gh api "repos/$GH_REPO/issues/$PR/comments" -F body=@"$RUNNER_TEMP/gallery.md" > /dev/null
+          for ID in $OLD; do gh api -X DELETE "repos/$GH_REPO/issues/comments/$ID" > /dev/null || true; done
 
   loop:
     needs: [guard, ci, panel, reviewer]

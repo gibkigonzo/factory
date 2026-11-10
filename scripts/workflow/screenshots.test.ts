@@ -194,6 +194,8 @@ describe('zrzuty ekranu', () => {
 
       const same = compareScreenshots(head, head, false);
       assert.match(galleryComment(same, files, { url, sha: 'abc1234' }), /\*\*Wygląd bez zmian względem gałęzi głównej\.\*\*/);
+      assert.match(galleryComment(same, files, { url, sha: 'abc1234', round: 0 }), /^### Zrzuty ekranu$/m);
+      assert.match(galleryComment(same, files, { url, sha: 'abc1234', round: 2 }), /^### Zrzuty ekranu · runda 2$/m, 'runda jak w werdykcie');
       const noBase = compareScreenshots(head, undefined, false);
       assert.match(galleryComment(noBase, files, { url, sha: 'abc1234' }), /Porównanie z gałęzią główną się nie udało, więc lista obejmuje wszystkie zrzuty\.\n\n- hero:/);
       assert.match(galleryComment({ shots: [], rejected: [], base: false }, new Map(), { url, sha: 'abc1234' }), /nie zostawiła żadnego zrzutu/);
