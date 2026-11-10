@@ -279,6 +279,7 @@ function run(command: string | undefined, rest: string[]): string {
         url: (file) => `${base}/${encodeURIComponent(file)}`,
         sha: required(v.sha, '--sha'),
         runUrl: v['run-url'],
+        round: Number(v.round),
       });
       writeFileSync(required(v.out, '--out'), comment);
       return `Galeria: ${comment.length} znaków`;

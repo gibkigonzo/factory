@@ -119,7 +119,8 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 
 - Projekt podaje w `evidence.screenshots` komendę, która po CI zapisuje PNG w `$FACTORY_SCREENSHOTS`: `<nazwa>@<szerokość>.png` to wykonanie, `.ref.png` to wzorzec. Zrzuty robi deterministyczny kod projektu; czerwona komenda nie zatrzymuje recenzji.
 - Taśma robi te same zrzuty na punkcie rozgałęzienia i porównuje piksele. `ux-visual` (perspektywa z `screenshots: true`) dostaje tylko sekcje zmienione przez PR; gdy wygląd się nie zmienił, werdykt wystawia skrypt bez modelu. Inni recenzenci zrzutów nie dostają (10 listopada 2026, koszt).
-- Komentarz w PR ma linki do obrazów wzorzec|wykonanie, a nie obrazy w treści: GitHub nie pokazuje w komentarzach obrazów z repo prywatnego. Obrazy leżą na gałęzi `factory-screenshots` (jeden commit, tylko otwarte PR); job galerii działa bez Claude i bez kodu PR.
+- Komentarz w PR ma linki do obrazów wzorzec|wykonanie, a nie obrazy w treści: GitHub nie pokazuje w komentarzach obrazów z repo prywatnego. W każdej rundzie powstaje nowy komentarz, a poprzedni znika. Obrazy leżą na gałęzi `factory-screenshots` (jeden commit, tylko otwarte PR); job galerii działa bez Claude i bez kodu PR.
+- Wzorzec jest celem także wtedy, gdy kryteria sprawdzają tylko wymiary i liczbę elementów. Różnica widoczna od razu to `high` u `ux-visual`, a implementer poprawia ją przed oddaniem zmiany. „Agent może zmienić” w specu dotyczy tylko tego, czego wzorzec nie pokazuje. Lekcja z pilota: recenzent opisał różnice trafnie, ale nazwał je „stylistycznymi” i zatwierdził.
 - Później, gdy projekt tego potrzebuje: zrzuty pojedynczych komponentów.
 
 ## Otwarte pytania

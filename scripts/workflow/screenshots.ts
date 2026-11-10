@@ -250,6 +250,8 @@ export interface GalleryOptions {
   url: (file: string) => string;
   sha: string;
   runUrl?: string;
+  /** Runda poprawek; od 1 w nagłówku, tak jak w werdykcie trybu cienia. */
+  round?: number;
 }
 
 /**
@@ -258,7 +260,7 @@ export interface GalleryOptions {
  * Najpierw sekcje zmienione względem gałęzi bazowej; reszta jest zwinięta.
  */
 export function galleryComment(compared: Compared, files: Map<string, string>, options: GalleryOptions): string {
-  const lines = [SCREENSHOTS_MARKER, '### Zrzuty ekranu', ''];
+  const lines = [SCREENSHOTS_MARKER, `### Zrzuty ekranu${options.round ? ` · runda ${options.round}` : ''}`, ''];
   const log = options.runUrl ? ` Log: [przebieg](${options.runUrl}).` : '';
   if (compared.ok === false) lines.push(`⚠️ Komenda zrzutów zakończyła się błędem, więc części zrzutów może brakować.${log}`, '');
   const link = (shot: Compared['shots'][number]) => {
