@@ -16,6 +16,7 @@ import { decide } from './decision.ts';
 import type { Action } from './decision.ts';
 import { renderJournal } from './journal.ts';
 import { computeMetrics, isFalseLow } from './metrics.ts';
+import { roundComment } from '../workflow/loop.ts';
 import { usageBlock } from '../workflow/usage.ts';
 import type { Usage } from '../workflow/usage.ts';
 
@@ -188,6 +189,29 @@ describe('dane z GitHuba', () => {
     assert.equal(fourteen?.readyAt, '2026-11-04T08:00:00Z');
     // #10: od ready 31.10 8:00 do merge'u 2.11 12:00 to 52 h; #14: od założenia 8:00 do 12:00 to 4 h.
     assert.equal(computeMetrics(collectRecords(dir, ['owner'], 7), config).medianHoursToMerge, (52 + 4) / 2);
+  });
+
+  it('koszt recenzji rundy odesłanej do implementera bierze z komentarza rundy, bez podróbek', () => {
+    const own = mkdtempSync(join(tmpdir(), 'factory-rounds-'));
+    try {
+      const named = (name: string, cost: number) => ({ ...spend('review', cost), name });
+      writeFileSync(join(own, 'prs.json'), JSON.stringify([
+        { number: 40, title: 'Pętla', state: 'OPEN', createdAt: '2026-11-01T09:00:00Z', headRefName: 'factory/39-petla', body: '' },
+      ]));
+      mkdirSync(join(own, 'comments'));
+      writeFileSync(join(own, 'comments', '40.json'), JSON.stringify([
+        { id: 1, body: shadowComment({ pr: 40, round: 1, level: 'Low', action: 'merge', reviews: [], usage: [named('spec', 0.2)] }, config), user: { login: 'github-actions[bot]' }, created_at: '2026-11-02T10:00:00Z' },
+      ]));
+      mkdirSync(join(own, 'rounds'));
+      writeFileSync(join(own, 'rounds', '40.json'), JSON.stringify([
+        { body: roundComment({ reviews: [], round: 0, maxRounds: 3 }, [named('spec', 0.3), named('tests', 0.1)]) },
+        { body: `nie runda\n${usageBlock([named('spec', 50)])}` },
+      ]));
+      const usage = collectRecords(own, ['owner'], 7)[0]!.usage!;
+      assert.deepEqual(usage.map((u) => [u.name, u.count, u.cost]), [['spec', 2, 0.5], ['tests', 1, 0.1]]);
+    } finally {
+      rmSync(own, { recursive: true, force: true });
+    }
   });
 
   it('zużycie zbiera z planu, opisu PR i wszystkich werdyktów bota, zsumowane na etap', () => {

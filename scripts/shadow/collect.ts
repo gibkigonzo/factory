@@ -7,10 +7,12 @@
 //   issue-list.json          gh issue list --state all --json number,title,state,labels,createdAt,closedAt
 //   stopped.json             gh issue list --label factory:stopped --state open --json number,body,createdAt (/stop)
 //   plans/<issue>.json       komentarze bota z planem albo blokadą: [{ body }] (zużycie planera i zablokowanej implementacji)
+//   rounds/<pr>.json         komentarze bota z rundą poprawek: [{ body }] (zużycie recenzji rund bez werdyktu)
 //   reverts.txt              git log gałęzi głównej: rekordy „\x1e<data ISO>\t<treść commita>”
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { ROUND_MARKER } from '../workflow/loop.ts';
 import { parseLineProblems } from '../workflow/render.ts';
 import type { LineProblem } from '../workflow/render.ts';
 import { parseUsageBlocks, sumUsage } from '../workflow/usage.ts';
@@ -127,15 +129,22 @@ function issueUsage(dir: string, issue: number | undefined): Usage[] {
   return comments.flatMap((c) => parseUsageBlocks(c.body ?? '').filter((u) => u.stage === 'plan' || u.stage === 'implement'));
 }
 
-/** Zużycie: plan i blokady (komentarze w issue), implementacja (opis PR), recenzja i ocena (wszystkie werdykty). */
+/**
+ * Zużycie: plan i blokady (komentarze w issue), implementacja (opis PR), recenzja i ocena (wszystkie werdykty),
+ * a recenzja rund odesłanych do implementera z komentarzy rund (te rundy nie mają werdyktu).
+ */
 function usageOf(dir: string, pr: RawPr, issue: number | undefined): Usage[] {
   const verdicts = read<RawComment[]>(join(dir, 'comments', `${pr.number}.json`), [])
     .filter((c) => c.user?.login === 'github-actions[bot]')
     .flatMap((c) => parseShadow(c.body ?? '')?.usage ?? []);
+  const rounds = read<{ body?: string }[]>(join(dir, 'rounds', `${pr.number}.json`), [])
+    .filter((c) => (c.body ?? '').startsWith(ROUND_MARKER))
+    .flatMap((c) => parseUsageBlocks(c.body ?? ''));
   const records = [
     ...issueUsage(dir, issue),
     ...parseUsageBlocks(pr.body ?? '').filter((u) => u.stage === 'implement'),
     ...verdicts.filter((u) => u.stage === 'review' || u.stage === 'assess'),
+    ...rounds.filter((u) => u.stage === 'review'),
   ];
   return sumUsage(records);
 }
