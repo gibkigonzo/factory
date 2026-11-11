@@ -1,5 +1,6 @@
-# Komendy właściciela w komentarzu: /approve, /veto, /reject, /change, /split.
+# Komendy właściciela w komentarzu: /approve, /veto, /reject, /change, /split, /stop, /start.
 # /approve w issue z etykietą needs-approval to zgoda na nowe zależności z planu.
+# /stop <powód> zatrzymuje taśmę (issue „Taśma zatrzymana”), a /start ją wznawia razem z wstrzymanymi etapami.
 # Działają tylko od właściciela repo i kont z listy `trusted`; konto workflowów nie wydaje komend.
 # Treść komentarza trafia do skryptu wyłącznie przez zmienne środowiskowe.
 name: factory-commands
@@ -35,7 +36,7 @@ jobs:
             exit 0
           fi
           FIRST=$(printf '%s\n' "$BODY" | head -n 1 | tr -d '\r')
-          COMMAND=$(sed -nE 's#^/(approve|veto|reject|change|split)([[:space:]].*)?$#\1#p' <<<"$FIRST")
+          COMMAND=$(sed -nE 's#^/(approve|veto|reject|change|split|stop|start)([[:space:]].*)?$#\1#p' <<<"$FIRST")
           echo "command=$COMMAND" >> "$GITHUB_OUTPUT"
 
       - name: Wykonanie
@@ -47,6 +48,7 @@ jobs:
           NUMBER: ${{ github.event.issue.number }}
           IS_PR: ${{ github.event.issue.pull_request != null }}
           COMMENT: ${{ github.event.comment.id }}
+          BODY: ${{ github.event.comment.body }}
           WORKFLOW: ${{ inputs.workflow }}
         run: |
           DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
@@ -86,6 +88,51 @@ jobs:
               if [ "$IS_PR" = true ]; then gh pr comment "$NUMBER" --body "/split działa w issue, nie w PR."; exit 0; fi
               label split
               gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=plan -f issue="$NUMBER" -f note=split
+              ;;
+            stop)
+              # Powód: reszta komentarza po /stop. Taśma stoi, dopóki issue z etykietą factory:stopped jest otwarte.
+              REASON=$(printf '%s' "$BODY" | sed -E '1s#^/stop[[:space:]]*##' | tr -s '[:space:]' ' ' | sed -E 's/^ +| +$//g')
+              REASON=${REASON:-bez podanego powodu}
+              STOP=$(gh issue list --label factory:stopped --state open --limit 1 --json number --jq '.[0].number // empty')
+              if [ -n "$STOP" ]; then
+                gh issue comment "$STOP" --body "Kolejne \`/stop\` w #$NUMBER: $REASON"
+              else
+                DATA=$(jq -nc --arg reason "$REASON" --arg from "$NUMBER" '{reason: $reason, from: $from}' | sed 's/</\\u003c/g; s/>/\\u003e/g')
+                printf 'Taśmę zatrzymała komenda `/stop` w #%s.\n\n**Powód:** %s\n\nPlan, implementacja, recenzja i kolejka czekają; dziennik i komendy działają. Etapy, które miały ruszyć, dostają etykietę `factory:paused`. Wznowienie: `/start` w dowolnym issue albo PR.\n\n<!-- factory:stop %s -->\n' \
+                  "$NUMBER" "$REASON" "$DATA" > stop.md
+                gh label create factory:stopped --force --description 'Taśma fabryki zatrzymana' >/dev/null
+                URL=$(gh issue create --title 'Taśma zatrzymana' --label factory:stopped --body-file stop.md)
+                STOP=${URL##*/}
+              fi
+              gh issue comment "$NUMBER" --body "⏸️ Taśma zatrzymana (#$STOP). Wznowienie: \`/start\`."
+              ;;
+            start)
+              STOPS=$(gh issue list --label factory:stopped --state open --json number --jq '.[].number')
+              if [ -z "$STOPS" ]; then gh issue comment "$NUMBER" --body "Taśma działa; nie ma czego wznawiać."; exit 0; fi
+              for STOP in $STOPS; do gh issue close "$STOP" --comment "Taśma wznowiona komendą \`/start\` w #$NUMBER."; done
+              # Wstrzymane etapy: issue i PR z etykietą factory:paused, ostatni znacznik factory:paused od konta workflowów.
+              RESUMED=0
+              for T in $( { gh issue list --label factory:paused --state open --limit 100 --json number --jq '.[].number'
+                            gh pr list --label factory:paused --state open --limit 100 --json number --jq '.[].number'; } | sort -un); do
+                DATA=$(gh api --paginate "repos/$GH_REPO/issues/$T/comments" --jq '.[] | select(.user.login == "github-actions[bot]") | .body' \
+                  | sed -nE 's#.*<!-- factory:paused (\{[^<>]*\}) -->.*#\1#p' | tail -n 1)
+                [ -n "$DATA" ] || DATA='{}'
+                S=$(jq -r '.stage // ""' <<<"$DATA"); I=$(jq -r '.issue // ""' <<<"$DATA")
+                P=$(jq -r '.pr // ""' <<<"$DATA"); N=$(jq -r '.note // ""' <<<"$DATA")
+                gh issue edit "$T" --remove-label factory:paused >/dev/null 2>&1 || true
+                if ! [[ "$S" =~ ^(plan|implement|review)$ && "$I" =~ ^[0-9]*$ && "$P" =~ ^[0-9]*$ && "$N" =~ ^[A-Za-z0-9_-]*$ ]]; then
+                  echo "::warning::#$T: brak poprawnego zapisu wstrzymanego etapu; pomijam."
+                  continue
+                fi
+                ARGS=(-f stage="$S")
+                if [ -n "$I" ]; then ARGS+=(-f issue="$I"); fi
+                if [ -n "$P" ]; then ARGS+=(-f pr="$P"); fi
+                if [ -n "$N" ]; then ARGS+=(-f note="$N"); fi
+                gh workflow run "$WORKFLOW" --ref "$DEFAULT" "${ARGS[@]}"
+                RESUMED=$((RESUMED + 1))
+              done
+              queue
+              gh issue comment "$NUMBER" --body "▶️ Taśma wznowiona. Wstrzymane etapy, które ruszyły ponownie: $RESUMED; kolejka sprawdza czekające zadania."
               ;;
           esac
           gh api "repos/$GH_REPO/issues/comments/$COMMENT/reactions" -f content=eyes >/dev/null

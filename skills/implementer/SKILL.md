@@ -50,6 +50,7 @@ PR z gałęzi `factory/*` do gałęzi głównej. Opis PR: `Closes #<numer>`, co 
 - `summary`: co zmieniono, w jednym lub dwóch zdaniach; workflow wstawia go do opisu PR.
 - `assumptions`: najwyżej 5, po jednym zdaniu. Tylko decyzje i odstępstwa, których nie ma w specu ani w planie.
 - `evidence`: sam wskaźnik dowodu, bez komentarza.
+- `line_problem`: opcjonalnie problem taśmy w jednym lub dwóch zdaniach. Chodzi o kłopot z narzędziami albo komendami projektu, a nie z zadaniem: komenda pada albo wypisuje błąd, który nie wynika z Twojej zmiany i którego to zadanie nie usuwa. Podajesz komendę i objaw, np. „`npm run typecheck` wypisuje ostrzeżenie X, choć kończy się kodem 0”. Taki kłopot nie trafia do `assumptions`. Workflow zbiera zgłoszenia w dzienniku, a właściciel decyduje, czy zatrzymać taśmę. Wynik komendy oceniasz po kodzie wyjścia: ostrzeżenia przy kodzie 0 to nie błąd.
 
 Opis PR składa workflow z tego bloku, więc nie piszesz osobnego opisu ani podsumowania pracy.
 - `bugfix`: `true` tylko wtedy, gdy issue zgłasza błąd na gałęzi głównej; wtedy wymagane jest pole `regression_test` z nazwą testu, który na bazie nie przechodzi. Poprawki po recenzji i po `/change` w tym samym PR to `false`.

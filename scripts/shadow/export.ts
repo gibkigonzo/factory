@@ -3,7 +3,7 @@
 // Pliki leżą na gałęzi factory-journal i odświeżają się razem z dziennikiem.
 
 import type { Usage } from '../workflow/usage.ts';
-import type { IssueRecord, PrRecord } from './collect.ts';
+import type { IssueRecord, LineProblemRecord, PrRecord, StopState } from './collect.ts';
 import { ACTION_SHORT } from './decision.ts';
 
 export interface TaskRow {
@@ -120,7 +120,17 @@ export function journalCsv(rows: readonly TaskRow[]): string {
   return [header.join(','), ...lines].join('\n') + '\n';
 }
 
-export function journalJson(rows: readonly TaskRow[], updated: string): string {
+export function problemsCsv(problems: readonly LineProblemRecord[]): string {
+  const lines = problems.map((p) => [p.at, p.stage, p.issue, p.pr, p.problem.replace(/\s+/g, ' ').trim()].map(cell).join(','));
+  return ['zgloszono,etap,zadanie,pr,problem', ...lines].join('\n') + '\n';
+}
+
+export function journalJson(
+  rows: readonly TaskRow[],
+  updated: string,
+  extras: { problems?: readonly LineProblemRecord[]; stopped?: StopState } = {},
+): string {
   const total = round4(rows.reduce((sum, r) => sum + r.cost, 0));
-  return JSON.stringify({ updated, tasks: rows.length, cost: total, rows }, null, 2) + '\n';
+  const data = { updated, stopped: extras.stopped ?? null, tasks: rows.length, cost: total, rows, lineProblems: extras.problems ?? [] };
+  return JSON.stringify(data, null, 2) + '\n';
 }

@@ -6,8 +6,9 @@ import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { configWith } from '../risk/fixtures.ts';
 import type { Assessment } from '../risk/types.ts';
-import { collectIssueTasks, collectRecords, factoryIssues, issueOf, parseReverts } from './collect.ts';
-import { journalCsv, journalJson, taskRows } from './export.ts';
+import { collectIssueTasks, collectLineProblems, collectRecords, factoryIssues, issueOf, parseReverts, stopState } from './collect.ts';
+import { journalCsv, journalJson, problemsCsv, taskRows } from './export.ts';
+import { lineProblemBlock } from '../workflow/render.ts';
 import type { PrRecord } from './collect.ts';
 import { parseShadow, shadowComment, shadowRecord, SHADOW_MARKER } from './comment.ts';
 import type { ShadowRecord } from './comment.ts';
@@ -153,9 +154,15 @@ describe('dane z GitHuba', () => {
     { number: 22, title: 'Zwykłe issue', state: 'OPEN', labels: [{ name: 'bug' }], createdAt: '2026-11-05T07:00:00Z' },
   ]);
   write('plans/20.json', [
-    { body: `plan\n${usageBlock([spend('plan', 0.4)])}` },
+    { body: `plan\n${usageBlock([spend('plan', 0.4)])}\n${lineProblemBlock({ stage: 'plan', problem: 'Brak komendy lint', at: '2026-11-05T08:00:00Z' })}` },
     { body: `<!-- factory:blocked -->\nblokada\n${usageBlock([spend('implement', 0.3)])}` },
   ]);
+  const typecheck = { stage: 'implement', problem: 'typecheck wypisuje szum vue-tsc', at: '2026-11-06T08:00:00Z' };
+  write('prs.json', [
+    ...JSON.parse(readFileSync(join(dir, 'prs.json'), 'utf8')).map((pr: { number: number; body?: string }) =>
+      pr.number === 14 ? { ...pr, body: `${lineProblemBlock(typecheck)}\n${lineProblemBlock(typecheck)}` } : pr),
+  ]);
+  write('stopped.json', [{ number: 40, createdAt: '2026-11-07T09:00:00Z', body: 'Taśma\n<!-- factory:stop {"reason":"szum typecheck \\u003cvue-tsc\\u003e","from":"30"} -->' }]);
 
   it('bierze tylko PR-y fabryki z tego repo, ostatni werdykt bota i ostatnią reakcję właściciela', () => {
     const [ten, eleven, fourteen, ...rest] = collectRecords(dir, ['owner'], 7).sort((a, b) => a.number - b.number);
@@ -233,6 +240,20 @@ describe('dane z GitHuba', () => {
     assert.equal(json.tasks, 6);
     assert.equal(json.cost, 3.05);
     assert.equal(json.rows[5].reviewers.security, 0.25);
+  });
+
+  it('problemy taśmy: z planu, blokady i opisu PR, bez powtórzeń, od najnowszego; stan zatrzymanej taśmy', () => {
+    assert.deepEqual(collectLineProblems(dir), [
+      { ...typecheck, issue: 7, pr: 14 },
+      { stage: 'plan', problem: 'Brak komendy lint', at: '2026-11-05T08:00:00Z', issue: 20 },
+    ]);
+    assert.deepEqual(stopState(dir), { issue: 40, since: '2026-11-07T09:00:00Z', reason: 'szum typecheck <vue-tsc>' });
+    const csv = problemsCsv(collectLineProblems(dir)).split('\n');
+    assert.equal(csv[0], 'zgloszono,etap,zadanie,pr,problem');
+    assert.equal(csv[1], '2026-11-06T08:00:00Z,implement,7,14,typecheck wypisuje szum vue-tsc');
+    const json = JSON.parse(journalJson([], 'teraz', { problems: collectLineProblems(dir), stopped: stopState(dir) }));
+    assert.equal(json.lineProblems.length, 2);
+    assert.equal(json.stopped.issue, 40);
   });
 
   it('revert po oknie revert_days się nie liczy', () => {
@@ -346,6 +367,17 @@ describe('dziennik', () => {
     const full = renderJournal(records, config, 'teraz', { tasks: [task as never], filesUrl: 'https://example.test/blob/factory-journal' });
     assert.match(full, /- Zadania bez PR \(blokada, podział, odrzucenie, czekające\): 1, razem 0,50 USD\n- Razem wszystkie zadania: 2,50 USD/);
     assert.match(full, /\[journal\.csv\]\(https:\/\/example\.test\/blob\/factory-journal\/journal\.csv\) \(tabela\)/);
+  });
+
+  it('zatrzymana taśma na górze dziennika i zbiorcza lista problemów taśmy', () => {
+    const problems = Array.from({ length: 12 }, (_, i) => ({ stage: 'implement', problem: `Problem ${i}\n z narzędziem`, at: `2026-11-${String(20 - i).padStart(2, '0')}T08:00:00Z`, issue: i + 1 }));
+    const body = renderJournal([], config, 'teraz', { problems, stopped: { issue: 40, since: '2026-11-07T09:15:00Z', reason: 'szum typecheck' } });
+    assert.match(body, /^\*\*⏸️ Taśma zatrzymana\*\* od 2026-11-07 09:15 UTC \(#40\): szum typecheck\. [^\n]*`\/start`\.\n\n\*\*Bramka 1/);
+    assert.match(body, /## Problemy taśmy\n\nZgłoszenia agentów [^\n]*: 12\./);
+    assert.match(body, /- 2026-11-20 · implementacja \(#1\): Problem 0 z narzędziem/);
+    assert.match(body, /- …i 2 starszych \(pełna lista w problemy\.csv\)/);
+    assert.match(renderJournal([], config, 'teraz'), /## Problemy taśmy\n\n- Brak zgłoszeń\./);
+    assert.doesNotMatch(renderJournal([], config, 'teraz'), /Taśma zatrzymana/);
   });
 
   it('pusty dziennik przed pierwszym PR', () => {

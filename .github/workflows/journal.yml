@@ -73,6 +73,8 @@ jobs:
           mkdir -p "$RAW/comments" "$RAW/reactions" "$RAW/events" "$RAW/issues" "$RAW/plans"
           # Zadania bez PR (blokada, podział, odrzucenie) rozpoznaje skrypt po etykietach taśmy.
           gh issue list --state all --limit 1000 --json number,title,state,labels,createdAt,closedAt > "$RAW/issue-list.json"
+          # Zatrzymana taśma (/stop): dziennik pokazuje to na samej górze.
+          gh issue list --label factory:stopped --state open --limit 1 --json number,body,createdAt > "$RAW/stopped.json"
           gh pr list --state all --limit 1000 \
             --json number,title,body,state,createdAt,mergedAt,closedAt,headRefName,isCrossRepository,labels,mergeCommit,closingIssuesReferences \
             > "$RAW/prs.json"

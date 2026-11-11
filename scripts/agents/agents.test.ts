@@ -54,6 +54,12 @@ describe('spec-writer i format specu', () => {
     assert.ok(String(data.description).length <= 200, `opis ma ${String(data.description).length} znaków`);
   });
 
+  it('pytania w rundach po najwyżej 5, bez sztywnego limitu całej rozmowy; za dużo rund to podział', () => {
+    assert.match(body, /Pytania w rundach\.\*\* W jednej wiadomości najwyżej 5 pytań/);
+    assert.match(body, /po 3 rundach wciąż zostają otwarte decyzje[^\n]*podział/);
+    assert.doesNotMatch(body, /najwyżej 5, w jednej wiadomości/);
+  });
+
   it('szablon i przykład mają wszystkie sekcje specu w kolejności planera', () => {
     assert.equal(blocks.length, 2, 'szablon i przykład w blokach ```markdown');
     for (const block of blocks) assert.deepEqual(headings(block).map(section), [...SPEC_SECTIONS]);

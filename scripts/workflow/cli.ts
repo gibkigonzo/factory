@@ -8,8 +8,8 @@ import { parseArgs } from 'node:util';
 import { isOutputKind, OUTPUTS, parseOutput } from '../agents/output.ts';
 import type { FactoryConfig } from '../config/spec.ts';
 import type { Assessment, Evidence, Review } from '../risk/types.ts';
-import { collectIssueTasks, collectRecords, factoryIssues } from '../shadow/collect.ts';
-import { journalCsv, journalJson, taskRows } from '../shadow/export.ts';
+import { collectIssueTasks, collectLineProblems, collectRecords, factoryIssues, stopState } from '../shadow/collect.ts';
+import { journalCsv, journalJson, problemsCsv, taskRows } from '../shadow/export.ts';
 import { shadowComment, shadowRecord } from '../shadow/comment.ts';
 import { renderJournal } from '../shadow/journal.ts';
 import { runCommands } from './ci.ts';
@@ -18,7 +18,7 @@ import type { CiResult, Implementation } from './evidence.ts';
 import { toJsonSchema } from './jsonschema.ts';
 import { branchName, DENIED_FOR_READERS, implementerTools, pathProblems, READ_ONLY_TOOLS } from './patch.ts';
 import { assessPrompt, implementPrompt, planPrompt, reviewPrompt } from './prompts.ts';
-import { latestMarked, planComment, PLAN_MARKER, prBody, PR_MARKER } from './render.ts';
+import { latestMarked, lineProblemBlock, parseLineProblems, planComment, PLAN_MARKER, prBody, PR_MARKER } from './render.ts';
 import { claudeRuns } from './budget.ts';
 import type { Run } from './budget.ts';
 import { installCommands } from './dependencies.ts';
@@ -219,8 +219,18 @@ function run(command: string | undefined, rest: string[]): string {
       return JSON.stringify(decision);
     }
     case 'pr-body': {
-      const previous = v.previous && existsSync(v.previous) ? parseUsageBlocks(readFileSync(v.previous, 'utf8')) : [];
-      return prBody(json(required(v.implementation, '--implementation')) as Implementation, [...previous, ...usageFile(v.usage)]);
+      const before = v.previous && existsSync(v.previous) ? readFileSync(v.previous, 'utf8') : '';
+      return prBody(
+        json(required(v.implementation, '--implementation')) as Implementation,
+        [...parseUsageBlocks(before), ...usageFile(v.usage)],
+        parseLineProblems(before),
+      );
+    }
+    case 'line-problem': {
+      // Problem taśmy z wyjścia agenta jako tekst do komentarza z blokadą; pusty, gdy agent nic nie zgłosił.
+      const output = json(required(v.implementation, '--implementation')) as { line_problem?: string };
+      const problem = output.line_problem?.trim();
+      return problem ? lineProblemBlock({ stage: required(v.stage, '--stage'), problem, at: new Date().toISOString() }) : '';
     }
     case 'shadow-comment':
       return shadowComment(
@@ -240,6 +250,8 @@ function run(command: string | undefined, rest: string[]): string {
       return renderJournal(collectRecords(raw, owners, cfg.shadow.revert_days), cfg, updated, {
         tasks: collectIssueTasks(raw),
         filesUrl: v['files-url'],
+        problems: collectLineProblems(raw),
+        stopped: stopState(raw),
       });
     }
     case 'journal-export': {
@@ -249,8 +261,10 @@ function run(command: string | undefined, rest: string[]): string {
       const raw = required(v.raw, '--raw');
       const out = required(v.out, '--out');
       const rows = taskRows(collectRecords(raw, owners, cfg.shadow.revert_days), collectIssueTasks(raw));
+      const problems = collectLineProblems(raw);
       writeFileSync(join(out, 'journal.csv'), journalCsv(rows));
-      writeFileSync(join(out, 'journal.json'), journalJson(rows, new Date().toISOString()));
+      writeFileSync(join(out, 'problemy.csv'), problemsCsv(problems));
+      writeFileSync(join(out, 'journal.json'), journalJson(rows, new Date().toISOString(), { problems, stopped: stopState(raw) }));
       return `Statystyki: ${rows.length} zadań`;
     }
     case 'journal-issues':

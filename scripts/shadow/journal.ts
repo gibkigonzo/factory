@@ -1,7 +1,7 @@
 // Dziennik trybu cienia: treść przypiętego issue „Tryb cienia”. Lista zamiast tabel, bo czyta się go na telefonie.
 
 import type { FactoryConfig } from '../config/spec.ts';
-import type { IssueRecord, PrRecord } from './collect.ts';
+import type { IssueRecord, LineProblemRecord, PrRecord, StopState } from './collect.ts';
 import { ACTION_SHORT } from './decision.ts';
 import { computeMetrics, isFalseLow, MIN_GROUP, percent } from './metrics.ts';
 import type { Group } from './metrics.ts';
@@ -36,6 +36,18 @@ export interface JournalExtras {
   tasks?: readonly IssueRecord[];
   /** Adres katalogu z journal.csv i journal.json (gałąź factory-journal). */
   filesUrl?: string;
+  /** Problemy taśmy zgłoszone przez agentów, od najnowszego. */
+  problems?: readonly LineProblemRecord[];
+  /** Taśma zatrzymana komendą /stop. */
+  stopped?: StopState;
+}
+
+const SHOWN_PROBLEMS = 10;
+const STAGE_OF_PROBLEM: Record<string, string> = { plan: 'plan', implement: 'implementacja' };
+
+function problemLine(p: LineProblemRecord): string {
+  const where = [p.issue ? `#${p.issue}` : '', p.pr ? `PR #${p.pr}` : ''].filter(Boolean).join(', ');
+  return `- ${p.at.slice(0, 10)} · ${STAGE_OF_PROBLEM[p.stage] ?? p.stage}${where ? ` (${where})` : ''}: ${p.problem.replace(/\s+/g, ' ').trim()}`;
 }
 
 const total = (usage: readonly { cost: number }[] = []) => usage.reduce((sum, u) => sum + u.cost, 0);
@@ -50,7 +62,12 @@ export function renderJournal(records: readonly PrRecord[], config: FactoryConfi
     : `**Bramka 1: jeszcze nie.** ${m.gate.missing.join('; ')}.`;
   const { above, below, threshold, enoughData } = m.calibration;
   const t = String(threshold).replace('.', ',');
+  const stop = extras.stopped;
+  const problems = extras.problems ?? [];
   const lines = [
+    ...(stop
+      ? [`**⏸️ Taśma zatrzymana** od ${stop.since.slice(0, 16).replace('T', ' ')} UTC (#${stop.issue})${stop.reason ? `: ${stop.reason}` : ''}. Plan, implementacja, recenzja i kolejka czekają; wznowienie: \`/start\`.`, '']
+      : []),
     gate,
     '',
     '## Metryki',
@@ -87,12 +104,23 @@ export function renderJournal(records: readonly PrRecord[], config: FactoryConfi
     ...(tasks.length ? [`- Zadania bez PR (blokada, podział, odrzucenie, czekające): ${tasks.length}, razem ${usd(tasksCost)}`] : []),
     ...(prsCost + tasksCost > 0 ? [`- Razem wszystkie zadania: ${usd(prsCost + tasksCost)}`] : []),
     '',
+    '## Problemy taśmy',
+    '',
+    ...(problems.length
+      ? [
+          `Zgłoszenia agentów o kłopotach z narzędziami i komendami projektu, a nie z samym zadaniem: ${problems.length}. Taśma się przez nie nie zatrzymuje; gdy problem wraca, zatrzymaj ją komendą \`/stop <powód>\` i zleć naprawę.`,
+          '',
+          ...problems.slice(0, SHOWN_PROBLEMS).map(problemLine),
+          ...(problems.length > SHOWN_PROBLEMS ? [`- …i ${problems.length - SHOWN_PROBLEMS} starszych (pełna lista w problemy.csv)`] : []),
+        ]
+      : ['- Brak zgłoszeń.']),
+    '',
     '## PR-y fabryki',
     '',
     ...(records.length ? records.map(prLine) : ['- Jeszcze żadnego.']),
     '',
     ...(extras.filesUrl
-      ? [`Wszystkie zadania z kosztem na etap i recenzenta oraz Twoimi ocenami: [journal.csv](${extras.filesUrl}/journal.csv) (tabela) i [journal.json](${extras.filesUrl}/journal.json).`, '']
+      ? [`Wszystkie zadania z kosztem na etap i recenzenta oraz Twoimi ocenami: [journal.csv](${extras.filesUrl}/journal.csv) (tabela) i [journal.json](${extras.filesUrl}/journal.json); problemy taśmy: [problemy.csv](${extras.filesUrl}/problemy.csv).`, '']
       : []),
     `Progi Bramki 1: ${config.shadow.gate_prs} ocenionych PR, zgodność co najmniej ${percent(config.shadow.min_agreement)}, fałszywych Low najwyżej ${config.shadow.max_false_low}. Fałszywe Low to werdykt „scaliłaby”, który oceniłeś 👎, PR zamknięty bez merge'u albo merge cofnięty w ciągu ${config.shadow.revert_days} dni. Przyjęty PR to scalony i niecofnięty.`,
     '',

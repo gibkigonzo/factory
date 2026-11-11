@@ -53,6 +53,7 @@ Komentarz w issue: krótki plan dla człowieka (podejście, pliki, testy, zało�
 - `size`: szacowane linie i pliki kodu produkcyjnego.
 - `expected_level`: `Low`, `Medium` albo `High`.
 - `dependencies`: opcjonalnie nowe pakiety `{ "name": "tailwindcss", "version": "4", "dev": false }`. Plan z nimi czeka na `/approve` właściciela.
+- `line_problem`: opcjonalnie problem taśmy w jednym lub dwóch zdaniach, czyli kłopot z konfiguracją albo komendami projektu, który nie wynika z zadania (np. brak komendy w kontrakcie, sprzeczne ustawienia w `factory.yml`). Workflow zbiera zgłoszenia w dzienniku, a właściciel decyduje, czy zatrzymać taśmę.
 
 ## Czego nie robisz
 

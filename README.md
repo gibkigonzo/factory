@@ -6,7 +6,7 @@ Fabryka oprogramowania oparta na Claude Code i GitHub Actions. Zamienia rozmowę
 
 ## Co potrafi
 
-- **Spec z rozmowy, także z telefonu.** Skill `spec-writer` zadaje najwyżej 5 pytań o decyzje produktowe i zakłada issue z kryteriami akceptacji, które da się sprawdzić maszynowo.
+- **Spec z rozmowy, także z telefonu.** Skill `spec-writer` dopytuje o decyzje produktowe w krótkich rundach (do 5 pytań w jednej wiadomości) i zakłada issue z kryteriami akceptacji, które da się sprawdzić maszynowo.
 - **Plan.** Planer rozpisuje podejście, pliki, testy i dowody dla każdego kryterium. Gdy czegoś nie wie, pyta. Za duże zadanie dzieli na mniejsze issue.
 - **Implementacja w PR.** Implementer pisze kod i testy na gałęzi `factory/<numer>-<nazwa>` i podaje dowód dla każdego kryterium. Gdy nie może dokończyć zadania, zgłasza blokadę zamiast oddawać połowiczny PR.
 - **Recenzja.** CI uruchamia komendy projektu. Pięć perspektyw (poprawność, testy, bezpieczeństwo, utrzymanie, zgodność ze specem) ocenia PR, każda w świeżym kontekście. Projekt może dodać własne perspektywy.
@@ -100,6 +100,8 @@ Ręcznie, na razie, synchronizujesz tylko kopię skilla `spec-writer` w `.claude
 | `needs-approval` | plan dodaje pakiety; czeka na Twoje `/approve` |
 | `blocked` | potrzebna Twoja decyzja: pytania planera, blokada implementera albo awaria etapu (powód w komentarzu) |
 | `split` | planer podzielił zadanie na mniejsze issue |
+| `factory:paused` | taśma jest zatrzymana, a etap czeka; ruszy sam po `/start` (też w PR) |
+| `factory:stopped` | issue „Taśma zatrzymana”: otwarte, dopóki taśma stoi |
 
 W PR: `risk:low`, `risk:medium`, `risk:high` (poziom z oceny ryzyka) i `factory:round-N` (runda poprawek).
 
@@ -110,8 +112,14 @@ W PR: `risk:low`, `risk:medium`, `risk:high` (poziom z oceny ryzyka) i `factory:
 | `/change <opis>` | PR | runda poprawek według Twojego opisu |
 | `/reject` | issue albo PR | odrzuca zadanie, zamyka PR i zwalnia kolejkę |
 | `/split` | issue | planer dzieli zadanie na mniejsze issue |
+| `/stop <powód>` | issue albo PR | zatrzymuje taśmę: plan, implementacja, recenzja i kolejka czekają, a dziennik i komendy działają |
+| `/start` | issue albo PR | wznawia taśmę: etapy wstrzymane w czasie postoju ruszają same, kolejka wypuszcza czekające zadania |
 
 Komendy działają tylko od właściciela repo i kont z wejścia `trusted`.
+
+**Zatrzymanie taśmy** służy do tego, co w fabryce robi się przy wadzie linii: najpierw naprawa, potem dalsza produkcja. `/stop` otwiera issue „Taśma zatrzymana” z powodem. Przebieg, który już trwa, kończy bieżący etap, ale następny nie rusza i dostaje etykietę `factory:paused` z zapisem, co miało ruszyć. `/start` zamyka issue i wznawia zapisane etapy. Etapy wstrzymane w czasie postoju liczą się do dziennego limitu tak jak zwykłe przebiegi.
+
+**Problemy taśmy** zgłaszają agenci, gdy kłopot dotyczy narzędzi albo komend projektu, a nie samego zadania. Przykład: komenda wypisuje błąd, którego zadanie nie usunie. Zgłoszenie widać w komentarzu z planem, w opisie PR albo w komentarzu z blokadą. Dziennik zbiera wszystkie zgłoszenia w sekcji „Problemy taśmy”, a pełna lista trafia do `problemy.csv` na gałęzi `factory-journal`. Zgłoszenie nie zatrzymuje taśmy: decyzja o `/stop` należy do Ciebie.
 
 ## Jak działa
 
@@ -336,7 +344,7 @@ Implementer zmienia pliki narzędziami do edycji, nazwy i usunięcia robi przez 
 
 ### Spec z telefonu
 
-Spec pisze skill `spec-writer` w rozmowie z Claude. Zadaje najwyżej 5 pytań o decyzje produktowe, każde z proponowaną odpowiedzią. Potem pokazuje spec i po Twoim „tak” zakłada issue z etykietą `ready`, a ta uruchamia planera.
+Spec pisze skill `spec-writer` w rozmowie z Claude. Pyta o decyzje produktowe w rundach: najwyżej 5 pytań w jednej wiadomości, każde z proponowaną odpowiedzią. Kolejna runda pyta tylko o to, co otworzyły odpowiedzi. Gdy po 3 rundach zostają otwarte decyzje, proponuje podział na kilka speców. Potem pokazuje spec i po Twoim „tak” zakłada issue z etykietą `ready`, a ta uruchamia planera.
 
 Spec ma sekcje: Cel, Scenariusz, Kryteria akceptacji (sprawdzalne maszynowo), Poza zakresem, Założenia, Ryzyko produktowe (`niskie` albo `wysokie`) i Projekt. Szablon i przykład są w [`skills/spec-writer/SKILL.md`](skills/spec-writer/SKILL.md). Test pilnuje, żeby szablon, przykład i planer znały te same sekcje (`SPEC_SECTIONS` w `scripts/workflow/spec.ts`).
 
@@ -401,7 +409,7 @@ Wspólne workflowy to `workflow_call` w tym repo. Projekt wywołuje tylko dyryge
 
 | Etap | Uruchamia go | Co robi |
 | --- | --- | --- |
-| `pipeline.yml` | każde zdarzenie workflowu projektu | dyrygent: rozdziela zdarzenia na etapy poniżej |
+| `pipeline.yml` | każde zdarzenie workflowu projektu | dyrygent: rozdziela zdarzenia na etapy poniżej; przy zatrzymanej taśmie (`/stop`) zapisuje wstrzymane etapy zamiast je uruchamiać |
 | `plan.yml` | etykieta `ready` na issue | plan w komentarzu, etykieta `planned`, `blocked` albo `split`; przy `planned` uruchamia implementację albo stawia zadanie w kolejce (`queued`, `needs-approval`) |
 | `implement.yml` | plan, kolejka, `/change` w PR albo pętla poprawek | dzienny limit, instalacja zatwierdzonych zależności, patch od implementera, sprawdzenie ścieżek, PR z gałęzi `factory/<numer>-<nazwa>`; uruchamia recenzję. Przy blokadzie: etykieta `blocked` i komentarz, bez PR |
 | `review.yml` | implementacja | komendy z `factory.yml` (CI), zrzuty ekranu z komentarzem w PR, skład panelu, recenzenci równolegle; pętla poprawek odsyła PR do implementera |
@@ -409,7 +417,7 @@ Wspólne workflowy to `workflow_call` w tym repo. Projekt wywołuje tylko dyryge
 | `merge.yml` | po ocenie ryzyka, w tym samym uruchomieniu | w Etapie 0 tylko werdykt trybu cienia w nowym komentarzu |
 | `journal.yml` | po werdykcie, po zamknięciu PR fabryki, raz dziennie | dziennik trybu cienia w przypiętym issue i statystyki zadań na gałęzi `factory-journal`; po scaleniu PR fabryki zamyka jego issue |
 | `queue.yml` | po zamknięciu PR fabryki, po `/reject`, po zgodzie na zależności, raz dziennie | uruchamia implementację czekających zadań, które mieszczą się w limitach |
-| `commands.yml` | komentarz od właściciela | `/approve`, `/veto`, `/reject`, `/change <opis>`, `/split` |
+| `commands.yml` | komentarz od właściciela | `/approve`, `/veto`, `/reject`, `/change <opis>`, `/split`, `/stop <powód>`, `/start` |
 
 **Ustawienia** (wejścia w szablonie): `factory_ref` (wersja skryptów fabryki, ta sama co w `uses`; w Etapie 0 `main`), `runs_on` (np. `'["self-hosted", "vps"]'` dla własnego runnera w repo prywatnym), `trusted` (dodatkowe zaufane konta), `max_parallel` (recenzenci naraz). Modele i limity bierze z `factory.yml`.
 

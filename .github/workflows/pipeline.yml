@@ -3,6 +3,9 @@
 # a zmiany etapów (nowe joby, nowe uprawnienia w granicach sufitu) nie wymagają zmian w jego repo.
 # Uprawnienia, które przyznaje projekt, są sufitem: każdy etap i każdy job deklaruje tylko swoje minimum,
 # a joby z Claude dalej mają tylko prawo odczytu.
+# Zatrzymanie taśmy: komenda /stop otwiera issue z etykietą factory:stopped. Wtedy plan, implementacja, recenzja
+# i kolejka nie ruszają, a job pause zapisuje, co miało ruszyć. /start zamyka issue i wznawia zapisane wywołania.
+# Dziennik i komendy działają zawsze.
 name: factory-pipeline
 
 on:
@@ -23,10 +26,74 @@ on:
 permissions: {}
 
 jobs:
-  plan:
+  line:
     if: >-
       (github.event_name == 'issues' && github.event.label.name == 'ready') ||
-      (github.event_name == 'workflow_dispatch' && inputs.stage == 'plan')
+      (github.event_name == 'workflow_dispatch' && contains(fromJSON('["plan", "implement", "review", "queue"]'), inputs.stage)) ||
+      github.event_name == 'schedule' ||
+      (github.event_name == 'pull_request_target' &&
+        github.event.pull_request.head.repo.full_name == github.repository &&
+        startsWith(github.event.pull_request.head.ref, 'factory/'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: read
+    outputs:
+      stopped: ${{ steps.state.outputs.stopped }}
+      issue: ${{ steps.state.outputs.issue }}
+    steps:
+      - name: Stan taśmy
+        id: state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          N=$(gh issue list --label factory:stopped --state open --limit 1 --json number --jq '.[0].number // empty')
+          { echo "stopped=$([ -n "$N" ] && echo true || echo false)"; echo "issue=$N"; } >> "$GITHUB_OUTPUT"
+          if [ -n "$N" ]; then echo "::notice::Taśma zatrzymana (#$N); etap czeka na /start."; fi
+
+  pause:
+    # Taśma zatrzymana: zapis wywołania w issue albo PR (etykieta factory:paused i znacznik), żeby /start je wznowił.
+    needs: line
+    if: >-
+      needs.line.outputs.stopped == 'true' &&
+      ((github.event_name == 'issues' && github.event.label.name == 'ready') ||
+       (github.event_name == 'workflow_dispatch' && contains(fromJSON('["plan", "implement", "review"]'), inputs.stage)))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Wstrzymany etap
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STAGE: ${{ inputs.stage || 'plan' }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue }}
+          PR: ${{ inputs.pr }}
+          NOTE: ${{ inputs.note }}
+          STOP: ${{ needs.line.outputs.issue }}
+        run: |
+          if ! [[ "$STAGE" =~ ^(plan|implement|review)$ && "$ISSUE" =~ ^[0-9]*$ && "$PR" =~ ^[0-9]*$ && "$NOTE" =~ ^[A-Za-z0-9_-]*$ ]]; then
+            echo "::error::Nieoczekiwane wejście etapu; nic nie zapisuję."
+            exit 1
+          fi
+          TARGET=${PR:-$ISSUE}
+          [ -n "$TARGET" ] || exit 0
+          DATA=$(jq -nc --arg stage "$STAGE" --arg issue "$ISSUE" --arg pr "$PR" --arg note "$NOTE" '{stage: $stage, issue: $issue, pr: $pr, note: $note}')
+          printf '⏸️ Taśma jest zatrzymana (#%s), więc etap „%s” czeka. Ruszy sam po komendzie `/start`.\n\n<!-- factory:paused %s -->\n' \
+            "$STOP" "$STAGE" "$DATA" > body.md
+          gh label create factory:paused --force --description 'Etap czeka na wznowienie taśmy' >/dev/null
+          gh issue edit "$TARGET" --add-label factory:paused
+          gh issue comment "$TARGET" --body-file body.md
+
+  plan:
+    needs: line
+    if: >-
+      needs.line.outputs.stopped == 'false' && (
+        (github.event_name == 'issues' && github.event.label.name == 'ready') ||
+        (github.event_name == 'workflow_dispatch' && inputs.stage == 'plan'))
     uses: $/.github/workflows/plan.yml
     with:
       issue: ${{ github.event.issue.number || inputs.issue }}
@@ -44,7 +111,8 @@ jobs:
       actions: write
 
   implement:
-    if: github.event_name == 'workflow_dispatch' && inputs.stage == 'implement'
+    needs: line
+    if: needs.line.outputs.stopped == 'false' && github.event_name == 'workflow_dispatch' && inputs.stage == 'implement'
     uses: $/.github/workflows/implement.yml
     with:
       issue: ${{ inputs.issue }}
@@ -63,7 +131,8 @@ jobs:
       actions: write
 
   review:
-    if: github.event_name == 'workflow_dispatch' && inputs.stage == 'review'
+    needs: line
+    if: needs.line.outputs.stopped == 'false' && github.event_name == 'workflow_dispatch' && inputs.stage == 'review'
     uses: $/.github/workflows/review.yml
     with:
       pr: ${{ inputs.pr }}
@@ -124,12 +193,14 @@ jobs:
       pull-requests: read
 
   queue:
+    needs: line
     if: >-
-      github.event_name == 'schedule' ||
-      (github.event_name == 'workflow_dispatch' && inputs.stage == 'queue') ||
-      (github.event_name == 'pull_request_target' &&
-        github.event.pull_request.head.repo.full_name == github.repository &&
-        startsWith(github.event.pull_request.head.ref, 'factory/'))
+      needs.line.outputs.stopped == 'false' && (
+        github.event_name == 'schedule' ||
+        (github.event_name == 'workflow_dispatch' && inputs.stage == 'queue') ||
+        (github.event_name == 'pull_request_target' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          startsWith(github.event.pull_request.head.ref, 'factory/')))
     uses: $/.github/workflows/queue.yml
     with:
       factory_ref: ${{ inputs.factory_ref }}
