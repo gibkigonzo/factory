@@ -19,8 +19,12 @@ describe('publikacja na gałęzi', () => {
       for (const [name, body] of [['journal.csv', 'a'], ['journal.json', '{}'], ['journal.md', '#'], ['evil.sh', 'x'], ['sub/x.csv', 'x']]) {
         writeFileSync(join(src, name!), body!);
       }
-      const publish = (branch: string) => spawnSync('bash', [SCRIPT, remote, src, branch, 'Statystyki'], { encoding: 'utf8' });
-      for (let i = 0; i < 2; i++) assert.equal(publish('factory-journal').status, 0);
+      // Katalog względny, tak jak w workflowie: skrypt przechodzi do katalogu tymczasowego, a pliki ma znaleźć.
+      const publish = (branch: string) => spawnSync('bash', [SCRIPT, remote, 'src', branch, 'Statystyki'], { encoding: 'utf8', cwd: dir });
+      for (let i = 0; i < 2; i++) {
+        const run = publish('factory-journal');
+        assert.equal(run.status, 0, run.stderr);
+      }
       assert.deepEqual(git('--git-dir', remote, 'ls-tree', '--name-only', 'factory-journal').split('\n'), ['journal.csv', 'journal.json', 'journal.md']);
       assert.equal(git('--git-dir', remote, 'rev-list', '--count', 'factory-journal'), '1', 'gałąź nie rośnie');
       assert.equal(publish('main').status, 2);
