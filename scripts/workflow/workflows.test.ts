@@ -167,6 +167,20 @@ describe('workflowy fabryki', () => {
     assert.match(run, /-f stage=review -f pr="\$PR"/);
   });
 
+  it('koszt recenzji rundy bez werdyktu trafia do komentarza rundy, a dziennik go czyta', () => {
+    const loop = workflows.review!.data.jobs.loop!;
+    const downloads = (loop.steps ?? []).filter((step) => step.uses?.startsWith('actions/download-artifact'));
+    assert.ok(downloads.some((step) => (step as { with?: { pattern?: string } }).with?.pattern === 'factory-usage-review-*'));
+    assert.match(workflows.review!.text, /cli\.ts" loop .*--usage "\$W\/usage" --out "\$W\/round\.md"/);
+    assert.match(workflows.journal!.text, /contains\("<!-- factory:round -->"\)\) \| \{body\}\]' "\$RUNNER_TEMP\/bot-\$PR\.json" > "\$RAW\/rounds\/\$PR\.json"/);
+  });
+
+  it('poprawka w PR zdejmuje z issue etykietę blocked po wcześniejszej blokadzie', () => {
+    const run = (workflows.implement!.data.jobs.publish!.steps ?? []).find((step) => step.run?.includes('pr-body'))!.run!;
+    assert.match(run, /gh issue edit "\$ISSUE" --remove-label blocked/);
+    assert.ok(run.indexOf('--remove-label blocked') > run.indexOf('gh pr edit "$PR" --body-file'), 'dopiero po publikacji poprawki');
+  });
+
   it('ocena ryzyka liczy diff od punktu rozgałęzienia zapisanego w recenzji, także gdy PR scalono w trakcie', () => {
     assert.match(workflows.review!.text, /git merge-base "origin\/\$BASE" HEAD > "\$W\/base\.sha"/);
     assert.match(workflows.review!.text, /panel\.ts" --base "\$\(cat "\$W\/base\.sha"\)"/);

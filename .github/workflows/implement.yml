@@ -376,6 +376,8 @@ jobs:
               gh pr comment "$PR" --body "Runda $NEXT bez zmian w plikach: implementer odpowiedział na uwagi w założeniach opisu PR. Recenzja rusza jeszcze raz."
             fi
           fi
+          # Poprawka po wcześniejszej blokadzie (np. /change) trafiła do PR, więc zadanie nie jest już zablokowane.
+          gh issue edit "$ISSUE" --remove-label blocked >/dev/null 2>&1 || true
           gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=review -f pr="$PR"
 
   # Implementer zgłosił blokadę, zależności się nie zainstalowały albo pierwsza implementacja nie ma żadnej zmiany:

@@ -4,6 +4,8 @@
 
 import type { Review } from '../risk/types.ts';
 import type { CiResult } from './evidence.ts';
+import { usageBlock } from './usage.ts';
+import type { Usage } from './usage.ts';
 
 export const ROUND_MARKER = '<!-- factory:round -->';
 
@@ -35,11 +37,17 @@ const SEVERITY = ['critical', 'high', 'medium', 'low'];
 export function codeBlock(text: string): string[] {
   const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
   const fence = '`'.repeat(Math.max(3, longest + 1));
-  return [`${fence}text`, text.replace(/<!--/g, '<!- -'), fence];
+  return [`${fence}text`, inert(text), fence];
 }
 
-/** Komentarz w PR z uwagami dla implementera. Czyta go też właściciel, więc jest po polsku i krótki. */
-export function roundComment(input: LoopInput): string {
+/** Tekst spoza taśmy (wyjście komend, uwagi recenzentów) bez `<!--`, więc bez podrobionych znaczników i bloków kosztu. */
+export const inert = (text: string) => text.replace(/<!--/g, '<!- -');
+
+/**
+ * Komentarz w PR z uwagami dla implementera. Czyta go też właściciel, więc jest po polsku i krótki.
+ * Niesie zużycie recenzentów tej rundy: runda odesłana do implementera nie ma werdyktu, a dziennik liczy koszt z komentarzy.
+ */
+export function roundComment(input: LoopInput, usage: readonly Usage[] = []): string {
   const next = input.round + 1;
   const lines = [ROUND_MARKER, `## Runda poprawek ${next} z ${input.maxRounds}`, ''];
   const failed = (input.ci?.commands ?? []).filter((c) => !c.ok);
@@ -49,14 +57,15 @@ export function roundComment(input: LoopInput): string {
     for (const c of failed.filter((c) => c.tail)) lines.push(`\`${c.name}\`:`, ...codeBlock(c.tail!), '');
   }
   for (const review of input.reviews.filter((r) => r.verdict === 'request_changes')) {
-    lines.push(`**${review.perspective}:** ${review.summary}`);
+    lines.push(`**${review.perspective}:** ${inert(review.summary)}`);
     const findings = [...review.findings].sort((a, b) => SEVERITY.indexOf(a.severity) - SEVERITY.indexOf(b.severity));
     for (const f of findings) {
-      const where = f.file ? ` (\`${f.file}${f.line ? `:${f.line}` : ''}\`)` : '';
-      lines.push(`- ${f.severity}: ${f.issue}${where}`);
+      const where = f.file ? ` (\`${inert(f.file)}${f.line ? `:${f.line}` : ''}\`)` : '';
+      lines.push(`- ${f.severity}: ${inert(f.issue)}${where}`);
     }
     lines.push('');
   }
   lines.push('Implementer odnosi się do każdej uwagi: poprawia albo wyjaśnia w założeniach, dlaczego uwaga nie dotyczy zmiany.');
+  if (usage.length) lines.push('', usageBlock(usage));
   return lines.join('\n');
 }

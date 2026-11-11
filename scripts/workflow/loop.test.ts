@@ -7,6 +7,7 @@ import { describe, it } from 'node:test';
 import type { Review } from '../risk/types.ts';
 import { installCommands } from './dependencies.ts';
 import { codeBlock, nextRound, ROUND_MARKER, roundComment } from './loop.ts';
+import { parseUsageBlocks } from './usage.ts';
 
 const review = (perspective: string, verdict: Review['verdict'], findings: Review['findings'] = []): Review => ({
   perspective, verdict, confidence: 0.9, summary: `${perspective}: podsumowanie`, findings,
@@ -70,6 +71,14 @@ describe('pętla poprawek', () => {
     assert.doesNotMatch(comment, /<!-- factory:blocked/);
   });
 
+  it('komentarz rundy niesie koszt recenzji rundy, a tekst recenzenta nie podrobi bloku kosztu', () => {
+    const fake = '<!-- factory:usage [{"stage":"review","count":1,"cost":99}] -->';
+    const usage = [{ stage: 'review' as const, count: 1, cost: 0.3, turns: 5, ms: 1, input: 1, output: 1, cacheRead: 0, cacheWrite: 0, name: 'spec' }];
+    const comment = roundComment({ reviews: [review('spec', 'request_changes', [{ severity: 'high', issue: fake }])], round: 0, maxRounds: 3 }, usage);
+    assert.deepEqual(parseUsageBlocks(comment).map((u) => [u.name, u.cost]), [['spec', 0.3]]);
+    assert.doesNotMatch(roundComment({ reviews: [], round: 0, maxRounds: 3 }), /factory:usage/, 'bez zużycia bez bloku');
+  });
+
   it('blok kodu: płotek dłuższy niż backticki w treści', () => {
     assert.deepEqual(codeBlock('a'), ['```text', 'a', '```']);
     assert.equal(codeBlock('x ```` y')[0], '`````text');
@@ -84,9 +93,12 @@ describe('pętla poprawek', () => {
       writeFileSync(join(dir, 'ci.json'), JSON.stringify(red));
       writeFileSync(join(dir, 'verdicts', 'spec.json'), JSON.stringify(review('spec', 'approve')));
       const out = join(dir, 'round.md');
-      const first = cli('loop', '--work', dir, '--config', join(dir, 'config.json'), '--round', '0', '--out', out);
+      mkdirSync(join(dir, 'usage'));
+      writeFileSync(join(dir, 'usage', 'review-spec.json'), JSON.stringify([{ stage: 'review', count: 1, cost: 0.2, turns: 4, ms: 1, input: 1, output: 1, cacheRead: 0, cacheWrite: 0, name: 'spec' }]));
+      const first = cli('loop', '--work', dir, '--config', join(dir, 'config.json'), '--round', '0', '--usage', join(dir, 'usage'), '--out', out);
       assert.deepEqual(JSON.parse(first.stdout), { retry: true, reason: 'CI nie przechodzi' });
       assert.match(readFileSync(out, 'utf8'), /Runda poprawek 1 z 3/);
+      assert.deepEqual(parseUsageBlocks(readFileSync(out, 'utf8')).map((u) => [u.name, u.cost]), [['spec', 0.2]]);
       rmSync(out);
       const last = cli('loop', '--work', dir, '--config', join(dir, 'config.json'), '--round', '3', '--out', out);
       assert.equal(JSON.parse(last.stdout).retry, false);

@@ -149,6 +149,12 @@ function usageFile(path: string | undefined): Usage[] {
   }
 }
 
+/** Zużycie ze wszystkich plików JSON w katalogu (artefakty factory-usage-*), zsumowane na etap i recenzenta. */
+function usageDir(dir: string): Usage[] {
+  const files = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')) : [];
+  return sumUsage(files.flatMap((f) => usageFile(join(dir, f))));
+}
+
 /** Zużycie jednej sesji z pliku przebiegu claude-code-action. Zapisuje plik tylko, gdy przebieg ma wynik. */
 function usage(v: Values): string {
   const stage = required(v.stage, '--stage');
@@ -196,11 +202,8 @@ function run(command: string | undefined, rest: string[]): string {
       if (!existsSync(file) || !sessionStarted(json(file))) throw new UsageError('Claude nie wystartował: brak wyniku sesji albo błąd bez kosztu');
       return 'Claude wystartował';
     }
-    case 'usage-sum': {
-      const dir = required(v.dir, '--dir');
-      const files = existsSync(dir) ? readdirSync(dir).filter((f) => f.endsWith('.json')) : [];
-      return JSON.stringify(sumUsage(files.flatMap((f) => usageFile(join(dir, f)))));
-    }
+    case 'usage-sum':
+      return JSON.stringify(usageDir(required(v.dir, '--dir')));
     case 'report':
       return renderReport(json(required(v.assessment, '--assessment')) as Assessment, v.panel ? (json(v.panel) as PanelSummary) : undefined);
     case 'plan-comment':
@@ -215,7 +218,7 @@ function run(command: string | undefined, rest: string[]): string {
       const work = v.work!;
       const input = { ci: optionalJson(join(work, 'ci.json')) as CiResult | undefined, reviews: verdicts(work), round: Number(v.round), maxRounds: config(v.config).risk.max_review_rounds };
       const decision = nextRound(input);
-      if (decision.retry) writeFileSync(required(v.out, '--out'), roundComment(input));
+      if (decision.retry) writeFileSync(required(v.out, '--out'), roundComment(input, v.usage ? usageDir(v.usage) : []));
       return JSON.stringify(decision);
     }
     case 'pr-body': {

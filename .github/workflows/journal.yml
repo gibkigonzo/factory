@@ -70,7 +70,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          mkdir -p "$RAW/comments" "$RAW/reactions" "$RAW/events" "$RAW/issues" "$RAW/plans"
+          mkdir -p "$RAW/comments" "$RAW/reactions" "$RAW/events" "$RAW/issues" "$RAW/plans" "$RAW/rounds"
           # Zadania bez PR (blokada, podział, odrzucenie) rozpoznaje skrypt po etykietach taśmy.
           gh issue list --state all --limit 1000 --json number,title,state,labels,createdAt,closedAt > "$RAW/issue-list.json"
           # Zatrzymana taśma (/stop): dziennik pokazuje to na samej górze.
@@ -81,9 +81,11 @@ jobs:
           FACTORY='.[] | select((.headRefName | startswith("factory/")) and (.isCrossRepository | not))'
           for PR in $(jq -r "$FACTORY | .number" "$RAW/prs.json"); do
             gh api --paginate "repos/$GH_REPO/issues/$PR/comments" \
-              --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | contains("<!-- factory:shadow -->")))
-                    | {id, body, user: {login: .user.login}, created_at}' \
-              | jq -s . > "$RAW/comments/$PR.json"
+              --jq '.[] | select(.user.login == "github-actions[bot]") | {id, body, user: {login: .user.login}, created_at}' \
+              | jq -s . > "$RUNNER_TEMP/bot-$PR.json"
+            jq '[.[] | select(.body | contains("<!-- factory:shadow -->"))]' "$RUNNER_TEMP/bot-$PR.json" > "$RAW/comments/$PR.json"
+            # Komentarze rund poprawek niosą koszt recenzji rund bez werdyktu.
+            jq '[.[] | select(.body | contains("<!-- factory:round -->")) | {body}]' "$RUNNER_TEMP/bot-$PR.json" > "$RAW/rounds/$PR.json"
             for ID in $(jq -r '.[].id' "$RAW/comments/$PR.json"); do
               gh api --paginate "repos/$GH_REPO/issues/comments/$ID/reactions" \
                 --jq '.[] | {content, user: {login: .user.login}, created_at}' | jq -s . > "$RAW/reactions/$ID.json"
