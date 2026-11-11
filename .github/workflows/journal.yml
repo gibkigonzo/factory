@@ -164,6 +164,7 @@ jobs:
           echo "Dziennik trybu cienia: #$NUMBER"
 
       - name: Statystyki na gałęzi factory-journal
+        continue-on-error: true   # dziennik w issue jest już zapisany; błąd plików nie czerwieni całego przebiegu
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

@@ -5,8 +5,10 @@
 # Użycie: publish-branch.sh <remote> <katalog> <gałąź factory-…> <opis commita>
 # Publikuje tylko pliki .csv, .json i .md z katalogu (bez podkatalogów). Poświadczenia podaje wywołujący.
 set -euo pipefail
-REMOTE=$1 SRC=$2 BRANCH=$3 MESSAGE=$4
+REMOTE=$1 BRANCH=$3 MESSAGE=$4
 [[ "$BRANCH" =~ ^factory-[a-z-]+$ ]] || { echo "Gałąź spoza factory-*: $BRANCH" >&2; exit 2; }
+# Ścieżka bezwzględna, bo skrypt pracuje w katalogu tymczasowym (workflow podaje np. „journal”).
+SRC=$(cd "$2" && pwd)
 
 REPO=$(mktemp -d)
 cd "$REPO"
