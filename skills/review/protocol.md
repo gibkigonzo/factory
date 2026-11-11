@@ -13,7 +13,7 @@ Orkiestrator podaje w poleceniu ścieżki do plików. Czytasz je narzędziem Rea
 - **spec** z issue: cel, scenariusz, kryteria akceptacji, poza zakresem, założenia, ryzyko produktowe;
 - **opis PR** z dowodami implementera, jeśli jest;
 - **artefakty weryfikacji**, jeśli są: wyniki testów, zrzuty ekranu, raporty lintera lub testów mutacyjnych;
-- **wynik CI taśmy** (`ci.json`): komendy z `commands` w `factory.yml` (np. `test`, `build`, `e2e`) i czy przeszły. CI uruchamia taśma fabryki przy każdym PR, więc projekt nie potrzebuje do tego własnego workflow. Nieudana komenda to fakt, nie domysł: opieraj na nim uwagi.
+- **wynik CI taśmy** (`ci.json`): komendy z `commands` w `factory.yml` (np. `test`, `build`, `e2e`), czy przeszły i końcówka wyjścia każdej (`tail`, ostatnie linie stdout i stderr; pusty, gdy komenda nic nie wypisała). CI uruchamia taśma fabryki przy każdym PR, więc projekt nie potrzebuje do tego własnego workflow. Nieudana komenda to fakt, nie domysł: opieraj na nim uwagi. Dowodu na to, co komenda wypisała (np. czysty typecheck), szukaj w `tail`, a nie proś o niego implementera: implementer nie ma innego wyjścia komend niż to.
 
 Kod repo możesz czytać i przeszukiwać (Read, Grep, Glob), żeby zrozumieć kontekst zmiany.
 

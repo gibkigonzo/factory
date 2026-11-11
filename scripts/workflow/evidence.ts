@@ -7,7 +7,8 @@ import type { IssueSpec } from './spec.ts';
 
 export interface CiResult {
   status: 'success' | 'failure';
-  commands: { name: string; ok: boolean; seconds: number }[];
+  /** `tail`: ostatnie linie wyjścia komendy (stdout i stderr), bez kolorów terminala. */
+  commands: { name: string; ok: boolean; seconds: number; tail?: string }[];
 }
 
 export interface Implementation {

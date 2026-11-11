@@ -154,6 +154,19 @@ describe('workflowy fabryki', () => {
     assert.ok(env >= 0 && env < steps.indexOf(claude), 'katalog zrzutów ustawiony przed implementerem, poza patchem');
   });
 
+  it('runda poprawek bez zmian w plikach: opis PR i ponowna recenzja zamiast blokady', () => {
+    const { data } = workflows.implement!;
+    const publish = data.jobs.publish as { if?: string; steps?: (Step & { if?: string })[] };
+    const blocked = data.jobs.blocked as { if?: string };
+    assert.match(String(publish.if), /inputs\.pr != '' && needs\.implement\.outputs\.blocker == ''/);
+    assert.match(String(blocked.if), /needs\.implement\.outputs\.empty == 'true' && inputs\.pr == ''/);
+    const download = publish.steps!.find((step) => step.uses?.startsWith('actions/download-artifact'))!;
+    assert.match(String(download.if), /outputs\.empty == 'false'/, 'bez patcha nie ma artefaktu');
+    const run = publish.steps!.find((step) => step.run?.includes('pr-body'))!.run!;
+    assert.match(run, /^if \[ "\$EMPTY" != true \]; then\n(?: .*\n)*  git apply --index .*\n(?: .*\n)*fi\n/m, 'commit tylko z patchem');
+    assert.match(run, /-f stage=review -f pr="\$PR"/);
+  });
+
   it('ocena ryzyka liczy diff od punktu rozgałęzienia zapisanego w recenzji, także gdy PR scalono w trakcie', () => {
     assert.match(workflows.review!.text, /git merge-base "origin\/\$BASE" HEAD > "\$W\/base\.sha"/);
     assert.match(workflows.review!.text, /panel\.ts" --base "\$\(cat "\$W\/base\.sha"\)"/);

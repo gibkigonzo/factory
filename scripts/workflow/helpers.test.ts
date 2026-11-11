@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { spawnSync } from 'node:child_process';
 import { parseOutput, PLAN_SPEC } from '../agents/output.ts';
 import { REVIEW_SPEC } from '../risk/evidence.ts';
-import { commandOrder, runCommands } from './ci.ts';
+import { commandOrder, outputTail, runCommands, TAIL_LINES } from './ci.ts';
 import { buildEvidence } from './evidence.ts';
 import { toJsonSchema } from './jsonschema.ts';
 import { branchName, implementerTools, pathProblems } from './patch.ts';
@@ -267,6 +267,30 @@ describe('CI z komend factory.yml', () => {
     assert.deepEqual([ok.status, ok.commands.map((c) => `${c.name}:${c.ok}`)], ['failure', ['test:true', 'build:false']]);
     const broken = runCommands({ setup: 'false', test: 'true' }, process.cwd());
     assert.deepEqual(broken.commands.map((c) => c.name), ['setup']);
+  });
+
+  it('zapisuje końcówkę wyjścia (stdout i stderr) i kod wyjścia komendy, nie tee', () => {
+    const result = runCommands(
+      { test: 'for i in $(seq 1 40); do echo "linia $i"; done; echo "błąd" >&2; exit 3', lint: 'echo "a\"b\" \'c\' $HOME" | wc -c' },
+      process.cwd(),
+    );
+    const test = result.commands.find((c) => c.name === 'test')!;
+    assert.equal(test.ok, false);
+    const lines = test.tail!.split('\n');
+    assert.equal(lines.length, TAIL_LINES);
+    assert.deepEqual([lines[0], lines.at(-1)], ['linia 12', 'błąd']);
+    const lint = result.commands.find((c) => c.name === 'lint')!;
+    assert.equal(lint.ok, true);
+    assert.match(lint.tail!, /^\s*\d+$/);
+    assert.equal(runCommands({ build: 'true' }, process.cwd()).commands[0]!.tail, '', 'pusty tail: komenda nic nie wypisała');
+  });
+
+  it('końcówka wyjścia: bez kolorów terminala, z ostatnim stanem paska postępu, z przyciętymi liniami', () => {
+    assert.equal(outputTail('\x1b[31mERROR\x1b[0m x\n\n'), 'ERROR x');
+    assert.equal(outputTail('pobieranie 10%\rpobieranie 100%\r\nkoniec'), 'pobieranie 100%\nkoniec');
+    assert.equal(outputTail('a\nb\nc', 2), 'b\nc');
+    assert.equal(outputTail('x'.repeat(500)).length, 301);
+    assert.ok(outputTail(Array.from({ length: 30 }, () => 'y'.repeat(300)).join('\n')).length <= 4001);
   });
 });
 

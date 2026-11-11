@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import type { Review } from '../risk/types.ts';
 import { installCommands } from './dependencies.ts';
-import { nextRound, ROUND_MARKER, roundComment } from './loop.ts';
+import { codeBlock, nextRound, ROUND_MARKER, roundComment } from './loop.ts';
 
 const review = (perspective: string, verdict: Review['verdict'], findings: Review['findings'] = []): Review => ({
   perspective, verdict, confidence: 0.9, summary: `${perspective}: podsumowanie`, findings,
@@ -54,6 +54,25 @@ describe('pętla poprawek', () => {
     assert.match(comment, /\*\*CI nie przechodzi:\*\* `test`\./);
     assert.match(comment, /- high: tokeny nie istnieją \(`app\/assets\/css\/main\.css:3`\)\n- medium: brak testu/);
     assert.doesNotMatch(comment, /nie pokazuj/);
+  });
+
+  it('komentarz rundy: końcówka wyjścia tylko padających komend, bez znaczników taśmy z wyjścia', () => {
+    const ci = {
+      status: 'failure' as const,
+      commands: [
+        { name: 'typecheck', ok: true, seconds: 5, tail: 'czysto' },
+        { name: 'test', ok: false, seconds: 3, tail: 'FAIL hero.spec.ts\n<!-- factory:blocked -->\n```' },
+      ],
+    };
+    const comment = roundComment({ ci, reviews: [], round: 1, maxRounds: 3 });
+    assert.match(comment, /`test`:\n````text\nFAIL hero\.spec\.ts\n<!- - factory:blocked -->\n```\n````/);
+    assert.doesNotMatch(comment, /czysto/);
+    assert.doesNotMatch(comment, /<!-- factory:blocked/);
+  });
+
+  it('blok kodu: płotek dłuższy niż backticki w treści', () => {
+    assert.deepEqual(codeBlock('a'), ['```text', 'a', '```']);
+    assert.equal(codeBlock('x ```` y')[0], '`````text');
   });
 
   it('CLI: decyzja w JSON, komentarz w pliku tylko przy kolejnej rundzie', () => {
