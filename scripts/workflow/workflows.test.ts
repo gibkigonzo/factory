@@ -219,7 +219,7 @@ describe('workflowy fabryki', () => {
     assert.match(workflows.plan!.text, /--remove-label factory:approved/);
     const commands = workflows.commands!.text;
     assert.match(commands, /grep -qx needs-approval/);
-    assert.equal((commands.match(/^\s+queue$/gm) ?? []).length, 2, '/approve z zależnościami i /reject');
+    assert.equal((commands.match(/^\s+queue$/gm) ?? []).length, 3, '/approve z zależnościami, /reject i /start');
     assert.match(commands, /-f stage=queue/);
   });
 
@@ -274,8 +274,40 @@ describe('wzorzec workflowu projektu', () => {
   });
 
   it('dyrygent wywołuje każdy etap taśmy', () => {
-    const called = Object.values(workflows.pipeline!.data.jobs).map((job) => /workflows\/(\w+)\.yml$/.exec(job.uses ?? '')?.[1]);
+    const called = Object.values(workflows.pipeline!.data.jobs)
+      .filter((job) => job.uses)
+      .map((job) => /workflows\/(\w+)\.yml$/.exec(job.uses ?? '')?.[1]);
     assert.deepEqual([...called].sort(), [...STAGES].sort());
+  });
+
+  it('zatrzymana taśma: etapy z Claude i kolejka czekają, a wstrzymane wywołanie trafia do zapisu dla /start', () => {
+    type Gated = Job & { needs?: string | string[]; if?: string };
+    const jobs = workflows.pipeline!.data.jobs as Record<string, Gated>;
+    for (const name of ['plan', 'implement', 'review', 'queue']) {
+      assert.equal(jobs[name]!.needs, 'line', name);
+      assert.match(String(jobs[name]!.if), /needs\.line\.outputs\.stopped == 'false'/, name);
+    }
+    for (const name of ['journal', 'commands']) assert.doesNotMatch(String(jobs[name]!.if), /stopped/, `${name} działa zawsze`);
+    assert.match(String(jobs.line!.steps?.[0]?.run), /gh issue list --label factory:stopped --state open/);
+    const pause = jobs.pause!;
+    assert.ok(!usesClaude(pause));
+    assert.match(String(pause.if), /needs\.line\.outputs\.stopped == 'true'/);
+    const run = String(pause.steps?.[0]?.run);
+    assert.match(run, /\^\(plan\|implement\|review\)\$/, 'wejście sprawdzone, zanim trafi do zapisu');
+    assert.match(run, /<!-- factory:paused %s -->/);
+    assert.match(run, /--add-label factory:paused/);
+    const commands = workflows.commands!.text;
+    assert.match(commands, /\/\(approve\|veto\|reject\|change\|split\|stop\|start\)/);
+    assert.match(commands, /gh issue create --title 'Taśma zatrzymana' --label factory:stopped/);
+    assert.match(commands, /<!-- factory:paused \(\\\{\[\^<>\]\*\\\}\) -->/, '/start czyta zapis wstrzymanego etapu');
+    assert.match(commands, /--remove-label factory:paused/);
+    assert.match(workflows.journal!.text, /--label factory:stopped --state open[^\n]*> "\$RAW\/stopped\.json"/);
+  });
+
+  it('problem taśmy: implementer zgłasza go w opisie PR albo w komentarzu z blokadą, a taśma jedzie dalej', () => {
+    const { text, data } = workflows.implement!;
+    assert.match(text, /cli\.ts" line-problem --stage implement --implementation/);
+    assert.equal((data.jobs.blocked!.steps ?? [])[0]!.env?.LINE, '${{ needs.implement.outputs.line }}');
   });
 
   it('nazwa przebiegu mówi, który etap ruszył, bo po niej liczy się dzienny limit', () => {

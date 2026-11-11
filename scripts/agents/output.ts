@@ -54,6 +54,7 @@ export const PLAN_SPEC: Spec = {
       kind: 'list',
       item: { kind: 'object', fields: { title: text, body: text }, required: ['title', 'body'] },
     },
+    line_problem: text,
   },
   required: ['decision', 'summary', 'size', 'files', 'expected_level', 'acceptance', 'assumptions'],
 };
@@ -70,6 +71,7 @@ export const IMPLEMENTATION_SPEC: Spec = {
     regression_test: text,
     acceptance: { kind: 'list', item: CRITERION },
     assumptions: texts,
+    line_problem: text,
   },
   required: ['issue', 'status', 'bugfix', 'acceptance', 'assumptions'],
 };

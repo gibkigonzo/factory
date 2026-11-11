@@ -58,6 +58,7 @@ jobs:
       blocker: ${{ steps.deps.outputs.blocker || steps.collect.outputs.blocker }}
       usage: ${{ steps.usage.outputs.usage }}
       over_budget: ${{ steps.budget.outputs.skip }}
+      line: ${{ steps.collect.outputs.line }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -281,6 +282,8 @@ jobs:
             echo "status=$(jq -r '.status // "done"' "$W/implementation.json")"
             echo "blocker=$(jq -r '.blocker // "" | gsub("\\s+"; " ")' "$W/implementation.json")"
             echo "implementation<<FACTORY_EOF"; cat "$W/implementation.json"; echo "FACTORY_EOF"
+            # Problem taśmy (narzędzia, komendy projektu) do komentarza z blokadą; przy PR trafia do opisu PR.
+            echo "line<<FACTORY_EOF"; node "$F/scripts/workflow/cli.ts" line-problem --stage implement --implementation "$W/implementation.json"; echo; echo "FACTORY_EOF"
           } >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -385,6 +388,7 @@ jobs:
           PR: ${{ inputs.pr }}
           BLOCKER: ${{ needs.implement.outputs.blocker }}
           USAGE: ${{ needs.implement.outputs.usage }}
+          LINE: ${{ needs.implement.outputs.line }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           WORKFLOW: ${{ inputs.workflow }}
         run: |
@@ -395,6 +399,7 @@ jobs:
             NEXT="PR nie powstał, a recenzja nie ruszyła. Po usunięciu przeszkody nadaj issue etykietę \`ready\` jeszcze raz."
           fi
           printf '<!-- factory:blocked -->\n**Implementer nie dokończył zadania:** %s\n\n%s\n\nLog: %s\n' "$REASON" "$NEXT" "$RUN" > body.md
+          if [ -n "${LINE//[[:space:]]/}" ]; then printf '\n%s\n' "$LINE" >> body.md; fi
           # Koszt sesji, która skończyła się blokadą: bez PR nie trafiłby do dziennika.
           if [ "$(jq 'if type == "array" then length else 0 end' <<<"${USAGE:-[]}" 2>/dev/null)" -gt 0 ] 2>/dev/null; then
             printf '\n<!-- factory:usage %s -->\n' "$(jq -c . <<<"$USAGE")" >> body.md

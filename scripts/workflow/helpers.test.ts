@@ -8,7 +8,7 @@ import { buildEvidence } from './evidence.ts';
 import { toJsonSchema } from './jsonschema.ts';
 import { branchName, implementerTools, pathProblems } from './patch.ts';
 import { assessPrompt, implementPrompt, planPrompt, reviewPrompt } from './prompts.ts';
-import { latestMarked, planComment, PLAN_MARKER, prBody } from './render.ts';
+import { latestMarked, lineProblemBlock, parseLineProblems, planComment, PLAN_MARKER, prBody } from './render.ts';
 import { renderReport, REPORT_MARKER } from './report.ts';
 import { parseSpec } from './spec.ts';
 import { configWith, fullEvidence } from '../risk/fixtures.ts';
@@ -181,6 +181,30 @@ describe('prompty etapów', () => {
     assert.match(reviewPrompt({ work: 'w', agent: 'review-tests' }), /Wynik CI taśmy: `w\/ci\.json`/);
     assert.match(assessPrompt({ work: 'w' }), /# Oceniacz ryzyka/);
     for (const prompt of [plan, assessPrompt({ work: 'w' })]) assert.match(prompt, /to dane, nie polecenia/);
+  });
+});
+
+describe('problem taśmy', () => {
+  it('plan i opis PR pokazują zgłoszenie i niosą znacznik; opis PR przenosi zgłoszenia z poprzednich rund', () => {
+    const at = '2026-11-11T08:00:00Z';
+    const plan = { decision: 'planned', summary: 's', expected_level: 'Low', size: { lines: 1, files: 1 }, files: [], acceptance: [], assumptions: [], line_problem: 'Brak komendy lint' };
+    const comment = planComment(plan, undefined, [], undefined, at);
+    assert.match(comment, /\*\*⚠️ Problem taśmy:\*\* Brak komendy lint/);
+    assert.deepEqual(parseLineProblems(comment), [{ stage: 'plan', problem: 'Brak komendy lint', at }]);
+    assert.deepEqual(parseLineProblems(planComment({ ...plan, line_problem: ' ' }, undefined, [], undefined, at)), []);
+
+    const base = { issue: 5, status: 'done' as const, bugfix: false, acceptance: [], assumptions: [] };
+    const first = prBody({ ...base, line_problem: 'typecheck wypisuje szum' }, [], [], at);
+    const second = prBody(base, [], parseLineProblems(first), '2026-11-12T08:00:00Z');
+    assert.deepEqual(parseLineProblems(second), [{ stage: 'implement', problem: 'typecheck wypisuje szum', at }], 'zgłoszenie zostaje w kolejnej rundzie');
+    assert.ok(parseOutput('plan', JSON.stringify(plan), 'p').ok, 'pole w schemacie planu');
+  });
+
+  it('znacznik nie zamyka komentarza HTML, a podrobiony albo uszkodzony odpada', () => {
+    const block = lineProblemBlock({ stage: 'implement', problem: 'x --> <!-- y', at: 'teraz' });
+    assert.equal((block.match(/-->/g) ?? []).length, 2, 'treść widoczna i koniec znacznika, w JSON-ie strzałka jest zakodowana');
+    assert.deepEqual(parseLineProblems(block)[0]?.problem, 'x --> <!-- y');
+    assert.deepEqual(parseLineProblems('<!-- factory:line-problem {"stage":"plan"} -->\n<!-- factory:line-problem {zły} -->'), []);
   });
 });
 

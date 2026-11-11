@@ -5,11 +5,14 @@
 //   events/<issue>.json      zdarzenia issue (kiedy dostało etykietę ready)
 //   issues/<issue>.json      data założenia issue: { created_at }
 //   issue-list.json          gh issue list --state all --json number,title,state,labels,createdAt,closedAt
+//   stopped.json             gh issue list --label factory:stopped --state open --json number,body,createdAt (/stop)
 //   plans/<issue>.json       komentarze bota z planem albo blokadą: [{ body }] (zużycie planera i zablokowanej implementacji)
 //   reverts.txt              git log gałęzi głównej: rekordy „\x1e<data ISO>\t<treść commita>”
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseLineProblems } from '../workflow/render.ts';
+import type { LineProblem } from '../workflow/render.ts';
 import { parseUsageBlocks, sumUsage } from '../workflow/usage.ts';
 import type { Usage } from '../workflow/usage.ts';
 import { parseShadow } from './comment.ts';
@@ -177,6 +180,58 @@ function factoryPrs(dir: string): RawPr[] {
 export function factoryIssues(dir: string): number[] {
   const fromPrs = factoryPrs(dir).map(issueOf).filter((n): n is number => n !== undefined);
   return [...new Set([...fromPrs, ...taskIssues(dir).map((i) => i.number)])].sort((a, b) => a - b);
+}
+
+/** Zgłoszony problem taśmy z zadaniem, w którym go zgłoszono. */
+export interface LineProblemRecord extends LineProblem {
+  issue?: number;
+  pr?: number;
+}
+
+/**
+ * Problemy taśmy z komentarzy planu i blokady w issue oraz z opisów PR fabryki, od najnowszego.
+ * Opis PR przenosi zgłoszenia z poprzednich rund, więc to samo zgłoszenie liczy się raz.
+ */
+export function collectLineProblems(dir: string): LineProblemRecord[] {
+  const found = new Map<string, LineProblemRecord>();
+  const add = (problem: LineProblem, issue?: number, pr?: number) => {
+    const key = `${issue ?? ''}|${problem.stage}|${problem.at}|${problem.problem}`;
+    const record: LineProblemRecord = { ...problem };
+    if (issue) record.issue = issue;
+    if (pr) record.pr = pr;
+    if (!found.has(key) || pr) found.set(key, record);
+  };
+  for (const issue of factoryIssues(dir)) {
+    for (const comment of read<{ body?: string }[]>(join(dir, 'plans', `${issue}.json`), [])) {
+      for (const problem of parseLineProblems(comment.body ?? '')) add(problem, issue);
+    }
+  }
+  for (const pr of factoryPrs(dir)) {
+    for (const problem of parseLineProblems(pr.body ?? '')) add(problem, issueOf(pr), pr.number);
+  }
+  return [...found.values()].sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** Zatrzymana taśma: otwarte issue z etykietą factory:stopped (komenda /stop). */
+export interface StopState {
+  issue: number;
+  since: string;
+  reason?: string;
+}
+
+const STOP_BLOCK = /<!-- factory:stop (\{.*?\}) -->/s;
+
+export function stopState(dir: string): StopState | undefined {
+  const open = read<{ number: number; body?: string; createdAt: string }[]>(join(dir, 'stopped.json'), [])[0];
+  if (!open) return undefined;
+  const state: StopState = { issue: open.number, since: open.createdAt };
+  try {
+    const reason = (JSON.parse(STOP_BLOCK.exec(open.body ?? '')?.[1] ?? '{}') as { reason?: unknown }).reason;
+    if (typeof reason === 'string' && reason.trim()) state.reason = reason.trim();
+  } catch {
+    // Bez czytelnego powodu dziennik pokazuje samo zatrzymanie.
+  }
+  return state;
 }
 
 export function collectIssueTasks(dir: string): IssueRecord[] {

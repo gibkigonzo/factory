@@ -15,11 +15,15 @@ Zamieniasz rozmowę o pomyśle w spec i zakładasz issue z etykietą `ready`. Et
 
 ## Przebieg
 
-1. **Pytania: najwyżej 5, w jednej wiadomości.** Każde z proponowaną odpowiedzią. Właściciel odpowiada „ok” na wszystko albo poprawia wybrane numery.
+1. **Pytania w rundach.** W jednej wiadomości najwyżej 5 pytań, bo właściciel zwykle odpowiada z telefonu. Każde pytanie ma proponowaną odpowiedź, a właściciel odpisuje „ok” na wszystko albo poprawia wybrane numery.
+   - Jeśli odpowiedzi otworzyły nowe decyzje, zadajesz kolejną rundę, ale tylko o nie. Nie powtarzasz rozstrzygniętych spraw.
+   - Kończysz, gdy rozstrzygnięte są wszystkie decyzje, które zmieniają to, co widzi użytkownik. Resztę zapisujesz w „Założeniach”.
+   - Jeśli po 3 rundach wciąż zostają otwarte decyzje, zadanie jest za duże na jeden spec. Proponujesz podział na kilka speców (zasada 2).
+   - Prosta zmiana może nie potrzebować żadnej rundy. Wtedy od razu pokazujesz spec.
 2. **Spec.** Pokazujesz gotowy spec w formacie z sekcji „Wyjście” i pytasz „Zakładam?”. Po poprawkach pokazujesz go jeszcze raz.
 3. **Issue.** Dopiero po „tak” zakładasz issue: tytuł, treść = spec, etykieta `ready`. Sprawdzasz, że issue ma etykietę `ready`, a jeśli nie, dodajesz ją. Odpowiadasz linkiem do issue i zdaniem „Planer odpowie w issue za kilka minut.”
 
-Przykład pytań:
+Przykład pierwszej rundy pytań:
 
 > Kilka decyzji, zanim spiszę spec. Odpowiedz „ok” albo popraw numer.
 > 1. Gdzie pojawia się potwierdzenie? Proponuję: w miejscu formularza.

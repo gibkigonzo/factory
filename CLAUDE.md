@@ -46,7 +46,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 
 ### Praca z telefonu
 
-- Wymaganie: każdy krok użytkownika (akceptacja propozycji, rozmowa o specu, decyzja przy High, playtest) musi dać się zrobić z telefonu, bez komputera.
+- Wymaganie: każdy krok użytkownika (akceptacja propozycji, rozmowa o specu, decyzja przy High, playtest, zatrzymanie i wznowienie taśmy) musi dać się zrobić z telefonu, bez komputera.
 - Taśma działa na GitHub Actions, więc komputer nie jest potrzebny. Komendy `/approve`, `/veto` i inne działają z aplikacji GitHub Mobile.
 - Do zakładania issue z aplikacji Claude służy oficjalny serwer MCP GitHuba podłączony jako konektor claude.ai. Zwykły czat w aplikacji mobilnej zakłada issue (sprawdzone w #3), więc `spec-writer` może działać w zwykłym czacie.
 - Konektor łączy się przez inną aplikację GitHub niż Claude Code. Ta aplikacja musi mieć repo w swojej instalacji, inaczej zapis kończy się 403 `Resource not accessible by integration`.
@@ -115,6 +115,16 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Czerwone CI albo `request_changes` odsyła PR do implementera automatycznie, do `risk.max_review_rounds` rund. Werdykt powstaje po pętli. Przy czerwonym CI recenzenci nie ruszają, chyba że to ostatnia runda.
 - Implementer, który nie może dokończyć zadania, zgłasza `status: blocked`; wtedy nie ma PR ani recenzji, tylko etykieta `blocked` i komentarz.
 - Nowe zależności planer wpisuje do planu, właściciel zatwierdza je `/approve` w issue, a instaluje je workflow komendą z `dependencies` w `factory.yml`. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji.
+
+### Zatrzymanie taśmy i problemy taśmy (11 listopada 2026)
+
+- `/stop <powód>` zatrzymuje taśmę jak linkę bezpieczeństwa w fabryce: otwiera issue „Taśma zatrzymana” (`factory:stopped`). Dyrygent nie uruchamia wtedy planu, implementacji, recenzji ani kolejki, tylko zapisuje wstrzymany etap (`factory:paused`). `/start` wznawia taśmę i zapisane etapy. Dziennik i komendy działają zawsze.
+- Agenci (planer, implementer) zgłaszają problem taśmy w polu `line_problem`: kłopot z narzędziami albo komendami projektu, a nie z zadaniem. Zgłoszenie nie zatrzymuje taśmy; dziennik zbiera je w sekcji „Problemy taśmy” i w `problemy.csv`, a decyzja o `/stop` należy do właściciela.
+- Lekcja z pilota: implementer cztery razy wpisał w założeniach PR, że typecheck „pada” (szum ostrzeżenia `vue-tsc` przy kodzie 0), i nikt tego nie zauważył.
+
+### Spec w rundach pytań (11 listopada 2026)
+
+- Spec-writer pyta w rundach: najwyżej 5 pytań w wiadomości, kolejna runda tylko o to, co otworzyły odpowiedzi. Po 3 rundach z otwartymi decyzjami proponuje podział na kilka speców.
 
 ### Zrzuty ekranu (10 listopada 2026)
 
