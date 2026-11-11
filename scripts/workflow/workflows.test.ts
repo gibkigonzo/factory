@@ -98,6 +98,25 @@ describe('workflowy fabryki', () => {
     assert.match(String(job.steps?.[0]?.run), /s#\^factory\/\(\[0-9\]\+\)-\.\*#\\1#p/);
   });
 
+  it('statystyki dziennika: pliki na gałęzi factory-journal bez Claude, a blokada zapisuje swój koszt', () => {
+    const { text, data } = workflows.journal!;
+    const publish = data.jobs.publish!;
+    assert.ok(!usesClaude(publish));
+    assert.deepEqual(publish.permissions, { issues: 'write', contents: 'write' });
+    for (const step of publish.steps ?? []) {
+      if (step.uses?.startsWith('actions/checkout@')) assert.equal(step.with?.repository, 'gibkigonzo/factory', 'tylko skrypty fabryki');
+    }
+    assert.match(text, /publish-branch\.sh "[^"]+" journal factory-journal /);
+    assert.match(text, /cli\.ts" journal-export --raw/);
+    assert.match(text, /--files-url "\$GITHUB_SERVER_URL\/\$GITHUB_REPOSITORY\/blob\/factory-journal"/);
+    assert.match(text, /gh issue list --state all[^\n]*> "\$RAW\/issue-list\.json"/);
+    assert.match(text, /contains\("<!-- factory:blocked -->"\)/);
+    const blocked = (workflows.implement!.data.jobs.blocked!.steps ?? [])[0]!;
+    assert.match(blocked.run!, /<!-- factory:blocked -->/);
+    assert.match(blocked.run!, /<!-- factory:usage %s -->/);
+    assert.equal(blocked.env?.USAGE, '${{ needs.implement.outputs.usage }}');
+  });
+
   it('kolejka nie pobiera kodu z PR i decyduje skryptem: plan i kolejka korzystają z tej samej logiki', () => {
     const { text, data } = workflows.queue!;
     assert.doesNotMatch(text, /head\.(ref|sha)|pull_request\.head/);

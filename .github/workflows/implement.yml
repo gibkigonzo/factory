@@ -384,6 +384,7 @@ jobs:
           ISSUE: ${{ inputs.issue }}
           PR: ${{ inputs.pr }}
           BLOCKER: ${{ needs.implement.outputs.blocker }}
+          USAGE: ${{ needs.implement.outputs.usage }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           WORKFLOW: ${{ inputs.workflow }}
         run: |
@@ -393,7 +394,11 @@ jobs:
           else
             NEXT="PR nie powstał, a recenzja nie ruszyła. Po usunięciu przeszkody nadaj issue etykietę \`ready\` jeszcze raz."
           fi
-          printf '**Implementer nie dokończył zadania:** %s\n\n%s\n\nLog: %s\n' "$REASON" "$NEXT" "$RUN" > body.md
+          printf '<!-- factory:blocked -->\n**Implementer nie dokończył zadania:** %s\n\n%s\n\nLog: %s\n' "$REASON" "$NEXT" "$RUN" > body.md
+          # Koszt sesji, która skończyła się blokadą: bez PR nie trafiłby do dziennika.
+          if [ "$(jq 'if type == "array" then length else 0 end' <<<"${USAGE:-[]}" 2>/dev/null)" -gt 0 ] 2>/dev/null; then
+            printf '\n<!-- factory:usage %s -->\n' "$(jq -c . <<<"$USAGE")" >> body.md
+          fi
           gh label create blocked --force >/dev/null
           gh issue edit "$ISSUE" --add-label blocked
           gh issue comment "$ISSUE" --body-file body.md

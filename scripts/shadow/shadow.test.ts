@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, describe, it } from 'node:test';
 import { configWith } from '../risk/fixtures.ts';
 import type { Assessment } from '../risk/types.ts';
-import { collectRecords, factoryIssues, issueOf, parseReverts } from './collect.ts';
+import { collectIssueTasks, collectRecords, factoryIssues, issueOf, parseReverts } from './collect.ts';
+import { journalCsv, journalJson, taskRows } from './export.ts';
 import type { PrRecord } from './collect.ts';
 import { parseShadow, shadowComment, shadowRecord, SHADOW_MARKER } from './comment.ts';
 import type { ShadowRecord } from './comment.ts';
@@ -145,13 +146,23 @@ describe('dane z GitHuba', () => {
     { event: 'labeled', label: { name: 'ready' }, created_at: '2026-10-31T08:00:00Z' },
   ]);
   write('reverts.txt', '\x1e2026-11-05T09:00:00Z\tRevert "Low cofnięty"\n\nThis reverts commit abcdef1.\n');
+  write('issue-list.json', [
+    { number: 1, title: 'Low cofnięty', state: 'CLOSED', labels: [{ name: 'planned' }], createdAt: '2026-10-31T07:00:00Z' },
+    { number: 20, title: 'Zablokowane', state: 'OPEN', labels: [{ name: 'planned' }, { name: 'blocked' }], createdAt: '2026-11-05T07:00:00Z' },
+    { number: 21, title: 'Odrzucone', state: 'CLOSED', labels: [{ name: 'rejected' }], createdAt: '2026-11-05T07:00:00Z', closedAt: '2026-11-06T07:00:00Z' },
+    { number: 22, title: 'Zwykłe issue', state: 'OPEN', labels: [{ name: 'bug' }], createdAt: '2026-11-05T07:00:00Z' },
+  ]);
+  write('plans/20.json', [
+    { body: `plan\n${usageBlock([spend('plan', 0.4)])}` },
+    { body: `<!-- factory:blocked -->\nblokada\n${usageBlock([spend('implement', 0.3)])}` },
+  ]);
 
   it('bierze tylko PR-y fabryki z tego repo, ostatni werdykt bota i ostatnią reakcję właściciela', () => {
     const [ten, eleven, fourteen, ...rest] = collectRecords(dir, ['owner'], 7).sort((a, b) => a.number - b.number);
     assert.equal(rest.length, 0);
     assert.equal(fourteen!.number, 14);
     assert.deepEqual(ten, {
-      number: 10, title: 'Low cofnięty', state: 'merged', createdAt: '2026-11-01T09:00:00Z',
+      number: 10, issue: 1, title: 'Low cofnięty', state: 'merged', createdAt: '2026-11-01T09:00:00Z',
       mergedAt: '2026-11-02T12:00:00Z', closedAt: '2026-11-02T12:00:00Z', readyAt: '2026-10-31T08:00:00Z',
       rounds: 2, reverted: true, shadow: { record: { ...low, usage: [spend('review', 0.4)] }, at: '2026-11-02T10:00:00Z', reaction: 'up' },
       usage: ten!.usage,
@@ -165,7 +176,7 @@ describe('dane z GitHuba', () => {
     assert.equal(issueOf({ headRefName: 'factory/12-menu', closingIssuesReferences: [{ number: 3 }] }), 12);
     assert.equal(issueOf({ headRefName: 'factory/menu', closingIssuesReferences: [{ number: 3 }] }), 3);
     assert.equal(issueOf({ headRefName: 'factory/menu' }), undefined);
-    assert.deepEqual(factoryIssues(dir), [1, 2, 7]);
+    assert.deepEqual(factoryIssues(dir), [1, 2, 7, 20, 21], 'także issue z etykietami taśmy bez PR');
     const fourteen = collectRecords(dir, ['owner'], 7).find((r) => r.number === 14);
     assert.equal(fourteen?.readyAt, '2026-11-04T08:00:00Z');
     // #10: od ready 31.10 8:00 do merge'u 2.11 12:00 to 52 h; #14: od założenia 8:00 do 12:00 to 4 h.
@@ -195,6 +206,33 @@ describe('dane z GitHuba', () => {
     const body = renderJournal([record(1, [named('security', 0.4), named('tests', 0.1)])], config, 'teraz');
     assert.match(body, /- Recenzenci, średnio na PR: security 0,40 USD · tests 0,10 USD/);
     assert.match(body, /- Wyjście \(znaki\): rozumowanie 60% · tekst 20% · narzędzia, w tym kod 20%/);
+  });
+
+  it('zadania bez PR: po etykietach taśmy, z kosztem planu i zablokowanej implementacji', () => {
+    assert.deepEqual(factoryIssues(dir), [1, 2, 7, 20, 21]);
+    const tasks = collectIssueTasks(dir);
+    assert.deepEqual(tasks.map((t) => [t.issue, t.state, t.labels.join('+')]), [[21, 'closed', 'rejected'], [20, 'open', 'planned+blocked']]);
+    assert.deepEqual(tasks.find((t) => t.issue === 20)?.usage?.map((u) => [u.stage, u.cost]), [['plan', 0.4], ['implement', 0.3]]);
+    assert.equal(tasks.find((t) => t.issue === 21)?.usage, undefined);
+  });
+
+  it('statystyki w plikach: wiersz na zadanie, koszt na etap i recenzenta, ocena i bezpieczne komórki CSV', () => {
+    const named = (name: string, cost: number) => ({ ...spend('review', cost), name });
+    const prs = collectRecords(dir, ['owner'], 7).map((r) => (r.number === 10 ? { ...r, usage: [...(r.usage ?? []), named('security', 0.25)] } : r));
+    const rows = taskRows([...prs, { number: 30, title: '=HYPERLINK("x")', state: 'open', createdAt: 'x', rounds: 0, reverted: false } as never], collectIssueTasks(dir));
+    assert.deepEqual(rows.map((r) => [r.issue, r.pr]), [[undefined, 30], [21, undefined], [20, undefined], [7, 14], [2, 11], [1, 10]], 'od najnowszego numeru');
+    const csv = journalCsv(rows).split('\n');
+    const line = (start: string) => csv.find((l) => l.startsWith(start))!;
+    assert.equal(csv[0], 'zadanie,pr,tytul,stan,poziom,werdykt,ocena,rundy,cofniety,gotowe,scalone,koszt_usd,plan_usd,implementacja_usd,recenzja_usd,ocena_ryzyka_usd,tokeny_wyjscia,recenzent_security_usd');
+    assert.equal(line('20,'), '20,,Zablokowane,bez PR (blocked),,,,0,nie,,,0.7,0.4,0.3,,,2000,');
+    assert.equal(line('21,'), '21,,Odrzucone,"bez PR (rejected), zamknięte",,,,0,nie,,,0,,,,,0,');
+    assert.ok(line('1,10,').startsWith('1,10,Low cofnięty,scalony,Low,scaliłaby,👍,2,tak,2026-10-31T08:00:00Z,2026-11-02T12:00:00Z,2.35,0.3,0.8,1.15,0.1,'), line('1,10,'));
+    assert.ok(line('1,10,').endsWith(',0.25'));
+    assert.equal(line(',30,'), `,30,"'=HYPERLINK(""x"")",otwarty,,,,0,nie,,,0,,,,,0,`, 'tytuł nie uruchomi formuły w arkuszu');
+    const json = JSON.parse(journalJson(rows, '2026-11-11T08:00:00Z'));
+    assert.equal(json.tasks, 6);
+    assert.equal(json.cost, 3.05);
+    assert.equal(json.rows[5].reviewers.security, 0.25);
   });
 
   it('revert po oknie revert_days się nie liczy', () => {
@@ -302,6 +340,12 @@ describe('dziennik', () => {
     assert.match(body, /- Etapy, średnio na PR: implementacja 0,75 USD · recenzja 0,25 USD/);
     assert.match(body, /- #50 A · bez werdyktu · scalony · 1,50 USD/);
     assert.match(body, /- #52 C · bez werdyktu · scalony\n/);
+    assert.match(body, /- Razem wszystkie zadania: 2,00 USD/);
+    assert.doesNotMatch(body, /journal\.csv/);
+    const task = { issue: 60, title: 'Blokada', state: 'open', labels: ['blocked'], createdAt: 'x', usage: [spend('plan', 0.5)] } as const;
+    const full = renderJournal(records, config, 'teraz', { tasks: [task as never], filesUrl: 'https://example.test/blob/factory-journal' });
+    assert.match(full, /- Zadania bez PR \(blokada, podział, odrzucenie, czekające\): 1, razem 0,50 USD\n- Razem wszystkie zadania: 2,50 USD/);
+    assert.match(full, /\[journal\.csv\]\(https:\/\/example\.test\/blob\/factory-journal\/journal\.csv\) \(tabela\)/);
   });
 
   it('pusty dziennik przed pierwszym PR', () => {
@@ -321,6 +365,12 @@ describe('dziennik', () => {
       assert.match(result.stdout, /- #5 Stopka · bez werdyktu · otwarty/);
       const issues = spawnSync(process.execPath, [cli, 'journal-issues', '--raw', dir], { encoding: 'utf8' });
       assert.equal(issues.stdout.trim(), '5', issues.stderr);
+      const out = join(dir, 'out');
+      mkdirSync(out);
+      const exported = spawnSync(process.execPath, [cli, 'journal-export', '--raw', dir, '--config', join(dir, 'config.json'), '--owners', 'owner', '--out', out], { encoding: 'utf8' });
+      assert.equal(exported.status, 0, exported.stderr);
+      assert.match(readFileSync(join(out, 'journal.csv'), 'utf8'), /^zadanie,pr,tytul,[^\n]*\n5,5,Stopka,otwarty,/);
+      assert.equal(JSON.parse(readFileSync(join(out, 'journal.json'), 'utf8')).tasks, 1);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

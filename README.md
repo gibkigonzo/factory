@@ -205,6 +205,9 @@ evidence:
 1. Po ocenie ryzyka `merge.yml` dodaje w PR komentarz z werdyktem fabryki. Low: scaliłaby od razu. Medium: czekałaby 24 h na `/veto`. High: przekazałaby decyzję Tobie. Zmiana za duża albo zablokowana przez bramki jakości: odesłałaby ją do podziału albo do poprawek.
 2. Na komentarz reagujesz 👍 (zgoda) albo 👎 (niezgoda). Każda kolejna ocena (np. po `/change`) dostaje nowy komentarz, więc reakcja dotyczy konkretnego werdyktu. O samym PR decydujesz jak zwykle: merge, `/reject` albo revert.
 3. `journal.yml` prowadzi przypięte issue „Tryb cienia” (etykieta `factory:journal`): stan Bramki 1, metryki i listę PR-ów fabryki. Reakcje nie uruchamiają workflowów, więc dziennik odświeża się po każdym werdykcie, po zamknięciu PR fabryki i raz dziennie. Na żądanie: Actions → factory → Run workflow → `journal`.
+4. Przy każdym odświeżeniu dziennik zapisuje statystyki w plikach na gałęzi `factory-journal`. Link do nich jest w issue z dziennikiem.
+   - `journal.csv` (GitHub pokazuje go jako tabelę, da się go też wczytać do arkusza) i `journal.json` mają jeden wiersz na zadanie, także bez PR (blokada, podział, odrzucenie): issue, PR, poziom, werdykt, Twoja ocena, stan, rundy oraz koszt na etap i na recenzenta.
+   - Gałąź ma jeden commit, który nadpisuje się przy każdym odświeżeniu.
 
 Metryki liczy skrypt, nie model:
 
@@ -404,7 +407,7 @@ Wspólne workflowy to `workflow_call` w tym repo. Projekt wywołuje tylko dyryge
 | `review.yml` | implementacja | komendy z `factory.yml` (CI), zrzuty ekranu z komentarzem w PR, skład panelu, recenzenci równolegle; pętla poprawek odsyła PR do implementera |
 | `risk.yml` | po recenzji, w tym samym uruchomieniu | oceniacz ryzyka, reguły, check `factory/risk`, etykieta `risk:*`, raport w PR |
 | `merge.yml` | po ocenie ryzyka, w tym samym uruchomieniu | w Etapie 0 tylko werdykt trybu cienia w nowym komentarzu |
-| `journal.yml` | po werdykcie, po zamknięciu PR fabryki, raz dziennie | dziennik trybu cienia w przypiętym issue; po scaleniu PR fabryki zamyka jego issue |
+| `journal.yml` | po werdykcie, po zamknięciu PR fabryki, raz dziennie | dziennik trybu cienia w przypiętym issue i statystyki zadań na gałęzi `factory-journal`; po scaleniu PR fabryki zamyka jego issue |
 | `queue.yml` | po zamknięciu PR fabryki, po `/reject`, po zgodzie na zależności, raz dziennie | uruchamia implementację czekających zadań, które mieszczą się w limitach |
 | `commands.yml` | komentarz od właściciela | `/approve`, `/veto`, `/reject`, `/change <opis>`, `/split` |
 
@@ -418,7 +421,7 @@ Wspólne workflowy to `workflow_call` w tym repo. Projekt wywołuje tylko dyryge
 - Etapy łączy `workflow_dispatch`, bo zdarzenia z `GITHUB_TOKEN` nie uruchamiają innych workflowów. W Etapie 0 zmiany podpisuje `github-actions[bot]`; własna aplikacja GitHub fabryki przyjdzie w Etapie 1.
 - Na taśmę wchodzą tylko zdarzenia od właściciela repo, kont z wejścia `trusted` i workflowów fabryki. Komendy wydaje tylko człowiek.
 - `factory.yml` i perspektywy projektu w recenzji i ocenie pochodzą z gałęzi bazowej, więc PR nie poluzuje własnej oceny.
-- Zrzuty ekranu powstają z kodu PR. Job galerii nie pobiera tego kodu i nie uruchamia Claude: sprawdza pliki od nowa (nazwa, nagłówek PNG, limity). Prawo zapisu treści repo ma tylko po to, żeby wypchnąć obrazy na gałąź `factory-screenshots`.
+- Zrzuty ekranu powstają z kodu PR. Job galerii nie pobiera tego kodu i nie uruchamia Claude: sprawdza pliki od nowa (nazwa, nagłówek PNG, limity). Prawo zapisu treści repo ma tylko po to, żeby wypchnąć obrazy na gałąź `factory-screenshots`. Tak samo dziennik: zapisuje treść tylko na gałęzi `factory-journal` (skrypt nie przyjmie innej gałęzi niż `factory-*`).
 - Dziennik i kolejkę uruchamia też `pull_request_target` przy zamknięciu PR z gałęzi `factory/*` tego repo. Nie pobierają kodu z PR: czytają gałąź główną i API.
 
 Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML: Claude bez prawa zapisu, akcje przypięte do commitów, żadnych wyrażeń wklejonych w skrypty, uprawnienia w łańcuchu projekt → dyrygent → etap → job tylko maleją, dyrygent woła każdy etap, merger, dziennik, kolejka i galeria zrzutów bez Claude.

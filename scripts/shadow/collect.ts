@@ -4,7 +4,8 @@
 //   reactions/<comment>.json reakcje na komentarz z werdyktem
 //   events/<issue>.json      zdarzenia issue (kiedy dostało etykietę ready)
 //   issues/<issue>.json      data założenia issue: { created_at }
-//   plans/<issue>.json       komentarze z planem: [{ body }] (zużycie planera)
+//   issue-list.json          gh issue list --state all --json number,title,state,labels,createdAt,closedAt
+//   plans/<issue>.json       komentarze bota z planem albo blokadą: [{ body }] (zużycie planera i zablokowanej implementacji)
 //   reverts.txt              git log gałęzi głównej: rekordy „\x1e<data ISO>\t<treść commita>”
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -16,6 +17,8 @@ import type { ShadowRecord } from './comment.ts';
 
 export interface PrRecord {
   number: number;
+  /** Issue zadania, z nazwy gałęzi factory/<numer>-…. */
+  issue?: number;
   title: string;
   state: 'open' | 'merged' | 'closed';
   createdAt: string;
@@ -115,18 +118,52 @@ function rounds(labels: readonly { name: string }[] = []): number {
   return numbers.length > 0 ? Math.max(...numbers) : 0;
 }
 
-/** Zużycie: plan (komentarze planu w issue), implementacja (opis PR), recenzja i ocena (wszystkie werdykty). */
+/** Zużycie z komentarzy bota w issue: plan i implementacje zakończone blokadą (te nie trafiają do opisu PR). */
+function issueUsage(dir: string, issue: number | undefined): Usage[] {
+  const comments = issue ? read<{ body?: string }[]>(join(dir, 'plans', `${issue}.json`), []) : [];
+  return comments.flatMap((c) => parseUsageBlocks(c.body ?? '').filter((u) => u.stage === 'plan' || u.stage === 'implement'));
+}
+
+/** Zużycie: plan i blokady (komentarze w issue), implementacja (opis PR), recenzja i ocena (wszystkie werdykty). */
 function usageOf(dir: string, pr: RawPr, issue: number | undefined): Usage[] {
-  const plans = issue ? read<{ body?: string }[]>(join(dir, 'plans', `${issue}.json`), []) : [];
   const verdicts = read<RawComment[]>(join(dir, 'comments', `${pr.number}.json`), [])
     .filter((c) => c.user?.login === 'github-actions[bot]')
     .flatMap((c) => parseShadow(c.body ?? '')?.usage ?? []);
   const records = [
-    ...plans.flatMap((p) => parseUsageBlocks(p.body ?? '').filter((u) => u.stage === 'plan')),
+    ...issueUsage(dir, issue),
     ...parseUsageBlocks(pr.body ?? '').filter((u) => u.stage === 'implement'),
     ...verdicts.filter((u) => u.stage === 'review' || u.stage === 'assess'),
   ];
   return sumUsage(records);
+}
+
+interface RawIssue {
+  number: number;
+  title: string;
+  state: string;
+  labels?: { name: string }[];
+  createdAt: string;
+  closedAt?: string | null;
+}
+
+/** Etykiety, które nadaje taśma: issue z którąś z nich jest zadaniem fabryki, także gdy nie powstał PR. */
+export const TASK_LABELS = ['ready', 'planned', 'queued', 'needs-approval', 'blocked', 'split', 'rejected'] as const;
+
+function taskIssues(dir: string): RawIssue[] {
+  const labels: readonly string[] = TASK_LABELS;
+  return read<RawIssue[]>(join(dir, 'issue-list.json'), []).filter((i) => i.labels?.some((l) => labels.includes(l.name)));
+}
+
+/** Zadanie fabryki, które nie dało PR: plan zablokowany, podzielony albo odrzucony, czekające albo z blokadą implementacji. */
+export interface IssueRecord {
+  issue: number;
+  title: string;
+  state: 'open' | 'closed';
+  labels: string[];
+  createdAt: string;
+  closedAt?: string;
+  readyAt?: string;
+  usage?: Usage[];
 }
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -136,9 +173,32 @@ function factoryPrs(dir: string): RawPr[] {
   return read<RawPr[]>(join(dir, 'prs.json'), []).filter((pr) => pr.headRefName.startsWith('factory/') && !pr.isCrossRepository);
 }
 
-/** Numery issue, dla których workflow ma pobrać zdarzenia i datę założenia. */
+/** Numery issue, dla których workflow ma pobrać zdarzenia, datę założenia i komentarze z planem lub blokadą. */
 export function factoryIssues(dir: string): number[] {
-  return [...new Set(factoryPrs(dir).map(issueOf).filter((n): n is number => n !== undefined))].sort((a, b) => a - b);
+  const fromPrs = factoryPrs(dir).map(issueOf).filter((n): n is number => n !== undefined);
+  return [...new Set([...fromPrs, ...taskIssues(dir).map((i) => i.number)])].sort((a, b) => a - b);
+}
+
+export function collectIssueTasks(dir: string): IssueRecord[] {
+  const withPr = new Set(factoryPrs(dir).map(issueOf));
+  return taskIssues(dir)
+    .filter((i) => !withPr.has(i.number))
+    .sort((a, b) => b.number - a.number)
+    .map((i) => {
+      const record: IssueRecord = {
+        issue: i.number,
+        title: i.title,
+        state: i.state === 'CLOSED' ? 'closed' : 'open',
+        labels: (i.labels ?? []).map((l) => l.name),
+        createdAt: i.createdAt,
+      };
+      if (i.closedAt) record.closedAt = i.closedAt;
+      const ready = readyAt(dir, i.number);
+      if (ready) record.readyAt = ready;
+      const usage = sumUsage(issueUsage(dir, i.number));
+      if (usage.length) record.usage = usage;
+      return record;
+    });
 }
 
 /** owners: konta, których 👍/👎 liczą się jako ocena werdyktu (właściciel repo i zaufane konta). */
@@ -154,9 +214,10 @@ export function collectRecords(dir: string, owners: readonly string[], revertDay
         sha && merged && reverts.some((r) => sha.startsWith(r.sha) && Date.parse(r.at) - merged <= revertDays * DAY),
       );
       const record: PrRecord = { number: pr.number, title: pr.title, state, createdAt: pr.createdAt, rounds: rounds(pr.labels), reverted };
+      const issue = issueOf(pr);
+      if (issue) record.issue = issue;
       if (pr.mergedAt) record.mergedAt = pr.mergedAt;
       if (pr.closedAt) record.closedAt = pr.closedAt;
-      const issue = issueOf(pr);
       const ready = readyAt(dir, issue);
       if (ready) record.readyAt = ready;
       const usage = usageOf(dir, pr, issue);

@@ -1,7 +1,7 @@
 // Dziennik trybu cienia: treść przypiętego issue „Tryb cienia”. Lista zamiast tabel, bo czyta się go na telefonie.
 
 import type { FactoryConfig } from '../config/spec.ts';
-import type { PrRecord } from './collect.ts';
+import type { IssueRecord, PrRecord } from './collect.ts';
 import { ACTION_SHORT } from './decision.ts';
 import { computeMetrics, isFalseLow, MIN_GROUP, percent } from './metrics.ts';
 import type { Group } from './metrics.ts';
@@ -31,8 +31,20 @@ function prLine(record: PrRecord): string {
   return `- ${parts.join(' · ')}`;
 }
 
-export function renderJournal(records: readonly PrRecord[], config: FactoryConfig, updated: string): string {
+export interface JournalExtras {
+  /** Zadania fabryki bez PR: ich koszt wchodzi do sumy. */
+  tasks?: readonly IssueRecord[];
+  /** Adres katalogu z journal.csv i journal.json (gałąź factory-journal). */
+  filesUrl?: string;
+}
+
+const total = (usage: readonly { cost: number }[] = []) => usage.reduce((sum, u) => sum + u.cost, 0);
+
+export function renderJournal(records: readonly PrRecord[], config: FactoryConfig, updated: string, extras: JournalExtras = {}): string {
   const m = computeMetrics(records, config);
+  const tasks = (extras.tasks ?? []).filter((t) => t.usage?.length);
+  const prsCost = records.reduce((sum, r) => sum + total(r.usage), 0);
+  const tasksCost = tasks.reduce((sum, t) => sum + total(t.usage), 0);
   const gate = m.gate.passed
     ? '**Bramka 1: przechodzi.** Można przejść do Etapu 1, decyzja należy do Ciebie.'
     : `**Bramka 1: jeszcze nie.** ${m.gate.missing.join('; ')}.`;
@@ -72,11 +84,16 @@ export function renderJournal(records: readonly PrRecord[], config: FactoryConfi
             : []),
         ]
       : ['- Brak pomiarów: zużycie zapisują etapy uruchomione po włączeniu pomiaru.']),
+    ...(tasks.length ? [`- Zadania bez PR (blokada, podział, odrzucenie, czekające): ${tasks.length}, razem ${usd(tasksCost)}`] : []),
+    ...(prsCost + tasksCost > 0 ? [`- Razem wszystkie zadania: ${usd(prsCost + tasksCost)}`] : []),
     '',
     '## PR-y fabryki',
     '',
     ...(records.length ? records.map(prLine) : ['- Jeszcze żadnego.']),
     '',
+    ...(extras.filesUrl
+      ? [`Wszystkie zadania z kosztem na etap i recenzenta oraz Twoimi ocenami: [journal.csv](${extras.filesUrl}/journal.csv) (tabela) i [journal.json](${extras.filesUrl}/journal.json).`, '']
+      : []),
     `Progi Bramki 1: ${config.shadow.gate_prs} ocenionych PR, zgodność co najmniej ${percent(config.shadow.min_agreement)}, fałszywych Low najwyżej ${config.shadow.max_false_low}. Fałszywe Low to werdykt „scaliłaby”, który oceniłeś 👎, PR zamknięty bez merge'u albo merge cofnięty w ciągu ${config.shadow.revert_days} dni. Przyjęty PR to scalony i niecofnięty.`,
     '',
     `_Aktualizacja: ${updated}. Dziennik prowadzi workflow fabryki; nie edytuj go ręcznie._`,
