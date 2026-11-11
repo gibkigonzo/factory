@@ -114,6 +114,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 
 - Czerwone CI albo `request_changes` odsyła PR do implementera automatycznie, do `risk.max_review_rounds` rund. Werdykt powstaje po pętli. Przy czerwonym CI recenzenci nie ruszają, chyba że to ostatnia runda.
 - Implementer, który nie może dokończyć zadania, zgłasza `status: blocked`; wtedy nie ma PR ani recenzji, tylko etykieta `blocked` i komentarz.
+- Runda poprawek bez zmian w plikach (`done` z wyjaśnieniem w założeniach) aktualizuje opis PR i uruchamia recenzję jeszcze raz, w limicie rund. `ci.json` ma końcówkę wyjścia każdej komendy, więc dowód z CI (np. czysty typecheck) recenzent bierze stamtąd. Lekcja z pilota: recenzent prosił o log, którego implementer nie mógł pokazać, a runda bez zmian kończyła się blokadą (11 listopada 2026).
 - Nowe zależności planer wpisuje do planu, właściciel zatwierdza je `/approve` w issue, a instaluje je workflow komendą z `dependencies` w `factory.yml`. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji.
 
 ### Zatrzymanie taśmy i problemy taśmy (11 listopada 2026)

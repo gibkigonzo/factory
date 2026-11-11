@@ -59,7 +59,7 @@ export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: st
     `Spec z issue: \`${ctx.work}/spec.md\`.`,
     `Opis PR z dowodami implementera: \`${ctx.work}/pr.md\`.`,
     `Artefakty weryfikacji (mogą być puste): \`${ctx.work}/artifacts/\`.`,
-    `Wynik CI taśmy: \`${ctx.work}/ci.json\` (brak pliku: CI nie zadziałało). Komendy CI są w \`commands\` w \`${ctx.work}/config.json\`.`,
+    `Wynik CI taśmy: \`${ctx.work}/ci.json\` (brak pliku: CI nie zadziałało), przy każdej komendzie z końcówką jej wyjścia (\`tail\`). Komendy CI są w \`commands\` w \`${ctx.work}/config.json\`.`,
     // Zrzuty pobiera tylko recenzent perspektywy, która ich używa (screenshots: true); inni nie mają katalogu.
     ...screenshotsTask(`${ctx.work}/screenshots`, `${ctx.work}/screenshots-base`),
   ];

@@ -292,9 +292,13 @@ jobs:
           path: .factory/work/change.patch
           if-no-files-found: ignore
 
+  # Runda poprawek bez zmian w plikach (implementer wyjaśnił uwagi w założeniach) też tu trafia:
+  # bez commita aktualizuje opis PR, dodaje etykietę rundy i uruchamia recenzję. Limit rund dalej działa.
   publish:
     needs: implement
-    if: needs.implement.outputs.empty == 'false' && needs.implement.outputs.status == 'done'
+    if: >-
+      needs.implement.outputs.status == 'done' && (needs.implement.outputs.empty == 'false' ||
+        (inputs.pr != '' && needs.implement.outputs.blocker == ''))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -319,6 +323,7 @@ jobs:
           mv .factory-src "$RUNNER_TEMP/factory"
           npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.implement.outputs.empty == 'false'
         with:
           name: factory-change
           path: ${{ runner.temp }}/change
@@ -333,19 +338,22 @@ jobs:
           TITLE: ${{ needs.implement.outputs.title }}
           IMPLEMENTATION: ${{ needs.implement.outputs.implementation }}
           USAGE: ${{ needs.implement.outputs.usage }}
+          EMPTY: ${{ needs.implement.outputs.empty }}
           WORKFLOW: ${{ inputs.workflow }}
         run: |
           F="$RUNNER_TEMP/factory"
           DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git apply --index "$RUNNER_TEMP/change/change.patch"
-          git commit -m "factory: $TITLE (#$ISSUE)"
-          if [ -z "$PR" ]; then
-            # Nowa gałąź factory/* należy do taśmy; po nieudanej próbie nadpisujemy ją bez otwartego PR.
-            git push --force origin "HEAD:refs/heads/$BRANCH"
-          else
-            git push origin "HEAD:$BRANCH"
+          if [ "$EMPTY" != true ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git apply --index "$RUNNER_TEMP/change/change.patch"
+            git commit -m "factory: $TITLE (#$ISSUE)"
+            if [ -z "$PR" ]; then
+              # Nowa gałąź factory/* należy do taśmy; po nieudanej próbie nadpisujemy ją bez otwartego PR.
+              git push --force origin "HEAD:refs/heads/$BRANCH"
+            else
+              git push origin "HEAD:$BRANCH"
+            fi
           fi
 
           printf '%s' "$IMPLEMENTATION" > "$RUNNER_TEMP/implementation.json"
@@ -364,16 +372,20 @@ jobs:
             NEXT=$((ROUND + 1))
             gh label create "factory:round-$NEXT" --force >/dev/null
             gh pr edit "$PR" --add-label "factory:round-$NEXT"
+            if [ "$EMPTY" = true ]; then
+              gh pr comment "$PR" --body "Runda $NEXT bez zmian w plikach: implementer odpowiedział na uwagi w założeniach opisu PR. Recenzja rusza jeszcze raz."
+            fi
           fi
           gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=review -f pr="$PR"
 
-  # Implementer zgłosił blokadę, zależności się nie zainstalowały albo nie ma żadnej zmiany: bez PR i bez recenzji.
+  # Implementer zgłosił blokadę, zależności się nie zainstalowały albo pierwsza implementacja nie ma żadnej zmiany:
+  # bez PR i bez recenzji. Runda poprawek bez zmian ze statusem done idzie do publish.
   blocked:
     needs: implement
     if: >-
       needs.implement.result == 'success' && needs.implement.outputs.over_budget != 'true' && (
         needs.implement.outputs.blocker != '' || needs.implement.outputs.status == 'blocked' ||
-        needs.implement.outputs.empty == 'true')
+        (needs.implement.outputs.empty == 'true' && inputs.pr == ''))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

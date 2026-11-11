@@ -28,13 +28,25 @@ export function nextRound(input: LoopInput): LoopDecision {
 
 const SEVERITY = ['critical', 'high', 'medium', 'low'];
 
+/**
+ * Wyjście komendy w bloku kodu. Płotek jest dłuższy niż najdłuższy ciąg backticków w treści, a `<!--` traci
+ * znaczenie: wyjście pisze kod z PR, więc nie może wstawić do komentarza znacznika taśmy (`<!-- factory:… -->`).
+ */
+export function codeBlock(text: string): string[] {
+  const longest = Math.max(0, ...(text.match(/`+/g) ?? []).map((run) => run.length));
+  const fence = '`'.repeat(Math.max(3, longest + 1));
+  return [`${fence}text`, text.replace(/<!--/g, '<!- -'), fence];
+}
+
 /** Komentarz w PR z uwagami dla implementera. Czyta go też właściciel, więc jest po polsku i krótki. */
 export function roundComment(input: LoopInput): string {
   const next = input.round + 1;
   const lines = [ROUND_MARKER, `## Runda poprawek ${next} z ${input.maxRounds}`, ''];
-  const failing = (input.ci?.commands ?? []).filter((c) => !c.ok).map((c) => `\`${c.name}\``);
+  const failed = (input.ci?.commands ?? []).filter((c) => !c.ok);
   if (input.ci?.status === 'failure') {
-    lines.push(`**CI nie przechodzi:** ${failing.join(', ') || 'brak wyniku komend'}. Uruchom te komendy, żeby zobaczyć błędy.`, '');
+    const names = failed.map((c) => `\`${c.name}\``).join(', ') || 'brak wyniku komend';
+    lines.push(`**CI nie przechodzi:** ${names}. Końcówka wyjścia z CI taśmy jest niżej; pełne błędy zobaczysz, uruchamiając te komendy.`, '');
+    for (const c of failed.filter((c) => c.tail)) lines.push(`\`${c.name}\`:`, ...codeBlock(c.tail!), '');
   }
   for (const review of input.reviews.filter((r) => r.verdict === 'request_changes')) {
     lines.push(`**${review.perspective}:** ${review.summary}`);
