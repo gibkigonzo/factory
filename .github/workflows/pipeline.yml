@@ -118,8 +118,8 @@ jobs:
     with:
       factory_ref: ${{ inputs.factory_ref }}
       trusted: ${{ inputs.trusted }}
-    permissions:
-      contents: read
+    permissions:     # zapis treści tylko dla statystyk na gałęzi factory-journal
+      contents: write
       issues: write
       pull-requests: read
 

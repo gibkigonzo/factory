@@ -8,7 +8,8 @@ import { parseArgs } from 'node:util';
 import { isOutputKind, OUTPUTS, parseOutput } from '../agents/output.ts';
 import type { FactoryConfig } from '../config/spec.ts';
 import type { Assessment, Evidence, Review } from '../risk/types.ts';
-import { collectRecords, factoryIssues } from '../shadow/collect.ts';
+import { collectIssueTasks, collectRecords, factoryIssues } from '../shadow/collect.ts';
+import { journalCsv, journalJson, taskRows } from '../shadow/export.ts';
 import { shadowComment, shadowRecord } from '../shadow/comment.ts';
 import { renderJournal } from '../shadow/journal.ts';
 import { runCommands } from './ci.ts';
@@ -84,6 +85,7 @@ function options(args: string[]) {
       url: { type: 'string' },
       sha: { type: 'string' },
       'run-url': { type: 'string' },
+      'files-url': { type: 'string' },
       before: { type: 'string' },
       publish: { type: 'string' },
       setup: { type: 'boolean', default: false },
@@ -234,7 +236,22 @@ function run(command: string | undefined, rest: string[]): string {
       const cfg = config(v.config);
       const owners = required(v.owners, '--owners').split(',').map((o) => o.trim()).filter(Boolean);
       const updated = `${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`;
-      return renderJournal(collectRecords(required(v.raw, '--raw'), owners, cfg.shadow.revert_days), cfg, updated);
+      const raw = required(v.raw, '--raw');
+      return renderJournal(collectRecords(raw, owners, cfg.shadow.revert_days), cfg, updated, {
+        tasks: collectIssueTasks(raw),
+        filesUrl: v['files-url'],
+      });
+    }
+    case 'journal-export': {
+      // Jeden wiersz na zadanie, także bez PR: journal.csv (tabela) i journal.json obok dziennika.
+      const cfg = config(v.config);
+      const owners = required(v.owners, '--owners').split(',').map((o) => o.trim()).filter(Boolean);
+      const raw = required(v.raw, '--raw');
+      const out = required(v.out, '--out');
+      const rows = taskRows(collectRecords(raw, owners, cfg.shadow.revert_days), collectIssueTasks(raw));
+      writeFileSync(join(out, 'journal.csv'), journalCsv(rows));
+      writeFileSync(join(out, 'journal.json'), journalJson(rows, new Date().toISOString()));
+      return `Statystyki: ${rows.length} zadań`;
     }
     case 'journal-issues':
       return factoryIssues(required(v.raw, '--raw')).join('\n');

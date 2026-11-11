@@ -78,6 +78,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Dziennik to przypięte issue „Tryb cienia”. Odświeża się po werdykcie, po zamknięciu PR fabryki i raz dziennie, bo reakcje nie uruchamiają workflowów.
 - Kalibracja progu pewności porównuje odsetek przyjętych PR w grupach pewności, a nie zgodność z werdyktem, bo werdykt sam zależy od pewności.
 - Progi Bramki 1 są w sekcji `shadow` w `base`.
+- Statystyki wszystkich zadań, także bez PR, dziennik zapisuje w `journal.csv` i `journal.json` na gałęzi `factory-journal`: koszt na etap i recenzenta oraz ocenę właściciela. Koszt zablokowanej implementacji trafia do komentarza z blokadą (11 listopada 2026).
 
 ### Spec z telefonu (7 listopada 2026)
 
