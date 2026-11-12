@@ -214,6 +214,50 @@ describe('dane z GitHuba', () => {
     }
   });
 
+  it('/change właściciela po werdykcie „scal” liczy ten werdykt jako 👎; po eskalacji i bez /change liczy się ostatni', () => {
+    const own = mkdtempSync(join(tmpdir(), 'factory-change-'));
+    try {
+      const put = (path: string, value: unknown) => {
+        mkdirSync(join(own, path, '..'), { recursive: true });
+        writeFileSync(join(own, path), JSON.stringify(value));
+      };
+      const verdict = (id: number, round: number, level: ShadowRecord['level'], action: ShadowRecord['action'], at: string) => ({
+        id, body: shadowComment({ pr: 50, round, level, action, reviews: [] }, config), user: { login: 'github-actions[bot]' }, created_at: at,
+      });
+      const pr = (number: number) => ({ number, title: `PR ${number}`, state: 'MERGED', createdAt: '2026-11-12T05:00:00Z', mergedAt: '2026-11-12T07:00:00Z', headRefName: `factory/${number}-x` });
+      put('prs.json', [pr(50), pr(51), pr(52), pr(53)]);
+      const twoVerdicts = (first: ShadowRecord['action'], level: ShadowRecord['level']) => [
+        verdict(1, 0, level, first, '2026-11-12T05:58:00Z'),
+        verdict(2, 1, 'Low', 'merge', '2026-11-12T06:53:00Z'),
+      ];
+      // #50: Low, potem /change, potem drugi werdykt z 👍. Liczy się pierwszy werdykt jako 👎 (fałszywe Low).
+      put('comments/50.json', twoVerdicts('merge', 'Low'));
+      put('reactions/2.json', [{ content: '+1', user: { login: 'owner' }, created_at: '2026-11-12T06:55:00Z' }]);
+      put('changes/50.json', [{ user: { login: 'owner' }, created_at: '2026-11-12T06:43:00Z' }]);
+      // #51: eskalacja (High), potem /change: zgoda, liczy się ostatni werdykt.
+      put('comments/51.json', twoVerdicts('escalate', 'High'));
+      put('changes/51.json', [{ user: { login: 'owner' }, created_at: '2026-11-12T06:43:00Z' }]);
+      // #52: /change od kogoś spoza właścicieli się nie liczy.
+      put('comments/52.json', twoVerdicts('merge', 'Low'));
+      put('changes/52.json', [{ user: { login: 'mallory' }, created_at: '2026-11-12T06:43:00Z' }]);
+      // #53: Medium, 👍 właściciela na tym werdykcie i mimo to /change: reakcja ma pierwszeństwo.
+      put('comments/53.json', [verdict(7, 0, 'Medium', 'veto-window', '2026-11-12T05:58:00Z'), verdict(8, 1, 'Low', 'merge', '2026-11-12T06:53:00Z')]);
+      put('reactions/7.json', [{ content: '+1', user: { login: 'owner' }, created_at: '2026-11-12T06:00:00Z' }]);
+      put('changes/53.json', [{ user: { login: 'owner' }, created_at: '2026-11-12T06:43:00Z' }]);
+      const records = collectRecords(own, ['owner'], 7);
+      const shadow = (n: number) => records.find((r) => r.number === n)?.shadow;
+      assert.deepEqual([shadow(50)?.record.round, shadow(50)?.reaction, shadow(50)?.implied], [0, 'down', 'change']);
+      assert.ok(isFalseLow(records.find((r) => r.number === 50)!), 'Low z /change to fałszywe Low');
+      assert.deepEqual([shadow(51)?.record.round, shadow(51)?.implied], [1, undefined]);
+      assert.deepEqual([shadow(52)?.record.round, shadow(52)?.implied], [1, undefined]);
+      assert.deepEqual([shadow(53)?.record.round, shadow(53)?.reaction, shadow(53)?.implied], [0, 'up', undefined]);
+      assert.match(renderJournal(records, config, 'teraz'), /#50 .*👎 \(po \/change\)/);
+      assert.match(journalCsv(taskRows(records, [])), /👎 \(po \/change\)/);
+    } finally {
+      rmSync(own, { recursive: true, force: true });
+    }
+  });
+
   it('zużycie zbiera z planu, opisu PR i wszystkich werdyktów bota, zsumowane na etap', () => {
     const ten = collectRecords(dir, ['owner'], 7).find((r) => r.number === 10);
     assert.deepEqual(ten?.usage?.map((u) => [u.stage, u.count, u.cost]), [

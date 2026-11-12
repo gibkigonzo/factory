@@ -109,13 +109,13 @@ W PR: `risk:low`, `risk:medium`, `risk:high` (poziom z oceny ryzyka) i `factory:
 | --- | --- | --- |
 | `/approve` | issue z `needs-approval` | zgoda na nowe pakiety z planu; zadanie trafia do kolejki |
 | `/approve`, `/veto` | PR | zapisują Twoją decyzję etykietą; w Etapie 1 sterują merge'em Medium i High |
-| `/change <opis>` | PR | runda poprawek według Twojego opisu |
+| `/change <opis>` | PR | runda poprawek według Twojego opisu; implementer ją wykonuje albo zgłasza blokadę z powodem |
 | `/reject` | issue albo PR | odrzuca zadanie, zamyka PR i zwalnia kolejkę |
 | `/split` | issue | planer dzieli zadanie na mniejsze issue |
 | `/stop <powód>` | issue albo PR | zatrzymuje taśmę: plan, implementacja, recenzja i kolejka czekają, a dziennik i komendy działają |
-| `/start` | issue albo PR | wznawia taśmę: etapy wstrzymane w czasie postoju ruszają same, kolejka wypuszcza czekające zadania |
+| `/start` | issue albo PR | wznawia taśmę: etapy wstrzymane w czasie postoju ruszają same, kolejka wypuszcza czekające zadania; gdy taśma działa, tylko sprawdza kolejkę |
 
-Komendy działają tylko od właściciela repo i kont z wejścia `trusted`.
+Komendy działają tylko od właściciela repo i kont z wejścia `trusted`. Wielkość liter nie ma znaczenia, bo autokorekta w telefonie pisze „/Change”. Na komentarz, który zaczyna się od „/” z nieznaną komendą, taśma odpowiada listą komend zamiast milczeć.
 
 **Zatrzymanie taśmy** służy do tego, co w fabryce robi się przy wadzie linii: najpierw naprawa, potem dalsza produkcja. `/stop` otwiera issue „Taśma zatrzymana” z powodem. Przebieg, który już trwa, kończy bieżący etap, ale następny nie rusza i dostaje etykietę `factory:paused` z zapisem, co miało ruszyć. `/start` zamyka issue i wznawia zapisane etapy. Etapy wstrzymane w czasie postoju liczą się do dziennego limitu tak jak zwykłe przebiegi.
 
@@ -180,7 +180,8 @@ W Etapie 1 merger zrobi to, co dziś opisuje werdykt: Low scali od razu, Medium 
 
 - **Pętla poprawek.** Czerwone CI albo `request_changes` recenzenta odsyła PR do implementera z komentarzem „Runda poprawek N z M” (uwagi od najpoważniejszej, przy czerwonym CI końcówka wyjścia padających komend), do `risk.max_review_rounds` rund. Przy czerwonym CI recenzenci nie ruszają, bo poprawka i tak zmieni diff; oceniają je dopiero w ostatniej rundzie. Ocena ryzyka i werdykt powstają po pętli. Uwagi nierozstrzygnięte po ostatniej rundzie dają High.
 - **Wyjście CI.** `ci.json` ma przy każdej komendzie końcówkę jej wyjścia (30 ostatnich linii stdout i stderr, bez kolorów). Recenzenci szukają w niej dowodu na to, co komenda wypisała, np. czystego typechecku, a implementer może się na nią powołać dowodem `ci: <komenda>`.
-- **Runda bez zmian w plikach.** Gdy w rundzie poprawek żadna uwaga nie wymaga zmiany kodu, implementer oddaje `done` z wyjaśnieniem w założeniach. Workflow aktualizuje opis PR, dodaje etykietę rundy i uruchamia recenzję jeszcze raz, bez commita. Limit rund działa tak samo.
+- **Zadanie rundy.** W rundzie poprawek implementer pracuje na gałęzi PR, a zadaniem są uwagi z komentarza (`/change` albo „Runda poprawek”), nie issue od nowa. Twoje `/change` wykonuje albo kończy blokadą z powodem.
+- **Runda bez zmian w plikach.** Gdy w rundzie poprawek żadna uwaga nie wymaga zmiany kodu, implementer oddaje `done` z wyjaśnieniem w założeniach. Workflow aktualizuje opis PR, w komentarzu PR cytuje wyjaśnienie implementera, dodaje etykietę rundy i uruchamia recenzję jeszcze raz, bez commita. Limit rund działa tak samo.
 - **Blokada.** Gdy implementer nie może dokończyć zadania (brak narzędzia, zależności, uprawnień), kończy ze statusem `blocked` i opisem. Workflow nie otwiera wtedy PR i nie puszcza recenzji: issue dostaje etykietę `blocked` i komentarz z powodem. Tak samo, gdy pierwsza implementacja nie zmieniła żadnego pliku. Poprawka, która potem trafi do PR (np. po `/change`), zdejmuje etykietę `blocked`. Brak sprawdzenia, które i tak zrobi CI (np. komenda spoza `commands`), nie jest blokadą: implementer oddaje zmianę i pisze w założeniach, czego nie uruchomił.
 - **Awaria startu.** Bun dla akcji Claude pochodzi z rejestru npm, bo pobieranie z GitHub Releases bywa niedostępne. Gdy sesja Claude mimo to nie wystartuje (brak wyniku albo błąd bez kosztu), etap czeka minutę i próbuje jeszcze raz. Błąd po rozpoczęciu pracy nie jest ponawiany.
 - **Nowe zależności.** Planer wpisuje pakiety z wersją do `dependencies` w planie. Plan z nimi czeka z etykietą `needs-approval` na `/approve` w issue. Potem workflow instaluje je komendami z `dependencies` w `factory.yml`, zanim ruszy implementer. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji, a obcy pakiet mógłby go odczytać.
@@ -189,7 +190,7 @@ W Etapie 1 merger zrobi to, co dziś opisuje werdykt: Low scali od razu, Medium 
 
 - Planer wypisuje pliki, które zmieni implementer. Zadanie ze wspólnymi plikami z zadaniem w toku (z planu albo z otwartego PR) czeka z etykietą `queued`, tak samo zadanie ponad `wip_limit`.
 - `daily_runs` to dzienny limit przebiegów z Claude: planu, implementacji i recenzji, liczonych po nazwie przebiegu. Kolejka, dziennik i komendy go nie zużywają. Limit sprawdza implementacja nowego zadania; zadanie ponad limit czeka w kolejce. Rundy poprawek otwartego PR limitu nie sprawdzają, bo pętla i tak kończy się po `max_review_rounds`.
-- Kolejka rusza po zamknięciu PR fabryki, po `/reject`, po zgodzie na zależności, po blokadzie albo awarii zadania w toku i raz dziennie o 04:17 UTC.
+- Kolejka rusza po zamknięciu PR fabryki, po `/reject`, po `/start`, po zgodzie na zależności, po blokadzie albo awarii zadania w toku i raz dziennie z harmonogramu (04:17 UTC). GitHub uruchamia przebiegi z harmonogramu z opóźnieniem, w pilocie zwykle o kilka godzin. Zadanie, które czeka na nowy dzień limitu, wcześniej uruchomisz przez `/start` po północy UTC.
 
 ### Zrzuty ekranu
 
@@ -202,7 +203,7 @@ evidence:
 
 - Komenda zapisuje pliki PNG w katalogu ze zmiennej `FACTORY_SCREENSHOTS`. `<nazwa>@<szerokość>.png` to wykonanie, a `<nazwa>@<szerokość>.ref.png` to wzorzec tej samej sekcji przy tej samej szerokości, np. wycinek makiety. Nazwa ma małe litery, cyfry, `-` i `_`. Wzorzec i szerokość są opcjonalne.
 - Lepiej działają zrzuty sekcji niż całej strony: duży obraz model widzi pomniejszony i gubi szczegóły.
-- Limity: 150 plików, 5 MB na plik i 100 MB razem. Plik spoza wzorca nazw, plik inny niż PNG albo ponad limit taśma pomija i wymienia w PR.
+- Limity: 400 plików, 5 MB na plik i 100 MB razem. Plik spoza wzorca nazw, plik inny niż PNG albo ponad limit taśma pomija i wymienia w PR. Zrzut pominięty przez limit galeria i recenzent wyglądu widzą jako „pominięty”, a nie jako sekcję, której już nie ma, a werdykt „wygląd bez zmian” skryptu wtedy nie zapada.
 - Czerwona komenda nie zatrzymuje recenzji. Recenzent i komentarz w PR mówią wtedy, że zrzutów może brakować.
 - Implementer może uruchomić tę komendę sam (katalog w `FACTORY_SCREENSHOTS` ustawia workflow) i przed oddaniem zmiany obejrzeć zrzuty zmienionych sekcji obok wzorca.
 - **Tylko sekcje zmienione przez PR.** Taśma uruchamia tę samą komendę na punkcie rozgałęzienia, w osobnym katalogu roboczym z komendą `setup`, i porównuje piksele zrzutów przed i po zmianie. Robi to skrypt, nie model. CI trwa przez to kilka minut dłużej, ale nie zużywa Claude.
@@ -221,8 +222,8 @@ evidence:
 
 Metryki liczy skrypt, nie model:
 
-- **zgodność**: odsetek werdyktów, które oceniłeś 👍;
-- **fałszywe Low**: werdykt „scaliłaby”, który oceniłeś 👎, PR zamknięty bez merge'u albo merge cofnięty w ciągu `revert_days` dni;
+- **zgodność**: odsetek werdyktów, które oceniłeś 👍. Liczy się ostatni werdykt PR, z jednym wyjątkiem: werdykt „scaliłaby” albo „okno weta”, po którym napisałeś `/change`, liczy się jako 👎 („👎 (po /change)” w dzienniku), bo w Etapie 1 PR scaliłby się bez Twojej poprawki. Twoja reakcja na ten sam werdykt ma pierwszeństwo, a `/change` po eskalacji (High) to zgoda;
+- **fałszywe Low**: werdykt „scaliłaby”, który oceniłeś 👎 (także przez `/change`), PR zamknięty bez merge'u albo merge cofnięty w ciągu `revert_days` dni;
 - **rundy poprawek** i **czas od `ready` do merge'u**;
 - **próg pewności recenzentów**: zakończone PR-y dzielone według najniższej pewności w panelu (≥ 0,8 i < 0,8) z odsetkiem przyjętych (scalonych i niecofniętych) w każdej grupie. Jeśli odsetek jest podobny, pewność nie przewiduje Twoich decyzji i próg zastąpią zgodność recenzentów oraz cytaty, które da się sprawdzić;
 - **koszt**: równowartość cen API na PR, na etap (plan, implementacja, recenzja, ocena ryzyka) i na recenzenta, tokeny wyjścia oraz podział wyjścia na rozumowanie, tekst i wywołania narzędzi (w tym kod). Przy subskrypcji pokazuje, ile taśma waży w limitach. Koszt recenzji rundy odesłanej do implementera zapisuje komentarz rundy, bo ta runda nie ma werdyktu.

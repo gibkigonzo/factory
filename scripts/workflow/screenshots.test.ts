@@ -12,6 +12,7 @@ import {
   compareScreenshots,
   galleryComment,
   INDEX,
+  LIMIT_REASON,
   MAX_FILES,
   runScreenshots,
   screenshotsTask,
@@ -99,6 +100,33 @@ describe('zrzuty ekranu', () => {
       assert.equal(runScreenshots(command, out, dir, { setup: 'exit 1' }).ok, false, 'nieudany setup: bez zrzutów');
       assert.deepEqual(readdirSync(out), [INDEX]);
       assert.equal(runScreenshots(command, out, dir, { setup: 'true' }).ok, true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('zrzut pominięty przez limit plików to nie usunięta sekcja: galeria, recenzent i werdykt skryptu to widzą', () => {
+    const dir = temp();
+    try {
+      const head = join(dir, 'head');
+      const base = join(dir, 'base');
+      // Katalog po pobraniu artefaktu ma tylko pliki przyjęte; odrzucone zostały zapisane w INDEX przebiegu.
+      shots(head, { 'a@375.png': image(1), 'u@375.ref.png': image(9) });
+      writeFileSync(join(head, INDEX), JSON.stringify({ ok: true, rejected: [{ file: 'u@375.png', reason: LIMIT_REASON }, { file: 'w@375.png', reason: LIMIT_REASON }, 'zły wpis'] }));
+      shots(base, { 'a@375.png': image(1), 'u@375.png': image(4), 'w@375.png': image(4) });
+      const compared = compareScreenshots(head, base, false);
+      assert.deepEqual(compared.shots.map((s) => `${s.name}:${s.change}`), ['a:unchanged', 'u:skipped', 'w:skipped']);
+      assert.deepEqual(compared.rejected.map((r) => r.file), ['u@375.png', 'w@375.png']);
+      const comment = galleryComment(compared, writeGallery(compared, head, join(dir, 'out')), { url: (f) => f, sha: 'abcdef1' });
+      assert.match(comment, /- u: 375 px: zrzut pominięty \(limit plików\)/);
+      assert.doesNotMatch(comment, /sekcji już nie ma/);
+      assert.match(comment, /Pominięte pliki: `u@375\.png` \(ponad limit/);
+      assert.match(screenshotsTask(head, base).join('\n'), /u, 375 px: zrzut po zmianie pominięty przez limit plików; nie znaczy to, że sekcji nie ma/);
+      assert.equal(unchangedVerdict(head, base, 'ux-visual'), undefined, 'pominiętego zrzutu skrypt nie uznaje za bez zmian');
+      // Zrzut bazy pominięty przez limit: nie ma z czym porównać, więc to zmiana do oceny, a nie nowa sekcja.
+      writeFileSync(join(base, INDEX), JSON.stringify({ ok: true, rejected: [{ file: 'c@375.png', reason: LIMIT_REASON }] }));
+      shots(head, { 'c@375.png': image(3) });
+      assert.equal(compareScreenshots(head, base, false).shots.find((s) => s.name === 'c')?.change, 'changed');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

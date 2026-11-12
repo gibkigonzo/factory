@@ -11,9 +11,11 @@ import { join, resolve } from 'node:path';
 import { compose, decodePng, differs, encodePng } from './png.ts';
 
 export const SCREENSHOT_NAME = /^([a-z0-9][a-z0-9_-]{0,63})(?:@(\d{2,5}))?(\.ref)?\.png$/;
-export const MAX_FILES = 150;
+export const MAX_FILES = 400;
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_TOTAL_BYTES = 100 * 1024 * 1024;
+/** Powód odrzucenia pliku ponad limit. Taki plik nie znaczy, że sekcji nie ma: zrzut po prostu się nie zmieścił. */
+export const LIMIT_REASON = `ponad limit ${MAX_FILES} plików albo ${MAX_TOTAL_BYTES / 1024 / 1024} MB razem`;
 /** Wynik komendy zapisany obok zrzutów. Pliki zrzutów i tak są sprawdzane od nowa. */
 export const INDEX = 'index.json';
 export const SCREENSHOTS_MARKER = '<!-- factory:screenshots -->';
@@ -61,7 +63,7 @@ export function collectScreenshots(dir: string, prune = true): Collected {
           : !isPng(path)
             ? 'to nie PNG'
             : accepted.length >= MAX_FILES || total + stat.size > MAX_TOTAL_BYTES
-              ? `ponad limit ${MAX_FILES} plików albo ${MAX_TOTAL_BYTES / 1024 / 1024} MB razem`
+              ? LIMIT_REASON
               : undefined;
     if (reason) {
       rejected.push({ file, reason });
@@ -82,6 +84,24 @@ export function collectScreenshots(dir: string, prune = true): Collected {
   }
   const ordered = [...shots.values()].sort((a, b) => a.name.localeCompare(b.name) || (a.width ?? 0) - (b.width ?? 0));
   return { shots: ordered, rejected };
+}
+
+/**
+ * Pliki odrzucone przy przebiegu komendy (zapisane w INDEX). Katalog po pobraniu artefaktu ma już tylko pliki przyjęte,
+ * więc bez INDEX nie wiadomo, że część zrzutów się nie zmieściła.
+ */
+export function indexRejected(dir: string): Collected['rejected'] {
+  try {
+    const rejected = (JSON.parse(readFileSync(join(dir, INDEX), 'utf8')) as { rejected?: unknown }).rejected;
+    if (!Array.isArray(rejected)) return [];
+    return rejected.flatMap((r) =>
+      r && typeof r === 'object' && typeof (r as { file?: unknown }).file === 'string' && typeof (r as { reason?: unknown }).reason === 'string'
+        ? [{ file: (r as { file: string }).file, reason: (r as { reason: string }).reason }]
+        : [],
+    );
+  } catch {
+    return [];
+  }
 }
 
 /** Czy komenda zrzutów zakończyła się sukcesem, według pliku INDEX; brak pliku albo zły format: nie wiadomo. */
@@ -116,8 +136,11 @@ export function runScreenshots(
   return result;
 }
 
-/** Zmiana wyglądu względem gałęzi bazowej: nowa sekcja, zmieniona, bez zmian albo sekcja, która zniknęła. */
-export type Change = 'new' | 'changed' | 'unchanged' | 'removed';
+/**
+ * Zmiana wyglądu względem gałęzi bazowej: nowa sekcja, zmieniona, bez zmian, sekcja, która zniknęła,
+ * albo zrzut po zmianie pominięty przez limit plików (sekcja może istnieć, ale nie ma czego porównać).
+ */
+export type Change = 'new' | 'changed' | 'unchanged' | 'removed' | 'skipped';
 
 export interface Compared extends Collected {
   shots: (Shot & { change?: Change })[];
@@ -128,6 +151,13 @@ export interface Compared extends Collected {
 }
 
 const shotKey = (s: Shot) => `${s.name}@${s.width ?? ''}`;
+const actualFile = (s: Shot) => `${s.name}${s.width ? `@${s.width}` : ''}.png`;
+/** Odrzucone pliki z przebiegu (INDEX) i z ponownego sprawdzenia katalogu, bez powtórzeń. */
+function allRejected(dir: string, collected: Collected): Collected['rejected'] {
+  const seen = new Set<string>();
+  return [...indexRejected(dir), ...collected.rejected].filter((r) => !seen.has(r.file) && seen.add(r.file));
+}
+const overLimit = (rejected: Collected['rejected']) => new Set(rejected.filter((r) => r.reason === LIMIT_REASON).map((r) => r.file));
 const byNameAndWidth = (a: Shot, b: Shot) => a.name.localeCompare(b.name) || (a.width ?? 0) - (b.width ?? 0);
 
 /** Czy zrzut wymaga oceny: zmienił się albo porównanie było niemożliwe. */
@@ -138,15 +168,19 @@ export const needsReview = (shot: Compared['shots'][number]) => shot.change !== 
  * Decyduje porównanie pikseli, nie model. Gdy któraś komenda zrzutów nie przeszła, porównania nie ma.
  */
 export function compareScreenshots(dir: string, baseDir?: string, prune = true): Compared {
-  const head = collectScreenshots(dir, prune);
+  const collected = collectScreenshots(dir, prune);
+  const head = { ...collected, rejected: allRejected(dir, collected) };
   const ok = screenshotsOk(dir);
   if (!baseDir || ok !== true || screenshotsOk(baseDir) !== true) return { ...head, ok, base: false };
   const before = collectScreenshots(baseDir, prune);
+  const skippedHead = overLimit(head.rejected);
+  const skippedBase = overLimit(allRejected(baseDir, before));
   const previous = new Map(before.shots.filter((s) => s.actual).map((s) => [shotKey(s), s.actual!]));
   const shots: Compared['shots'] = head.shots.map((shot) => {
     const old = previous.get(shotKey(shot));
-    if (!shot.actual) return { ...shot, change: old ? 'removed' : 'unchanged' };
-    if (!old) return { ...shot, change: 'new' };
+    if (!shot.actual) return { ...shot, change: skippedHead.has(actualFile(shot)) ? 'skipped' : old ? 'removed' : 'unchanged' };
+    // Bez zrzutu bazy (pominięty przez limit) nie ma z czym porównać: oceni recenzent.
+    if (!old) return { ...shot, change: skippedBase.has(actualFile(shot)) ? 'changed' : 'new' };
     let changed = true;
     try {
       changed = differs(readFileSync(join(dir, shot.actual)), readFileSync(join(baseDir, old)));
@@ -157,7 +191,9 @@ export function compareScreenshots(dir: string, baseDir?: string, prune = true):
   });
   const present = new Set(head.shots.map(shotKey));
   for (const shot of before.shots) {
-    if (shot.actual && !present.has(shotKey(shot))) shots.push({ name: shot.name, ...(shot.width ? { width: shot.width } : {}), change: 'removed' });
+    if (shot.actual && !present.has(shotKey(shot))) {
+      shots.push({ name: shot.name, ...(shot.width ? { width: shot.width } : {}), change: skippedHead.has(actualFile(shot)) ? 'skipped' : 'removed' });
+    }
   }
   return { shots: shots.sort(byNameAndWidth), rejected: head.rejected, ok, base: true };
 }
@@ -188,7 +224,9 @@ export function screenshotsTask(dir: string, baseDir?: string): string[] {
   const describe = (s: Compared['shots'][number]) =>
     s.change === 'removed'
       ? `  - ${label(s)}: sekcja była przed zmianą, a po zmianie jej nie ma; wzorzec ${path(s.reference)}`
-      : `  - ${label(s)}${s.change === 'new' ? ' (nowa)' : ''}: wykonanie ${path(s.actual)}, wzorzec ${path(s.reference)}`;
+      : s.change === 'skipped'
+        ? `  - ${label(s)}: zrzut po zmianie pominięty przez limit plików; nie znaczy to, że sekcji nie ma, a tej szerokości nie oceniasz`
+        : `  - ${label(s)}${s.change === 'new' ? ' (nowa)' : ''}: wykonanie ${path(s.actual)}, wzorzec ${path(s.reference)}`;
   const intro = 'Zrzuty ekranu z CI otwierasz narzędziem Read: wykonanie po zmianie i wzorzec tej samej sekcji przy tej samej szerokości.';
   if (!compared.base) {
     const failed = compared.ok === false ? ' Komenda zrzutów zakończyła się błędem, więc części zrzutów może brakować.' : '';
@@ -266,6 +304,7 @@ export function galleryComment(compared: Compared, files: Map<string, string>, o
   const link = (shot: Compared['shots'][number]) => {
     const width = shot.width ? `${shot.width} px` : 'obraz';
     if (shot.change === 'removed') return `${width}: sekcji już nie ma`;
+    if (shot.change === 'skipped') return `${width}: zrzut pominięty (limit plików)`;
     const file = files.get(shotKey(shot));
     if (!file) return width;
     const only = !shot.actual ? ' (tylko wzorzec)' : !shot.reference ? ' (tylko wykonanie)' : '';
@@ -281,7 +320,7 @@ export function galleryComment(compared: Compared, files: Map<string, string>, o
     const pairs = compared.shots.some((s) => s.actual && s.reference);
     lines.push(`Commit \`${options.sha.slice(0, 7)}\`.${pairs ? ' Link otwiera wzorzec po lewej albo u góry, a wykonanie obok albo pod spodem.' : ''}`, '');
     // Sam wzorzec bez wykonania: sekcji jeszcze nie ma na stronie. Osobny zwinięty blok, żeby nie zasłaniał zmian.
-    const pending = compared.shots.filter((s) => !s.actual && s.change !== 'removed' && s.change !== 'new');
+    const pending = compared.shots.filter((s) => !s.actual && s.change !== 'removed' && s.change !== 'new' && s.change !== 'skipped');
     const rest = compared.shots.filter((s) => !pending.includes(s));
     if (!compared.base) {
       lines.push('Porównanie z gałęzią główną się nie udało, więc lista obejmuje wszystkie zrzuty.', '', ...list(rest));

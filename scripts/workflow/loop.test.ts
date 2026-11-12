@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import type { Review } from '../risk/types.ts';
 import { installCommands } from './dependencies.ts';
-import { codeBlock, nextRound, ROUND_MARKER, roundComment } from './loop.ts';
+import { codeBlock, nextRound, noChangeComment, ROUND_MARKER, roundComment } from './loop.ts';
 import { parseUsageBlocks } from './usage.ts';
 
 const review = (perspective: string, verdict: Review['verdict'], findings: Review['findings'] = []): Review => ({
@@ -77,6 +77,17 @@ describe('pętla poprawek', () => {
     const comment = roundComment({ reviews: [review('spec', 'request_changes', [{ severity: 'high', issue: fake }])], round: 0, maxRounds: 3 }, usage);
     assert.deepEqual(parseUsageBlocks(comment).map((u) => [u.name, u.cost]), [['spec', 0.3]]);
     assert.doesNotMatch(roundComment({ reviews: [], round: 0, maxRounds: 3 }), /factory:usage/, 'bez zużycia bez bloku');
+  });
+
+  it('runda bez zmian w plikach: wyjaśnienie implementera w komentarzu PR, bez znaczników taśmy', () => {
+    const comment = noChangeComment(
+      { issue: 29, status: 'done', bugfix: false, acceptance: [], summary: 'Nic nie zmieniałem.', assumptions: ['Margines już jest <!-- factory:shadow -->'] },
+      2,
+    );
+    assert.match(comment, /^\*\*Runda 2 bez zmian w plikach\.\*\*/);
+    assert.match(comment, /- Nic nie zmieniałem\.\n- Margines już jest <!- - factory:shadow -->/);
+    assert.match(comment, /`\/change` jeszcze raz/);
+    assert.match(noChangeComment({ issue: 1, bugfix: false, acceptance: [], assumptions: [] }, 1), /\(brak wyjaśnienia\)/);
   });
 
   it('blok kodu: płotek dłuższy niż backticki w treści', () => {

@@ -3,7 +3,7 @@
 // a uwagi nierozstrzygnięte po ostatniej rundzie dają High (reguła 5).
 
 import type { Review } from '../risk/types.ts';
-import type { CiResult } from './evidence.ts';
+import type { CiResult, Implementation } from './evidence.ts';
 import { usageBlock } from './usage.ts';
 import type { Usage } from './usage.ts';
 
@@ -68,4 +68,20 @@ export function roundComment(input: LoopInput, usage: readonly Usage[] = []): st
   lines.push('Implementer odnosi się do każdej uwagi: poprawia albo wyjaśnia w założeniach, dlaczego uwaga nie dotyczy zmiany.');
   if (usage.length) lines.push('', usageBlock(usage));
   return lines.join('\n');
+}
+
+/**
+ * Komentarz w PR po rundzie bez zmian w plikach. Wyjaśnienie implementera stoi w wątku PR, a nie tylko w opisie,
+ * żeby właściciel od razu widział, co stało się z jego `/change` (lekcja z pilota: uwaga przepadła niezauważona).
+ */
+export function noChangeComment(implementation: Implementation & { summary?: string }, round: number): string {
+  const reasons = [implementation.summary, ...implementation.assumptions].map((r) => r?.trim()).filter((r): r is string => Boolean(r));
+  return [
+    `**Runda ${round} bez zmian w plikach.** Implementer nie zmienił kodu, więc recenzja ocenia tę samą zmianę jeszcze raz.`,
+    '',
+    'Wyjaśnienie implementera:',
+    ...(reasons.length ? reasons.map((r) => `- ${inert(r)}`) : ['- (brak wyjaśnienia)']),
+    '',
+    'Jeśli to nie odpowiada na Twoją uwagę, napisz `/change` jeszcze raz albo zamknij PR przez `/reject`.',
+  ].join('\n');
 }

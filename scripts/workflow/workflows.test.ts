@@ -172,13 +172,31 @@ describe('workflowy fabryki', () => {
     const downloads = (loop.steps ?? []).filter((step) => step.uses?.startsWith('actions/download-artifact'));
     assert.ok(downloads.some((step) => (step as { with?: { pattern?: string } }).with?.pattern === 'factory-usage-review-*'));
     assert.match(workflows.review!.text, /cli\.ts" loop .*--usage "\$W\/usage" --out "\$W\/round\.md"/);
-    assert.match(workflows.journal!.text, /contains\("<!-- factory:round -->"\)\) \| \{body\}\]' "\$RUNNER_TEMP\/bot-\$PR\.json" > "\$RAW\/rounds\/\$PR\.json"/);
+    assert.match(workflows.journal!.text, /contains\(\\"<!-- factory:round -->\\"\)\) \| \{body\}\]" "\$RUNNER_TEMP\/comments-\$PR\.json" > "\$RAW\/rounds\/\$PR\.json"/);
   });
 
   it('poprawka w PR zdejmuje z issue etykietę blocked po wcześniejszej blokadzie', () => {
     const run = (workflows.implement!.data.jobs.publish!.steps ?? []).find((step) => step.run?.includes('pr-body'))!.run!;
     assert.match(run, /gh issue edit "\$ISSUE" --remove-label blocked/);
     assert.ok(run.indexOf('--remove-label blocked') > run.indexOf('gh pr edit "$PR" --body-file'), 'dopiero po publikacji poprawki');
+  });
+
+  it('komendy bez rozróżniania wielkości liter, z odpowiedzią na nieznaną; /start bez zatrzymania sprawdza kolejkę', () => {
+    const { text, data } = workflows.commands!;
+    const steps = data.jobs.command!.steps ?? [];
+    const parse = steps.find((step) => (step as { id?: string }).id === 'parse')!.run!;
+    assert.match(parse, /#Ip' <<<"\$FIRST" \| tr '\[:upper:\]' '\[:lower:\]'/);
+    assert.match(parse, /echo "unknown=\$UNKNOWN"/);
+    const unknown = steps.find((step) => (step as { name?: string }).name === 'Nieznana komenda') as Step & { if?: string };
+    assert.match(String(unknown.if), /steps\.parse\.outputs\.unknown != ''/);
+    assert.match(text, /Taśma działa; kolejka sprawdza czekające zadania/);
+    assert.match(text, /\/stop\[\[:space:\]:,\.!\]\*##I/, 'powód /stop także przy „/Stop”');
+  });
+
+  it('runda bez zmian cytuje wyjaśnienie implementera, a dziennik zbiera /change właściciela', () => {
+    assert.match(workflows.implement!.text, /cli\.ts" no-change-comment --implementation "\$RUNNER_TEMP\/implementation\.json" --round "\$NEXT"/);
+    assert.doesNotMatch(workflows.implement!.text, /porannym/);
+    assert.match(workflows.journal!.text, /> "\$RAW\/changes\/\$PR\.json"/);
   });
 
   it('ocena ryzyka liczy diff od punktu rozgałęzienia zapisanego w recenzji, także gdy PR scalono w trakcie', () => {
@@ -246,7 +264,7 @@ describe('workflowy fabryki', () => {
     assert.match(workflows.plan!.text, /--remove-label factory:approved/);
     const commands = workflows.commands!.text;
     assert.match(commands, /grep -qx needs-approval/);
-    assert.equal((commands.match(/^\s+queue$/gm) ?? []).length, 3, '/approve z zależnościami, /reject i /start');
+    assert.equal((commands.match(/^\s+queue$/gm) ?? []).length, 4, '/approve z zależnościami, /reject, /start po zatrzymaniu i bez niego');
     assert.match(commands, /-f stage=queue/);
   });
 

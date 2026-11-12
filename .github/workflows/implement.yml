@@ -373,7 +373,8 @@ jobs:
             gh label create "factory:round-$NEXT" --force >/dev/null
             gh pr edit "$PR" --add-label "factory:round-$NEXT"
             if [ "$EMPTY" = true ]; then
-              gh pr comment "$PR" --body "Runda $NEXT bez zmian w plikach: implementer odpowiedział na uwagi w założeniach opisu PR. Recenzja rusza jeszcze raz."
+              node "$F/scripts/workflow/cli.ts" no-change-comment --implementation "$RUNNER_TEMP/implementation.json" --round "$NEXT" > "$RUNNER_TEMP/no-change.md"
+              gh pr comment "$PR" --body-file "$RUNNER_TEMP/no-change.md"
             fi
           fi
           # Poprawka po wcześniejszej blokadzie (np. /change) trafiła do PR, więc zadanie nie jest już zablokowane.
@@ -443,10 +444,12 @@ jobs:
           WORKFLOW: ${{ inputs.workflow }}
         run: |
           if [ "$OVER" = true ]; then
-            # Kolejka uruchomi zadanie przy porannym przeglądzie (schedule), gdy limit się odnowi.
+            # Kolejka uruchomi zadanie przy dziennym przeglądzie (schedule), gdy limit się odnowi. GitHub uruchamia
+            # przebiegi z harmonogramu z kilkugodzinnym opóźnieniem, więc komunikat nie obiecuje pory.
+            # Limit liczy przebiegi od północy UTC.
             gh label create queued --force >/dev/null
             gh issue edit "$ISSUE" --add-label queued
-            gh issue comment "$ISSUE" --body "Dzienny limit uruchomień taśmy jest wyczerpany. Zadanie czeka w kolejce i ruszy samo przy porannym przeglądzie kolejki. Log: $RUN"
+            gh issue comment "$ISSUE" --body "Dzienny limit uruchomień taśmy jest wyczerpany. Zadanie czeka w kolejce i ruszy samo przy dziennym przeglądzie kolejki; GitHub uruchamia go z kilkugodzinnym opóźnieniem. Wcześniej: po północy UTC (1:00 lub 2:00 czasu polskiego) napisz \`/start\` w dowolnym issue. Log: $RUN"
             exit 0
           fi
           gh label create blocked --force >/dev/null

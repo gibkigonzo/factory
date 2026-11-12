@@ -70,7 +70,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          mkdir -p "$RAW/comments" "$RAW/reactions" "$RAW/events" "$RAW/issues" "$RAW/plans" "$RAW/rounds"
+          mkdir -p "$RAW/comments" "$RAW/reactions" "$RAW/events" "$RAW/issues" "$RAW/plans" "$RAW/rounds" "$RAW/changes"
           # Zadania bez PR (blokada, podział, odrzucenie) rozpoznaje skrypt po etykietach taśmy.
           gh issue list --state all --limit 1000 --json number,title,state,labels,createdAt,closedAt > "$RAW/issue-list.json"
           # Zatrzymana taśma (/stop): dziennik pokazuje to na samej górze.
@@ -81,11 +81,15 @@ jobs:
           FACTORY='.[] | select((.headRefName | startswith("factory/")) and (.isCrossRepository | not))'
           for PR in $(jq -r "$FACTORY | .number" "$RAW/prs.json"); do
             gh api --paginate "repos/$GH_REPO/issues/$PR/comments" \
-              --jq '.[] | select(.user.login == "github-actions[bot]") | {id, body, user: {login: .user.login}, created_at}' \
-              | jq -s . > "$RUNNER_TEMP/bot-$PR.json"
-            jq '[.[] | select(.body | contains("<!-- factory:shadow -->"))]' "$RUNNER_TEMP/bot-$PR.json" > "$RAW/comments/$PR.json"
+              --jq '.[] | {id, body: (.body // ""), user: {login: .user.login}, created_at}' \
+              | jq -s . > "$RUNNER_TEMP/comments-$PR.json"
+            BOT='select(.user.login == "github-actions[bot]")'
+            jq "[.[] | $BOT | select(.body | contains(\"<!-- factory:shadow -->\"))]" "$RUNNER_TEMP/comments-$PR.json" > "$RAW/comments/$PR.json"
             # Komentarze rund poprawek niosą koszt recenzji rund bez werdyktu.
-            jq '[.[] | select(.body | contains("<!-- factory:round -->")) | {body}]' "$RUNNER_TEMP/bot-$PR.json" > "$RAW/rounds/$PR.json"
+            jq "[.[] | $BOT | select(.body | contains(\"<!-- factory:round -->\")) | {body}]" "$RUNNER_TEMP/comments-$PR.json" > "$RAW/rounds/$PR.json"
+            # /change po werdykcie „scal” albo „okno weta” liczy się jako niezgoda z werdyktem (skrypt sprawdza autora).
+            jq '[.[] | select(.user.login != "github-actions[bot]") | select(.body | split("\n")[0] | test("^\\s*/change([\\s:,.!]|$)"; "i")) | {user, created_at}]' \
+              "$RUNNER_TEMP/comments-$PR.json" > "$RAW/changes/$PR.json"
             for ID in $(jq -r '.[].id' "$RAW/comments/$PR.json"); do
               gh api --paginate "repos/$GH_REPO/issues/comments/$ID/reactions" \
                 --jq '.[] | {content, user: {login: .user.login}, created_at}' | jq -s . > "$RAW/reactions/$ID.json"
