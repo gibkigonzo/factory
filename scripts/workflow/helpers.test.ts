@@ -174,7 +174,11 @@ describe('prompty etapów', () => {
     const plan = planPrompt({ work: '.factory/work', issue: 5 });
     assert.match(plan, /# Planer/);
     assert.match(plan, /`\.factory\/work\/issue\.md`/);
-    assert.match(implementPrompt({ work: 'w', issue: 5, change: true }), /`w\/change\.md`/);
+    const change = implementPrompt({ work: 'w', issue: 5, change: true });
+    assert.match(change, /`w\/change\.md`/);
+    assert.ok(change.indexOf('To runda poprawek otwartego PR') < change.indexOf('Issue #5'), 'zadanie rundy przed issue');
+    assert.match(change, /gałąź tego PR z poprzednią wersją Twojej zmiany, nie gałąź główna/);
+    assert.doesNotMatch(implementPrompt({ work: 'w', issue: 5 }), /To runda poprawek otwartego PR/);
     assert.match(implementPrompt({ work: 'w', issue: 5, screenshots: 'npm run screenshots' }), /`npm run screenshots`[^\n]*`w\/screenshots`/);
     assert.doesNotMatch(implementPrompt({ work: 'w', issue: 5 }), /FACTORY_SCREENSHOTS/);
     assert.match(reviewPrompt({ work: 'w', agent: 'review-project', criteria: 'w/perspectives/brand.md' }), /`w\/perspectives\/brand\.md`/);
@@ -289,8 +293,9 @@ describe('CI z komend factory.yml', () => {
     assert.equal(outputTail('\x1b[31mERROR\x1b[0m x\n\n'), 'ERROR x');
     assert.equal(outputTail('pobieranie 10%\rpobieranie 100%\r\nkoniec'), 'pobieranie 100%\nkoniec');
     assert.equal(outputTail('a\nb\nc', 2), 'b\nc');
-    assert.equal(outputTail('x'.repeat(500)).length, 301);
-    assert.ok(outputTail(Array.from({ length: 30 }, () => 'y'.repeat(300)).join('\n')).length <= 4001);
+    const long = outputTail(`Received: "${'a'.repeat(1000)}KONIEC"`);
+    assert.ok(long.length <= 603 && long.startsWith('Received: "aaa') && long.endsWith('aKONIEC"'), 'początek i koniec długiej linii');
+    assert.ok(outputTail(Array.from({ length: 30 }, () => 'y'.repeat(600)).join('\n')).length <= 6001);
   });
 });
 

@@ -26,7 +26,7 @@ import { packageLockChanges, skippedSummary } from './lockfiles.ts';
 import type { SkippedFile } from './lockfiles.ts';
 import { matchesAny } from '../risk/glob.ts';
 import type { Dependency } from './dependencies.ts';
-import { nextRound, roundComment } from './loop.ts';
+import { nextRound, noChangeComment, roundComment } from './loop.ts';
 import { admit, queueState, release } from './queue.ts';
 import { renderReport } from './report.ts';
 import type { PanelSummary } from './report.ts';
@@ -221,6 +221,8 @@ function run(command: string | undefined, rest: string[]): string {
       if (decision.retry) writeFileSync(required(v.out, '--out'), roundComment(input, v.usage ? usageDir(v.usage) : []));
       return JSON.stringify(decision);
     }
+    case 'no-change-comment':
+      return noChangeComment(json(required(v.implementation, '--implementation')) as Implementation, Number(required(v.round, '--round')));
     case 'pr-body': {
       const before = v.previous && existsSync(v.previous) ? readFileSync(v.previous, 'utf8') : '';
       return prBody(

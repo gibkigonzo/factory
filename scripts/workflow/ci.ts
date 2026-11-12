@@ -10,8 +10,15 @@ import type { FactoryConfig } from '../config/spec.ts';
 import type { CiResult } from './evidence.ts';
 
 export const TAIL_LINES = 30;
-const LINE_CHARS = 300;
-const TAIL_CHARS = 4000;
+/** Długa linia (np. „Expected”/„Received” w teście) zostaje z początkiem i końcem, bo różnica bywa daleko od początku. */
+const LINE_CHARS = 600;
+const TAIL_CHARS = 6000;
+
+function shorten(line: string): string {
+  if (line.length <= LINE_CHARS) return line;
+  const half = LINE_CHARS / 2;
+  return `${line.slice(0, half)} … ${line.slice(-half)}`;
+}
 
 /** Kolejność: setup, potem typowe sprawdzenia, potem pozostałe komendy projektu w kolejności z factory.yml. */
 export function commandOrder(commands: FactoryConfig['commands']): string[] {
@@ -32,7 +39,7 @@ export function outputTail(text: string, lines = TAIL_LINES): string {
   const all = clean
     .split(/\r?\n/)
     .map((line) => line.split('\r').filter(Boolean).at(-1) ?? '')
-    .map((line) => (line.length > LINE_CHARS ? `${line.slice(0, LINE_CHARS)}…` : line.trimEnd()));
+    .map((line) => shorten(line.trimEnd()));
   while (all.length && all.at(-1) === '') all.pop();
   const tail = all.slice(-lines).join('\n');
   return tail.length > TAIL_CHARS ? `…${tail.slice(-TAIL_CHARS)}` : tail;

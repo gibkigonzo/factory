@@ -35,9 +35,23 @@ jobs:
             echo "::notice::Komendy przyjmuję tylko od właściciela i zaufanych kont; $ACTOR do nich nie należy."
             exit 0
           fi
-          FIRST=$(printf '%s\n' "$BODY" | head -n 1 | tr -d '\r')
-          COMMAND=$(sed -nE 's#^/(approve|veto|reject|change|split|stop|start)([[:space:]].*)?$#\1#p' <<<"$FIRST")
-          echo "command=$COMMAND" >> "$GITHUB_OUTPUT"
+          # Bez rozróżniania wielkości liter: autokorekta w telefonie zmienia „/change” na „/Change”.
+          FIRST=$(printf '%s\n' "$BODY" | head -n 1 | tr -d '\r' | sed -E 's/^[[:space:]]+//')
+          COMMAND=$(sed -nE 's#^/(approve|veto|reject|change|split|stop|start)([[:space:]:,.!].*)?$#\1#Ip' <<<"$FIRST" | tr '[:upper:]' '[:lower:]')
+          # Komentarz zaczyna się od „/”, ale komendy nie ma: taśma odpowiada, zamiast milczeć.
+          UNKNOWN=""
+          if [ -z "$COMMAND" ] && [[ "$FIRST" =~ ^/([A-Za-z]{1,20})([[:space:]:,.!]|$) ]]; then UNKNOWN="${BASH_REMATCH[1]}"; fi
+          { echo "command=$COMMAND"; echo "unknown=$UNKNOWN"; } >> "$GITHUB_OUTPUT"
+
+      - name: Nieznana komenda
+        if: steps.parse.outputs.unknown != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          UNKNOWN: ${{ steps.parse.outputs.unknown }}
+        run: |
+          gh issue comment "$NUMBER" --body "Nie znam komendy \`/$UNKNOWN\`, więc nic nie zrobiłem. Komendy taśmy: \`/approve\`, \`/veto\`, \`/reject\`, \`/change <uwagi>\`, \`/split\`, \`/stop <powód>\`, \`/start\`."
 
       - name: Wykonanie
         if: steps.parse.outputs.command != ''
@@ -91,7 +105,7 @@ jobs:
               ;;
             stop)
               # Powód: reszta komentarza po /stop. Taśma stoi, dopóki issue z etykietą factory:stopped jest otwarte.
-              REASON=$(printf '%s' "$BODY" | sed -E '1s#^/stop[[:space:]]*##' | tr -s '[:space:]' ' ' | sed -E 's/^ +| +$//g')
+              REASON=$(printf '%s' "$BODY" | sed -E '1s#^[[:space:]]*/stop[[:space:]:,.!]*##I' | tr -s '[:space:]' ' ' | sed -E 's/^ +| +$//g')
               REASON=${REASON:-bez podanego powodu}
               STOP=$(gh issue list --label factory:stopped --state open --limit 1 --json number --jq '.[0].number // empty')
               if [ -n "$STOP" ]; then
@@ -108,7 +122,12 @@ jobs:
               ;;
             start)
               STOPS=$(gh issue list --label factory:stopped --state open --json number --jq '.[].number')
-              if [ -z "$STOPS" ]; then gh issue comment "$NUMBER" --body "Taśma działa; nie ma czego wznawiać."; exit 0; fi
+              if [ -z "$STOPS" ]; then
+                # Taśma działa: /start tylko sprawdza kolejkę, np. gdy zadanie czeka na nowy dzień limitu.
+                queue
+                gh issue comment "$NUMBER" --body "Taśma działa; kolejka sprawdza czekające zadania."
+                exit 0
+              fi
               for STOP in $STOPS; do gh issue close "$STOP" --comment "Taśma wznowiona komendą \`/start\` w #$NUMBER."; done
               # Wstrzymane etapy: issue i PR z etykietą factory:paused, ostatni znacznik factory:paused od konta workflowów.
               RESUMED=0

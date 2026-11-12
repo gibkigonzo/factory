@@ -20,7 +20,8 @@ function prLine(record: PrRecord): string {
   const parts = [`#${record.number} ${record.title}`];
   if (record.shadow) {
     const { level, action } = record.shadow.record;
-    const reaction = record.shadow.reaction === 'up' ? '👍' : record.shadow.reaction === 'down' ? '👎' : 'bez oceny';
+    const reaction =
+      record.shadow.reaction === 'up' ? '👍' : record.shadow.reaction === 'down' ? `👎${record.shadow.implied === 'change' ? ' (po /change)' : ''}` : 'bez oceny';
     parts.push(`${level}, ${ACTION_SHORT[action]}`, reaction);
   } else {
     parts.push('bez werdyktu');

@@ -47,7 +47,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 ### Praca z telefonu
 
 - Wymaganie: każdy krok użytkownika (akceptacja propozycji, rozmowa o specu, decyzja przy High, playtest, zatrzymanie i wznowienie taśmy) musi dać się zrobić z telefonu, bez komputera.
-- Taśma działa na GitHub Actions, więc komputer nie jest potrzebny. Komendy `/approve`, `/veto` i inne działają z aplikacji GitHub Mobile.
+- Taśma działa na GitHub Actions, więc komputer nie jest potrzebny. Komendy `/approve`, `/veto` i inne działają z aplikacji GitHub Mobile. Wielkość liter nie ma znaczenia (autokorekta pisze „/Change”), a na nieznaną komendę taśma odpowiada.
 - Do zakładania issue z aplikacji Claude służy oficjalny serwer MCP GitHuba podłączony jako konektor claude.ai. Zwykły czat w aplikacji mobilnej zakłada issue (sprawdzone w #3), więc `spec-writer` może działać w zwykłym czacie.
 - Konektor łączy się przez inną aplikację GitHub niż Claude Code. Ta aplikacja musi mieć repo w swojej instalacji, inaczej zapis kończy się 403 `Resource not accessible by integration`.
 
@@ -77,6 +77,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Po każdej ocenie ryzyka `merge.yml` dodaje w PR nowy komentarz z werdyktem mergera, a właściciel ocenia go 👍 albo 👎. Decyzję liczy `scripts/shadow/decision.ts`; ten sam kod zdecyduje o merge'u w Etapie 1.
 - Dziennik to przypięte issue „Tryb cienia”. Odświeża się po werdykcie, po zamknięciu PR fabryki i raz dziennie, bo reakcje nie uruchamiają workflowów.
 - Kalibracja progu pewności porównuje odsetek przyjętych PR w grupach pewności, a nie zgodność z werdyktem, bo werdykt sam zależy od pewności.
+- Werdykt „scal” albo „okno weta”, po którym właściciel napisał `/change`, liczy się jako 👎 (przy Low jako fałszywe Low), bo w Etapie 1 PR scaliłby się bez poprawki. Reakcja na ten werdykt ma pierwszeństwo; `/change` po eskalacji to zgoda (12 listopada 2026).
 - Progi Bramki 1 są w sekcji `shadow` w `base`.
 - Statystyki wszystkich zadań, także bez PR, dziennik zapisuje w `journal.csv` i `journal.json` na gałęzi `factory-journal`: koszt na etap i recenzenta oraz ocenę właściciela. Koszt zablokowanej implementacji trafia do komentarza z blokadą, a koszt recenzji rundy odesłanej do implementera do komentarza rundy (11 listopada 2026).
 
@@ -114,7 +115,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 
 - Czerwone CI albo `request_changes` odsyła PR do implementera automatycznie, do `risk.max_review_rounds` rund. Werdykt powstaje po pętli. Przy czerwonym CI recenzenci nie ruszają, chyba że to ostatnia runda.
 - Implementer, który nie może dokończyć zadania, zgłasza `status: blocked`; wtedy nie ma PR ani recenzji, tylko etykieta `blocked` i komentarz.
-- Runda poprawek bez zmian w plikach (`done` z wyjaśnieniem w założeniach) aktualizuje opis PR i uruchamia recenzję jeszcze raz, w limicie rund. `ci.json` ma końcówkę wyjścia każdej komendy, więc dowód z CI (np. czysty typecheck) recenzent bierze stamtąd. Lekcja z pilota: recenzent prosił o log, którego implementer nie mógł pokazać, a runda bez zmian kończyła się blokadą (11 listopada 2026).
+- Runda poprawek bez zmian w plikach (`done` z wyjaśnieniem w założeniach) aktualizuje opis PR, cytuje wyjaśnienie w komentarzu PR i uruchamia recenzję jeszcze raz, w limicie rund. `/change` właściciela implementer wykonuje albo kończy blokadą z powodem; zadaniem rundy są uwagi, a nie issue od nowa. Lekcja z pilota: implementer uznał pracę z issue za „już w main” i pominął uwagę właściciela (12 listopada 2026). `ci.json` ma końcówkę wyjścia każdej komendy, więc dowód z CI (np. czysty typecheck) recenzent bierze stamtąd. Lekcja z pilota: recenzent prosił o log, którego implementer nie mógł pokazać, a runda bez zmian kończyła się blokadą (11 listopada 2026).
 - Nowe zależności planer wpisuje do planu, właściciel zatwierdza je `/approve` w issue, a instaluje je workflow komendą z `dependencies` w `factory.yml`. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji.
 
 ### Zatrzymanie taśmy i problemy taśmy (11 listopada 2026)

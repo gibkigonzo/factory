@@ -49,7 +49,13 @@ export function implementPrompt(ctx: PromptContext & { change?: boolean; screens
       `Komenda zrzutów z \`evidence.screenshots\`: \`${ctx.screenshots}\`. Zmienną \`FACTORY_SCREENSHOTS\` (katalog \`${ctx.work}/screenshots\`) workflow już ustawił, więc uruchamiasz ją dosłownie. Gdy zmiana dotyczy wyglądu, obejrzyj narzędziem Read zrzuty zmienionych sekcji (\`<nazwa>@<szerokość>.png\`) obok wzorca (\`.ref.png\`) i popraw różnice, zanim oddasz zmianę.`,
     );
   }
-  if (ctx.change) lines.push(`Poprawka po uwagach właściciela lub recenzentów: \`${ctx.work}/change.md\`.`);
+  // Runda poprawek: zadaniem są uwagi, a nie issue. Bez tego implementer widzi w katalogu gotową pracę z issue,
+  // uznaje ją za „już w main” i oddaje rundę bez zmian, pomijając uwagę właściciela (lekcja z pilota).
+  if (ctx.change) {
+    lines.unshift(
+      `To runda poprawek otwartego PR. Katalog roboczy to gałąź tego PR z poprzednią wersją Twojej zmiany, nie gałąź główna, więc praca z issue już tu jest. Zadanie tej rundy to uwagi z \`${ctx.work}/change.md\`: przeczytaj je najpierw. Komentarz zaczynający się od \`/change\` to polecenie właściciela, a komentarz „Runda poprawek” to uwagi recenzentów i CI. Issue i plan są tylko kontekstem.`,
+    );
+  }
   return [body('skills/implementer/SKILL.md'), task(lines)].join('\n\n');
 }
 

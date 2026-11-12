@@ -15,6 +15,8 @@ export interface TaskRow {
   level?: string;
   verdict?: string;
   rating?: 'up' | 'down';
+  /** Ocena wynika z `/change` właściciela po werdykcie, a nie z reakcji. */
+  ratedBy?: 'change';
   rounds: number;
   reverted: boolean;
   readyAt?: string;
@@ -63,6 +65,7 @@ function prRow(record: PrRecord): TaskRow {
     row.level = record.shadow.record.level;
     row.verdict = ACTION_SHORT[record.shadow.record.action];
     if (record.shadow.reaction) row.rating = record.shadow.reaction;
+    if (record.shadow.implied) row.ratedBy = record.shadow.implied;
   }
   if (record.readyAt) row.readyAt = record.readyAt;
   if (record.mergedAt) row.mergedAt = record.mergedAt;
@@ -110,7 +113,7 @@ export function journalCsv(rows: readonly TaskRow[]): string {
   const lines = rows.map((r) =>
     [
       r.issue, r.pr, r.title, r.state, r.level, r.verdict,
-      r.rating === 'up' ? '👍' : r.rating === 'down' ? '👎' : undefined,
+      r.rating === 'up' ? '👍' : r.rating === 'down' ? `👎${r.ratedBy === 'change' ? ' (po /change)' : ''}` : undefined,
       r.rounds, r.reverted ? 'tak' : 'nie', r.readyAt, r.mergedAt,
       r.cost, ...STAGE_COLUMNS.map(([stage]) => r.stages[stage]), r.output, ...reviewers.map((name) => r.reviewers[name]),
     ]

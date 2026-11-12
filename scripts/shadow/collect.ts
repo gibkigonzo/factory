@@ -8,6 +8,7 @@
 //   stopped.json             gh issue list --label factory:stopped --state open --json number,body,createdAt (/stop)
 //   plans/<issue>.json       komentarze bota z planem albo blokadą: [{ body }] (zużycie planera i zablokowanej implementacji)
 //   rounds/<pr>.json         komentarze bota z rundą poprawek: [{ body }] (zużycie recenzji rund bez werdyktu)
+//   changes/<pr>.json        komentarze z komendą /change: [{ user: { login }, created_at }]
 //   reverts.txt              git log gałęzi głównej: rekordy „\x1e<data ISO>\t<treść commita>”
 
 import { existsSync, readFileSync } from 'node:fs';
@@ -32,7 +33,8 @@ export interface PrRecord {
   readyAt?: string;
   rounds: number;
   reverted: boolean;
-  shadow?: { record: ShadowRecord; at: string; reaction?: 'up' | 'down' };
+  /** `implied`: ocena wynika z `/change` właściciela po werdykcie, a nie z reakcji na komentarz. */
+  shadow?: { record: ShadowRecord; at: string; reaction?: 'up' | 'down'; implied?: 'change' };
   /** Zużycie wszystkich etapów i rund dla tego PR, zsumowane na etap. */
   usage?: Usage[];
 }
@@ -83,6 +85,22 @@ export function parseReverts(text: string): Revert[] {
     });
 }
 
+/** Ostatnia reakcja właściciela 👍/👎 na komentarz. */
+function ownerReaction(dir: string, comment: RawComment, owners: readonly string[]): 'up' | 'down' | undefined {
+  const reactions = read<RawReaction[]>(join(dir, 'reactions', `${comment.id}.json`), [])
+    .filter((r) => owners.includes(r.user?.login ?? '') && (r.content === '+1' || r.content === '-1'))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const reaction = reactions[reactions.length - 1];
+  return reaction ? (reaction.content === '+1' ? 'up' : 'down') : undefined;
+}
+
+/**
+ * Werdykt, który liczy się do kalibracji, i ocena właściciela. Zwykle to ostatni werdykt PR z reakcją 👍/👎.
+ * Wyjątek: werdykt „scal” (Low) albo „okno weta” (Medium), po którym właściciel napisał `/change` przed kolejnym
+ * werdyktem. W Etapie 1 taki PR scaliłby się bez tej poprawki, więc liczy się ten werdykt, jako 👎
+ * (przy Low to fałszywe Low). Reakcja właściciela na ten sam werdykt ma pierwszeństwo przed `/change`.
+ * Eskalacja (High) i `/change` to zgoda: decyzja i tak należała do właściciela.
+ */
 function latestShadow(dir: string, pr: number, owners: readonly string[]): PrRecord['shadow'] {
   const comments = read<RawComment[]>(join(dir, 'comments', `${pr}.json`), [])
     .filter((c) => c.user?.login === 'github-actions[bot]')
@@ -92,12 +110,19 @@ function latestShadow(dir: string, pr: number, owners: readonly string[]): PrRec
     });
   const last = comments[comments.length - 1];
   if (!last) return undefined;
-  const reactions = read<RawReaction[]>(join(dir, 'reactions', `${last.comment.id}.json`), [])
-    .filter((r) => owners.includes(r.user?.login ?? '') && (r.content === '+1' || r.content === '-1'))
-    .sort((a, b) => a.created_at.localeCompare(b.created_at));
-  const reaction = reactions[reactions.length - 1];
+  const changes = read<{ user?: { login?: string }; created_at?: string }[]>(join(dir, 'changes', `${pr}.json`), [])
+    .filter((c) => owners.includes(c.user?.login ?? '') && c.created_at)
+    .map((c) => c.created_at!);
+  for (const [i, verdict] of comments.entries()) {
+    if (verdict.record.action !== 'merge' && verdict.record.action !== 'veto-window') continue;
+    const next = comments[i + 1]?.comment.created_at ?? '\uffff';
+    if (!changes.some((at) => at > verdict.comment.created_at && at < next)) continue;
+    const reaction = ownerReaction(dir, verdict.comment, owners);
+    return { record: verdict.record, at: verdict.comment.created_at, ...(reaction ? { reaction } : { reaction: 'down', implied: 'change' as const }) };
+  }
   const shadow: NonNullable<PrRecord['shadow']> = { record: last.record, at: last.comment.created_at };
-  if (reaction) shadow.reaction = reaction.content === '+1' ? 'up' : 'down';
+  const reaction = ownerReaction(dir, last.comment, owners);
+  if (reaction) shadow.reaction = reaction;
   return shadow;
 }
 
