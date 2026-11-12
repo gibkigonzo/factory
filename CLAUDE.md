@@ -87,6 +87,8 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Wgranie ZIP-a (`npm run skill:zip`) do zwykłego czatu aplikacji Claude to opcja; tam skille są przypisane do konta i fabryka ich nie wgra.
 - Sekcje specu są w `SPEC_SECTIONS`; test pilnuje szablonu, przykładu i planera.
 - Issue zakłada konto właściciela (konektor i sesja Claude Code), więc strażnik taśmy je przepuszcza.
+- Taśmę uruchamia właściciel (12 listopada 2026). Spec-writer najpierw pyta „notatka czy spec?”. Notatka to issue z wiadomością właściciela i etykietą `idea`. Spec trafia do issue bez `ready`, a `ready` spec-writer dodaje dopiero na zgodę na start. Każde issue ma blok „Wiadomość właściciela” z oryginałem (spec ma pierwszeństwo).
+- Taśma planuje tylko issue ze specem: `ready` na notatce wraca z komentarzem bez sesji Claude, a `/split` na notatce działa (planer pisze spece podzadań, bez etykiet). `/split` na zadaniu, które taśma już planuje albo realizuje, odpowiada „za późno”.
 
 ### Koszt (7 listopada 2026)
 

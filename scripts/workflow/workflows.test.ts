@@ -216,6 +216,27 @@ describe('workflowy fabryki', () => {
     assert.match(review, /if \[ "\$SCREENSHOTS" = true \] && grep -q '\[\^\[:space:\]\]' "\$W\/previous-round\.md" 2>\/dev\/null; then ARGS\+=\(--previous "\$W\/previous-round\.md"\); fi/);
   });
 
+  it('plan tylko dla issue ze specem: notatka z ready wraca bez Claude, /split przechodzi', () => {
+    const { data } = workflows.plan!;
+    const spec = data.jobs.spec as { if?: string; steps?: Step[]; permissions?: Record<string, string> };
+    assert.ok(spec && !usesClaude(data.jobs.spec!), 'strażnik bez sesji Claude');
+    const run = spec.steps!.find((step) => step.run?.includes('acceptance'))!.run!;
+    assert.match(run, /if \[ "\$NOTE" = split \]; then echo "ok=true"/);
+    assert.match(run, /cli\.ts spec "\$RUNNER_TEMP\/issue\.md" \| jq '\.acceptance \| length'/);
+    assert.match(run, /--remove-label ready/);
+    const plan = data.jobs.plan as { needs?: string[]; if?: string };
+    assert.deepEqual(plan.needs, ['guard', 'spec']);
+    assert.match(String(plan.if), /needs\.spec\.outputs\.ok == 'true'/);
+    assert.match(workflows.plan!.text, /--add-label split\n[\s\S]*--remove-label idea/);
+  });
+
+  it('/split za późno, gdy taśma już planuje albo realizuje zadanie', () => {
+    const { text } = workflows.commands!;
+    assert.match(text, /any\(\.\[\]; \. == "ready"\) or \(any\(\.\[\]; \. == "planned"\) and/);
+    assert.match(text, /startswith\(\\"factory\/\$NUMBER-\\"\)/);
+    assert.match(text, /Za późno na \\`\/split\\`/);
+  });
+
   it('ocena ryzyka liczy diff od punktu rozgałęzienia zapisanego w recenzji, także gdy PR scalono w trakcie', () => {
     assert.match(workflows.review!.text, /git merge-base "origin\/\$BASE" HEAD > "\$W\/base\.sha"/);
     assert.match(workflows.review!.text, /panel\.ts" --base "\$\(cat "\$W\/base\.sha"\)"/);

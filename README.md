@@ -6,7 +6,7 @@ Fabryka oprogramowania oparta na Claude Code i GitHub Actions. Zamienia rozmowę
 
 ## Co potrafi
 
-- **Spec z rozmowy, także z telefonu.** Skill `spec-writer` dopytuje o decyzje produktowe w krótkich rundach (do 5 pytań w jednej wiadomości) i zakłada issue z kryteriami akceptacji, które da się sprawdzić maszynowo.
+- **Spec z rozmowy, także z telefonu.** Skill `spec-writer` zapisuje pomysł jako notatkę albo dopytuje o decyzje produktowe w krótkich rundach (do 5 pytań w jednej wiadomości) i zakłada issue z kryteriami akceptacji, które da się sprawdzić maszynowo. Taśmę uruchamiasz Ty, etykietą `ready`.
 - **Plan.** Planer rozpisuje podejście, pliki, testy i dowody dla każdego kryterium. Gdy czegoś nie wie, pyta. Za duże zadanie dzieli na mniejsze issue.
 - **Implementacja w PR.** Implementer pisze kod i testy na gałęzi `factory/<numer>-<nazwa>` i podaje dowód dla każdego kryterium. Gdy nie może dokończyć zadania, zgłasza blokadę zamiast oddawać połowiczny PR.
 - **Recenzja.** CI uruchamia komendy projektu. Pięć perspektyw (poprawność, testy, bezpieczeństwo, utrzymanie, zgodność ze specem) ocenia PR, każda w świeżym kontekście. Projekt może dodać własne perspektywy.
@@ -76,7 +76,7 @@ Szczegóły i wariant ze zwykłym czatem: [Spec z telefonu](#spec-z-telefonu).
 ### 6. Pierwsze zadanie
 
 1. W aplikacji Claude: zakładka Code, nowa sesja na repo projektu i np. „Mam pomysł: …”.
-2. Odpowiadasz na pytania („ok” albo poprawki numerów) i akceptujesz spec. Powstaje issue z etykietą `ready`.
+2. Na pytanie „notatka czy spec?” wybierasz spec, odpowiadasz na pytania („ok” albo poprawki numerów) i akceptujesz spec. Powstaje issue bez `ready`, a spec-writer pyta, czy uruchomić taśmę. Na „tak” dodaje `ready`.
 3. Po kilku minutach w issue jest plan. Gdy planer pyta, odpowiadasz i nadajesz `ready` ponownie. Gdy plan dodaje pakiety, piszesz `/approve`.
 4. Implementer otwiera PR. Recenzja i pętla poprawek działają same.
 5. W PR pojawiają się raport ryzyka i werdykt fabryki. Werdykt oceniasz 👍 albo 👎, a o PR decydujesz jak zwykle: merge albo `/reject`.
@@ -128,8 +128,9 @@ Niebieskie kroki wykonuje człowiek, fioletowe agent (Claude, tylko odczyt, zwra
 ```mermaid
 flowchart TD
   H1(["Rozmowa o pomyśle w aplikacji Claude, akceptacja specu"]):::human
-  A1("spec-writer: issue ze specem i etykietą ready"):::agent
-  S1["Strażnik: zaufane konto"]:::script
+  A1("spec-writer: issue ze specem, bez ready"):::agent
+  H0(["Zgoda na start: etykieta ready"]):::human
+  S1["Strażnik: zaufane konto i spec w issue"]:::script
   A2("Planer: plan w JSON"):::agent
   S2["Komentarz z planem, etykieta, kolejka: wspólne pliki, wip_limit, dzienny limit"]:::script
   H2(["Odpowiadasz na pytania albo dajesz ready mniejszym issue"]):::human
@@ -151,7 +152,7 @@ flowchart TD
   H6(["/approve w issue: zgoda na nowe zależności z planu"]):::human
   L{"Pętla poprawek: czerwone CI albo prośba o zmiany, runda poniżej limitu?"}:::script
 
-  H1 --> A1 --> S1 --> A2 --> S2
+  H1 --> A1 --> H0 --> S1 --> A2 --> S2
   S2 -->|"blocked albo split"| H2
   H2 -->|"etykieta ready"| S1
   S2 -->|"planned"| A3 --> S3
@@ -329,7 +330,7 @@ Werdykt recenzenta (`reviews[]`) ma stały format: perspektywa, `verdict` (`appr
 
 | Agent | Kiedy | Wyjście |
 | --- | --- | --- |
-| `spec-writer` (skill) | rozmowa o pomyśle w aplikacji Claude | issue ze specem i etykietą `ready` |
+| `spec-writer` (skill) | rozmowa o pomyśle w aplikacji Claude | notatka (`idea`) albo issue ze specem; `ready` dopiero na Twoją zgodę |
 | `planner` (skill) | issue z etykietą `ready` | plan w komentarzu i blok JSON: `planned`, `blocked` albo `split`; pliki, testy, dowody, nowe zależności |
 | `implementer` (skill) | plan, `/change` albo runda poprawek | zmiany w plikach i blok JSON: `done` albo `blocked`, dowód dla każdego kryterium |
 | `review-<perspektywa>` (subagenci) | po implementacji, równolegle | werdykt JSON; tylko `Read`, `Grep` i `Glob`, każdy w świeżym kontekście |
@@ -347,7 +348,11 @@ Implementer zmienia pliki narzędziami do edycji, nazwy i usunięcia robi przez 
 
 ### Spec z telefonu
 
-Spec pisze skill `spec-writer` w rozmowie z Claude. Pyta o decyzje produktowe w rundach: najwyżej 5 pytań w jednej wiadomości, każde z proponowaną odpowiedzią. Kolejna runda pyta tylko o to, co otworzyły odpowiedzi. Gdy po 3 rundach zostają otwarte decyzje, proponuje podział na kilka speców. Potem pokazuje spec i po Twoim „tak” zakłada issue z etykietą `ready`, a ta uruchamia planera.
+Spec pisze skill `spec-writer` w rozmowie z Claude. Pyta o decyzje produktowe w rundach: najwyżej 5 pytań w jednej wiadomości, każde z proponowaną odpowiedzią. Kolejna runda pyta tylko o to, co otworzyły odpowiedzi. Gdy po 3 rundach zostają otwarte decyzje, proponuje podział na kilka speców. Potem pokazuje spec i po Twoim „tak” zakłada issue **bez** etykiety `ready` i pyta, czy uruchomić taśmę; `ready` dodaje dopiero na drugie „tak”. Dzięki temu decydujesz, kiedy taśma rusza, a issue możesz jeszcze podzielić (`/split`).
+
+Zanim zacznie pytać, spec-writer pyta „Zapisać jako notatkę czy robimy spec?”. Notatka to issue z Twoją wiadomością i etykietą `idea`, bez specu. Spec zrobisz z niej później („zrób spec z #N”, spec-writer podmieni treść tego issue) albo podzielisz ją przez `/split`, a planer napisze spece podzadań. Każde issue ma na końcu blok „Wiadomość właściciela” z Twoją oryginalną wiadomością; gdy różni się od specu, ważniejszy jest spec.
+
+Taśma planuje tylko issue ze specem. Etykieta `ready` na notatce wraca z komentarzem i nie kosztuje przebiegu Claude. `/split` na issue, które taśma już planuje albo realizuje, odpowiada „za późno”, bo podział zdublowałby pracę.
 
 Spec ma sekcje: Cel, Scenariusz, Kryteria akceptacji (sprawdzalne maszynowo), Poza zakresem, Założenia, Ryzyko produktowe (`niskie` albo `wysokie`) i Projekt. Szablon i przykład są w [`skills/spec-writer/SKILL.md`](skills/spec-writer/SKILL.md). Test pilnuje, żeby szablon, przykład i planer znały te same sekcje (`SPEC_SECTIONS` w `scripts/workflow/spec.ts`).
 
@@ -359,7 +364,7 @@ Spec ma sekcje: Cel, Scenariusz, Kryteria akceptacji (sprawdzalne maszynowo), Po
 2. W claude.ai: Settings → Capabilities → Skills, wgraj ZIP. Skille wymagają włączonego wykonywania kodu (Code execution).
 3. Konektor GitHub potrzebuje prawa zapisu, a repo projektu musi być w instalacji jego aplikacji GitHub; inaczej zapis kończy się błędem 403.
 
-W obu drogach issue zakłada Twoje konto, więc strażnik taśmy je przepuszcza. Bez narzędzia z prawem zapisu spec-writer pokaże spec do skopiowania, a issue założysz ręcznie z etykietą `ready`.
+W obu drogach issue zakłada Twoje konto, więc strażnik taśmy je przepuszcza. Bez narzędzia z prawem zapisu spec-writer pokaże spec do skopiowania, a issue założysz ręcznie; `ready` dodasz, gdy zechcesz uruchomić taśmę.
 
 ### Perspektywy
 
@@ -413,7 +418,7 @@ Wspólne workflowy to `workflow_call` w tym repo. Projekt wywołuje tylko dyryge
 | Etap | Uruchamia go | Co robi |
 | --- | --- | --- |
 | `pipeline.yml` | każde zdarzenie workflowu projektu | dyrygent: rozdziela zdarzenia na etapy poniżej; przy zatrzymanej taśmie (`/stop`) zapisuje wstrzymane etapy zamiast je uruchamiać |
-| `plan.yml` | etykieta `ready` na issue | plan w komentarzu, etykieta `planned`, `blocked` albo `split`; przy `planned` uruchamia implementację albo stawia zadanie w kolejce (`queued`, `needs-approval`) |
+| `plan.yml` | etykieta `ready` na issue | issue bez specu wraca z komentarzem (bez Claude); plan w komentarzu, etykieta `planned`, `blocked` albo `split`; przy `planned` uruchamia implementację albo stawia zadanie w kolejce (`queued`, `needs-approval`) |
 | `implement.yml` | plan, kolejka, `/change` w PR albo pętla poprawek | dzienny limit, instalacja zatwierdzonych zależności, patch od implementera, sprawdzenie ścieżek, PR z gałęzi `factory/<numer>-<nazwa>`; uruchamia recenzję. Przy blokadzie: etykieta `blocked` i komentarz, bez PR |
 | `review.yml` | implementacja | komendy z `factory.yml` (CI), zrzuty ekranu z komentarzem w PR, skład panelu, recenzenci równolegle; pętla poprawek odsyła PR do implementera |
 | `risk.yml` | po recenzji, w tym samym uruchomieniu | oceniacz ryzyka, reguły, check `factory/risk`, etykieta `risk:*`, raport w PR |

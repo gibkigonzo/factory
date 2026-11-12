@@ -72,11 +72,22 @@ describe('spec-writer i format specu', () => {
     for (const criterion of spec.acceptance) assert.doesNotMatch(criterion, /\)\s*$/, 'kryterium bez dopisku, czym je sprawdzić');
   });
 
-  it('reguła dla CLAUDE.md projektu kieruje pomysły do spec-writera i taśmy', () => {
+  it('reguła dla CLAUDE.md projektu kieruje pomysły do spec-writera, a taśmę uruchamia właściciel', () => {
     const rule = readFileSync(join(ROOT, 'templates/claude/CLAUDE.md'), 'utf8');
     assert.match(rule, /`spec-writer`/);
-    assert.match(rule, /`ready`/);
+    assert.match(rule, /notatkę \(issue z etykietą `idea`\)/);
+    assert.match(rule, /bez etykiety `ready`/);
     assert.match(rule, /Nie implementuj/);
+  });
+
+  it('notatka albo spec, issue bez ready, a ready dopiero na „tak” i z wiadomością właściciela', () => {
+    assert.match(body, /„Zapisać jako notatkę czy robimy spec\?”/);
+    assert.match(body, /etykietą `idea`, bez `ready`/);
+    assert.match(body, /„Uruchomić taśmę teraz\? Dodam etykietę `ready`\.”/);
+    assert.match(body, /Nie dodajesz etykiety `ready` bez „tak”/);
+    assert.doesNotMatch(body, /--label ready/, 'issue nie powstaje z ready');
+    for (const block of blocks) assert.match(block, /<details><summary>Wiadomość właściciela<\/summary>\n\n> /);
+    assert.equal(parseSpec(blocks[1]!).acceptance.length, 4, 'blok wiadomości nie zmienia kryteriów');
   });
 
   it('planer zna te same sekcje', () => {

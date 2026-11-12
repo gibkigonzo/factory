@@ -38,9 +38,48 @@ jobs:
             echo "ok=false" >> "$GITHUB_OUTPUT"
           fi
 
-  plan:
+  # Taśma planuje tylko issue ze specem (sekcja „Kryteria akceptacji” z punktami). Notatka z etykietą `ready`
+  # wraca bez sesji Claude: zdejmujemy etykietę i podpowiadamy spec albo /split. /split (note=split) przechodzi,
+  # bo wtedy planer sam pisze spece podzadań.
+  spec:
     needs: guard
     if: needs.guard.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.issue }}
+          NOTE: ${{ inputs.note }}
+        run: |
+          if [ "$NOTE" = split ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          npm ci --prefix .factory-src --omit=dev --no-audit --no-fund >/dev/null
+          gh issue view "$ISSUE" --json body --jq .body > "$RUNNER_TEMP/issue.md"
+          CRITERIA=$(node .factory-src/scripts/workflow/cli.ts spec "$RUNNER_TEMP/issue.md" | jq '.acceptance | length')
+          if [ "$CRITERIA" -gt 0 ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "ok=false" >> "$GITHUB_OUTPUT"
+          gh issue edit "$ISSUE" --remove-label ready >/dev/null 2>&1 || true
+          gh issue comment "$ISSUE" --body "To issue nie ma specu (sekcji „Kryteria akceptacji” z punktami), więc taśma go nie planuje i zdjęła etykietę \`ready\`. Zrób spec w rozmowie z Claude: „zrób spec z #$ISSUE”. Możesz też podzielić issue komendą \`/split\`: planer napisze spece podzadań."
+
+  plan:
+    needs: [guard, spec]
+    if: needs.guard.outputs.ok == 'true' && needs.spec.outputs.ok == 'true'
     runs-on: ${{ fromJSON(startsWith(inputs.runs_on, '[') && inputs.runs_on || format('"{0}"', inputs.runs_on)) }}
     timeout-minutes: 30
     permissions:
@@ -257,6 +296,8 @@ jobs:
               ;;
             split)
               gh issue edit "$ISSUE" --add-label split
+              # Notatka podzielona na zadania przestaje być samą notatką; podzadania startują dopiero z `ready` od właściciela.
+              gh issue edit "$ISSUE" --remove-label idea >/dev/null 2>&1 || true
               jq -c '.sub_issues[]' plan.json | while read -r sub; do
                 jq -r .body <<<"$sub" > sub.md
                 URL=$(gh issue create --title "$(jq -r .title <<<"$sub")" --body-file sub.md)
