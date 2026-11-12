@@ -59,7 +59,7 @@ export function implementPrompt(ctx: PromptContext & { change?: boolean; screens
   return [body('skills/implementer/SKILL.md'), task(lines)].join('\n\n');
 }
 
-export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: string }): string {
+export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: string; previousRound?: string }): string {
   const lines = [
     `Diff zmiany: \`${ctx.work}/diff.patch\`. Lockfile'y i pliki generowane są zamiast w nim streszczone w \`${ctx.work}/skipped.md\` (plik jest pusty, gdy niczego nie pominięto).`,
     `Spec z issue: \`${ctx.work}/spec.md\`.`,
@@ -69,6 +69,13 @@ export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: st
     // Zrzuty pobiera tylko recenzent perspektywy, która ich używa (screenshots: true); inni nie mają katalogu.
     ...screenshotsTask(`${ctx.work}/screenshots`, `${ctx.work}/screenshots-base`),
   ];
+  // Recenzent każdej rundy zaczyna od zera; bez poprzednich uwag potrafi zażądać odwrotności tego, co implementer
+  // właśnie poprawił na prośbę poprzedniej rundy (lekcja z pilota: grubość nagłówka „za cienki”, potem „za gruby”).
+  if (ctx.previousRound) {
+    lines.push(
+      `Uwagi, na które odpowiadała ta runda (komentarz „Runda poprawek” albo polecenie właściciela \`/change\`): \`${ctx.previousRound}\`. Odpowiedź implementera jest w opisie PR (podsumowanie i założenia).`,
+    );
+  }
   if (ctx.criteria) lines.unshift(`Plik kryteriów Twojej perspektywy: \`${ctx.criteria}\`.`);
   return [body(`agents/${ctx.agent}.md`), task(lines)].join('\n\n');
 }

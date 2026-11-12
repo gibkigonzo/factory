@@ -102,7 +102,9 @@ function prompt(stage: string | undefined, v: Values): string {
     const cfg = optionalJson(join(ctx.work, 'config.json')) as FactoryConfig | undefined;
     return implementPrompt({ ...ctx, change: v.change, screenshots: cfg?.evidence?.screenshots });
   }
-  if (stage === 'review') return reviewPrompt({ ...ctx, agent: required(v.agent, '--agent'), criteria: v.criteria });
+  if (stage === 'review') {
+    return reviewPrompt({ ...ctx, agent: required(v.agent, '--agent'), criteria: v.criteria, previousRound: v.previous });
+  }
   if (stage === 'assess') return assessPrompt(ctx);
   throw new UsageError('prompt: etap plan, implement, review albo assess');
 }

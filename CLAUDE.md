@@ -78,7 +78,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Dziennik to przypięte issue „Tryb cienia”. Odświeża się po werdykcie, po zamknięciu PR fabryki i raz dziennie, bo reakcje nie uruchamiają workflowów.
 - Kalibracja progu pewności porównuje odsetek przyjętych PR w grupach pewności, a nie zgodność z werdyktem, bo werdykt sam zależy od pewności.
 - Werdykt „scal” albo „okno weta”, po którym właściciel napisał `/change`, liczy się jako 👎 (przy Low jako fałszywe Low), bo w Etapie 1 PR scaliłby się bez poprawki. Reakcja na ten werdykt ma pierwszeństwo; `/change` po eskalacji to zgoda (12 listopada 2026).
-- Progi Bramki 1 są w sekcji `shadow` w `base`.
+- Progi Bramki 1 są w sekcji `shadow` w `base`. Bramka liczy okno ostatnich `gate_prs` PR z oceną, a nie całą historię: po naprawie błędu fabryka musi pokazać tyle dobrych werdyktów pod rząd (12 listopada 2026).
 - Statystyki wszystkich zadań, także bez PR, dziennik zapisuje w `journal.csv` i `journal.json` na gałęzi `factory-journal`: koszt na etap i recenzenta oraz ocenę właściciela. Koszt zablokowanej implementacji trafia do komentarza z blokadą, a koszt recenzji rundy odesłanej do implementera do komentarza rundy (11 listopada 2026).
 
 ### Spec z telefonu (7 listopada 2026)
@@ -115,7 +115,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 
 - Czerwone CI albo `request_changes` odsyła PR do implementera automatycznie, do `risk.max_review_rounds` rund. Werdykt powstaje po pętli. Przy czerwonym CI recenzenci nie ruszają, chyba że to ostatnia runda.
 - Implementer, który nie może dokończyć zadania, zgłasza `status: blocked`; wtedy nie ma PR ani recenzji, tylko etykieta `blocked` i komentarz.
-- Runda poprawek bez zmian w plikach (`done` z wyjaśnieniem w założeniach) aktualizuje opis PR, cytuje wyjaśnienie w komentarzu PR i uruchamia recenzję jeszcze raz, w limicie rund. `/change` właściciela implementer wykonuje albo kończy blokadą z powodem; zadaniem rundy są uwagi, a nie issue od nowa. Lekcja z pilota: implementer uznał pracę z issue za „już w main” i pominął uwagę właściciela (12 listopada 2026). `ci.json` ma końcówkę wyjścia każdej komendy, więc dowód z CI (np. czysty typecheck) recenzent bierze stamtąd. Lekcja z pilota: recenzent prosił o log, którego implementer nie mógł pokazać, a runda bez zmian kończyła się blokadą (11 listopada 2026).
+- Runda poprawek bez zmian w plikach (`done` z wyjaśnieniem w założeniach) aktualizuje opis PR, cytuje wyjaśnienie w komentarzu PR i uruchamia recenzję jeszcze raz, w limicie rund. `/change` właściciela implementer wykonuje albo kończy blokadą z powodem; zadaniem rundy są uwagi, a nie issue od nowa. Lekcja z pilota: implementer uznał pracę z issue za „już w main” i pominął uwagę właściciela (12 listopada 2026). Rundy po `/change` właściciela (`factory:change-N`) nie liczą się do limitu automatycznych rund. `ci.json` ma końcówkę wyjścia każdej komendy, więc dowód z CI (np. czysty typecheck) recenzent bierze stamtąd. Lekcja z pilota: recenzent prosił o log, którego implementer nie mógł pokazać, a runda bez zmian kończyła się blokadą (11 listopada 2026).
 - Nowe zależności planer wpisuje do planu, właściciel zatwierdza je `/approve` w issue, a instaluje je workflow komendą z `dependencies` w `factory.yml`. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji.
 
 ### Zatrzymanie taśmy i problemy taśmy (11 listopada 2026)
@@ -134,6 +134,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Taśma robi te same zrzuty na punkcie rozgałęzienia i porównuje piksele. `ux-visual` (perspektywa z `screenshots: true`) dostaje tylko sekcje zmienione przez PR; gdy wygląd się nie zmienił, werdykt wystawia skrypt bez modelu. Inni recenzenci zrzutów nie dostają (10 listopada 2026, koszt).
 - Komentarz w PR ma linki do obrazów wzorzec|wykonanie, a nie obrazy w treści: GitHub nie pokazuje w komentarzach obrazów z repo prywatnego. W każdej rundzie powstaje nowy komentarz, a poprzedni znika. Obrazy leżą na gałęzi `factory-screenshots` (jeden commit, tylko otwarte PR); job galerii działa bez Claude i bez kodu PR.
 - Wzorzec jest celem także wtedy, gdy kryteria sprawdzają tylko wymiary i liczbę elementów. Różnica widoczna od razu to `high` u `ux-visual`, a implementer poprawia ją przed oddaniem zmiany. „Agent może zmienić” w specu dotyczy tylko tego, czego wzorzec nie pokazuje. Lekcja z pilota: recenzent opisał różnice trafnie, ale nazwał je „stylistycznymi” i zatwierdził.
+- Recenzent wyglądu dostaje uwagi, na które odpowiadała runda, i nie żąda ich odwrotności. Sąsiednie grubości czcionki i podobny krój to najwyżej `medium`. Lekcja z pilota: recenzent kolejnej rundy uznał za „za gruby” nagłówek pogrubiony na prośbę poprzedniej i zablokował PR na High (12 listopada 2026).
 - Później, gdy projekt tego potrzebuje: zrzuty pojedynczych komponentów.
 
 ## Otwarte pytania

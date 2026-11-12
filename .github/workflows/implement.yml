@@ -59,6 +59,7 @@ jobs:
       usage: ${{ steps.usage.outputs.usage }}
       over_budget: ${{ steps.budget.outputs.skip }}
       line: ${{ steps.collect.outputs.line }}
+      kind: ${{ steps.data.outputs.kind }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -107,10 +108,14 @@ jobs:
           gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$ISSUE/comments" | jq -s add \
             | node "$F/scripts/workflow/cli.ts" find-plan --issue "$ISSUE" > "$W/plan.json"
           CHANGE=""
+          KIND=""
           if [ -n "$NOTE" ]; then
             gh api "repos/$GITHUB_REPOSITORY/issues/comments/$NOTE" --jq .body > "$W/change.md"
             CHANGE="--change"
+            # Runda z pętli (komentarz taśmy) albo z /change właściciela; ta druga nie liczy się do limitu rund.
+            if head -n 1 "$W/change.md" | grep -qF '<!-- factory:round -->'; then KIND=loop; else KIND=change; fi
           fi
+          echo "kind=$KIND" >> "$GITHUB_OUTPUT"
           node "$F/scripts/workflow/cli.ts" prompt implement --work "$W" --issue "$ISSUE" $CHANGE > "$W/prompt.md"
           {
             echo "title=$(gh issue view "$ISSUE" --json title --jq .title)"
@@ -339,6 +344,7 @@ jobs:
           IMPLEMENTATION: ${{ needs.implement.outputs.implementation }}
           USAGE: ${{ needs.implement.outputs.usage }}
           EMPTY: ${{ needs.implement.outputs.empty }}
+          KIND: ${{ needs.implement.outputs.kind }}
           WORKFLOW: ${{ inputs.workflow }}
         run: |
           F="$RUNNER_TEMP/factory"
@@ -372,6 +378,11 @@ jobs:
             NEXT=$((ROUND + 1))
             gh label create "factory:round-$NEXT" --force >/dev/null
             gh pr edit "$PR" --add-label "factory:round-$NEXT"
+            if [ "$KIND" = change ]; then
+              # Runda na polecenie właściciela: numeruje się jak inne, ale nie zmniejsza limitu automatycznych rund.
+              gh label create "factory:change-$NEXT" --force --description 'Runda poprawek po /change właściciela' >/dev/null
+              gh pr edit "$PR" --add-label "factory:change-$NEXT"
+            fi
             if [ "$EMPTY" = true ]; then
               node "$F/scripts/workflow/cli.ts" no-change-comment --implementation "$RUNNER_TEMP/implementation.json" --round "$NEXT" > "$RUNNER_TEMP/no-change.md"
               gh pr comment "$PR" --body-file "$RUNNER_TEMP/no-change.md"

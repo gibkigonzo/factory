@@ -59,6 +59,7 @@ jobs:
     outputs:
       status: ${{ steps.round.outputs.status }}
       round: ${{ steps.round.outputs.round }}
+      auto: ${{ steps.round.outputs.auto }}
       final: ${{ steps.round.outputs.final }}
       screenshots: ${{ steps.shots.outputs.configured }}
       sha: ${{ steps.shots.outputs.sha }}
@@ -108,13 +109,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ inputs.pr }}
         run: |
-          ROUND=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels \
-            --jq '[.labels[].name | select(startswith("factory:round-")) | ltrimstr("factory:round-") | tonumber] | max // 0')
+          LABELS=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels)
+          ROUND=$(jq '[.labels[].name | select(startswith("factory:round-")) | ltrimstr("factory:round-") | tonumber] | max // 0' <<<"$LABELS")
+          # Rundy po /change właściciela (etykiety factory:change-N) nie liczą się do limitu automatycznych rund.
+          CHANGES=$(jq '[.labels[].name | select(startswith("factory:change-"))] | length' <<<"$LABELS")
+          AUTO=$((ROUND - CHANGES))
+          if [ "$AUTO" -lt 0 ]; then AUTO=0; fi
           MAX=$(jq .risk.max_review_rounds "$W/config.json")
           {
             echo "status=$(jq -r .status "$W/ci.json")"
             echo "round=$ROUND"
-            echo "final=$([ "$ROUND" -ge "$MAX" ] && echo true || echo false)"
+            echo "auto=$AUTO"
+            echo "final=$([ "$AUTO" -ge "$MAX" ] && echo true || echo false)"
           } >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -200,6 +206,7 @@ jobs:
         id: panel
         env:
           GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
           PR: ${{ inputs.pr }}
         run: |
           BASE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)
@@ -215,6 +222,14 @@ jobs:
           node "$F/scripts/workflow/cli.ts" review-diff --base "$(cat "$W/base.sha")" --config "$W/config.json" \
             --out "$W/diff.patch" --summary "$W/skipped.md"
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body --jq .body > "$W/pr.md"
+          # Uwagi, na które odpowiadała ta runda: ostatni komentarz rundy od taśmy albo /change właściciela.
+          # Dostaje je recenzent wyglądu, żeby nie żądał odwrotności tego, co implementer właśnie poprawił.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq '.[] | {login: .user.login, body: (.body // ""), created_at}' \
+            | jq -rs --arg owner "$OWNER" '[.[] | select(
+                (.login == "github-actions[bot]" and (.body | startswith("<!-- factory:round -->")))
+                or (.login == $owner and (.body | split("\n")[0] | test("^\\s*/change([\\s:,.!]|$)"; "i"))))]
+                | sort_by(.created_at) | last | .body // ""' > "$W/previous-round.md"
           gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json body \
             | node "$F/scripts/workflow/cli.ts" find-implementation --pr "$PR" > "$W/implementation.json"
           ISSUE=$(jq -r .issue "$W/implementation.json")
@@ -306,9 +321,11 @@ jobs:
         env:
           AGENT: ${{ matrix.member.agent }}
           CRITERIA: ${{ matrix.member.criteria }}
+          SCREENSHOTS: ${{ matrix.member.screenshots }}
         run: |
           ARGS=(--work "$W" --agent "$AGENT")
           if [ -n "$CRITERIA" ]; then ARGS+=(--criteria "$CRITERIA"); fi
+          if [ "$SCREENSHOTS" = true ] && grep -q '[^[:space:]]' "$W/previous-round.md" 2>/dev/null; then ARGS+=(--previous "$W/previous-round.md"); fi
           node "$F/scripts/workflow/cli.ts" prompt review "${ARGS[@]}" > "$W/prompt.md"
           {
             echo "schema=$(node "$F/scripts/workflow/cli.ts" schema verdict)"
@@ -537,10 +554,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           PR: ${{ inputs.pr }}
-          ROUND: ${{ needs.ci.outputs.round }}
+          AUTO: ${{ needs.ci.outputs.auto }}
           WORKFLOW: ${{ inputs.workflow }}
         run: |
-          DECISION=$(node "$F/scripts/workflow/cli.ts" loop --work "$W" --config "$W/config.json" --round "${ROUND:-0}" --usage "$W/usage" --out "$W/round.md")
+          DECISION=$(node "$F/scripts/workflow/cli.ts" loop --work "$W" --config "$W/config.json" --round "${AUTO:-0}" --usage "$W/usage" --out "$W/round.md")
           echo "Pętla poprawek: $(jq -r .reason <<<"$DECISION")" >> "$GITHUB_STEP_SUMMARY"
           if [ "$(jq -r .retry <<<"$DECISION")" != true ] || [ "$(gh pr view "$PR" --json state --jq .state)" != OPEN ]; then
             echo "retry=false" >> "$GITHUB_OUTPUT"

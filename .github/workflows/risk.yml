@@ -222,8 +222,10 @@ jobs:
           PR: ${{ inputs.pr }}
         run: |
           BASE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)
-          ROUNDS=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels \
-            --jq '[.labels[].name | select(startswith("factory:round-")) | ltrimstr("factory:round-") | tonumber] | max // 0')
+          # Automatyczne rundy poprawek: wszystkie rundy minus rundy po /change właściciela (factory:change-N).
+          ROUNDS=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels --jq '
+            ([.labels[].name | select(startswith("factory:round-")) | ltrimstr("factory:round-") | tonumber] | max // 0)
+            - ([.labels[].name | select(startswith("factory:change-"))] | length) | if . < 0 then 0 else . end')
           node "$F/scripts/workflow/cli.ts" evidence --work "$W" --rounds "$ROUNDS" > "$W/evidence.json"
           # Ten sam punkt rozgałęzienia co w recenzji (base.sha z panelu), bo PR mógł zostać scalony w trakcie.
           FORK=$(cat "$W/base.sha" 2>/dev/null || echo "origin/$BASE")

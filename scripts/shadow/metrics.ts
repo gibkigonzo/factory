@@ -35,6 +35,8 @@ export interface Metrics {
     /** Udział rodzajów wyjścia w znakach: rozumowanie, tekst i wywołania narzędzi. */
     output?: { thinking: number; text: number; tools: number };
   };
+  /** Okno Bramki 1: ostatnie PR-y z werdyktem i znanym wynikiem (ocena albo fałszywe Low), najwyżej `gate_prs`. */
+  window: { prs: number[]; evaluated: number; agreed: number; agreement?: number; falseLow: number[] };
   gate: { passed: boolean; missing: string[] };
 }
 
@@ -75,15 +77,33 @@ function calibration(records: readonly PrRecord[], threshold: number): Metrics['
   return { threshold, above, below, enoughData: above.count >= MIN_GROUP && below.count >= MIN_GROUP };
 }
 
-function gate(m: Omit<Metrics, 'gate'>, config: FactoryConfig): Metrics['gate'] {
+/**
+ * Bramka 1 patrzy na okno ostatnich `gate_prs` PR-ów z werdyktem i znanym wynikiem, od najnowszego werdyktu.
+ * Starsze błędy wypadają z okna, gdy fabryka pokaże dość nowych werdyktów, więc bramka ocenia jej obecną wersję,
+ * a nie całą historię (ustalenie z 12 listopada 2026).
+ */
+function windowOf(records: readonly PrRecord[], size: number): Metrics['window'] {
+  const known = records
+    .filter((r) => r.shadow && (r.shadow.reaction || isFalseLow(r)))
+    .sort((a, b) => b.shadow!.at.localeCompare(a.shadow!.at) || b.number - a.number)
+    .slice(0, size);
+  const evaluated = known.filter((r) => r.shadow!.reaction);
+  const agreed = evaluated.filter((r) => r.shadow!.reaction === 'up').length;
+  const window: Metrics['window'] = { prs: known.map((r) => r.number), evaluated: evaluated.length, agreed, falseLow: known.filter(isFalseLow).map((r) => r.number) };
+  const agreement = ratio(agreed, evaluated.length);
+  if (agreement !== undefined) window.agreement = agreement;
+  return window;
+}
+
+function gate(w: Metrics['window'], config: FactoryConfig): Metrics['gate'] {
   const { gate_prs, min_agreement, max_false_low } = config.shadow;
   const missing: string[] = [];
-  if (m.evaluated < gate_prs) missing.push(`brakuje ${gate_prs - m.evaluated} ocenionych PR (${m.evaluated} z ${gate_prs})`);
+  if (w.prs.length < gate_prs) missing.push(`brakuje ${gate_prs - w.prs.length} ocenionych PR (${w.prs.length} z ${gate_prs})`);
   // Bez ocen zgodności nie ma; tę lukę opisuje już brak ocenionych PR (gate_prs jest dodatnie).
-  if (m.agreement !== undefined && m.agreement < min_agreement) {
-    missing.push(`zgodność ${percent(m.agreement)}, potrzeba co najmniej ${percent(min_agreement)}`);
+  if (w.agreement !== undefined && w.agreement < min_agreement) {
+    missing.push(`zgodność ${percent(w.agreement)}, potrzeba co najmniej ${percent(min_agreement)}`);
   }
-  if (m.falseLow.length > max_false_low) missing.push(`fałszywe Low: ${m.falseLow.length} (dozwolone ${max_false_low})`);
+  if (w.falseLow.length > max_false_low) missing.push(`fałszywe Low: ${w.falseLow.length} (dozwolone ${max_false_low})`);
   return { passed: missing.length === 0, missing };
 }
 
@@ -142,6 +162,7 @@ export function computeMetrics(records: readonly PrRecord[], config: FactoryConf
     agreed,
     falseLow: records.filter(isFalseLow).map((r) => r.number),
     calibration: calibration(withVerdict, config.risk.min_confidence),
+    window: windowOf(records, config.shadow.gate_prs),
   };
   const costs = cost(records);
   if (costs) base.cost = costs;
@@ -151,5 +172,5 @@ export function computeMetrics(records: readonly PrRecord[], config: FactoryConf
   if (avgRounds !== undefined) base.avgRounds = avgRounds;
   const medianHours = median(hours);
   if (medianHours !== undefined) base.medianHoursToMerge = medianHours;
-  return { ...base, gate: gate(base, config) };
+  return { ...base, gate: gate(base.window, config) };
 }

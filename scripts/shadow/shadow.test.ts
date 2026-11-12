@@ -387,6 +387,27 @@ describe('metryki i Bramka 1', () => {
     assert.deepEqual(m.gate.missing, ['fałszywe Low: 1 (dozwolone 0)']);
   });
 
+  it('Bramka 1 liczy okno ostatnich gate_prs PR: stary błąd wypada z okna, nowy w nim zostaje', () => {
+    const at = (day: number) => `2026-11-${String(day).padStart(2, '0')}T10:00:00Z`;
+    const withAt = (action: Action, reaction: 'up' | 'down', day: number) => ({ ...verdict(action, 0.9, reaction), at: at(day) });
+    const oldFalseLow = pr({ shadow: withAt('merge', 'down', 1) });
+    const good = Array.from({ length: 20 }, (_, i) => pr({ shadow: withAt('merge', 'up', i + 2) }));
+    const m = computeMetrics([oldFalseLow, ...good], config);
+    assert.deepEqual(m.falseLow, [oldFalseLow.number], 'w historii fałszywe Low zostaje');
+    assert.equal(m.window.prs.length, 20);
+    assert.ok(!m.window.prs.includes(oldFalseLow.number), 'najstarszy werdykt poza oknem');
+    assert.deepEqual(m.gate, { passed: true, missing: [] });
+    const recentFalseLow = pr({ shadow: withAt('merge', 'down', 25) });
+    const later = computeMetrics([oldFalseLow, ...good, recentFalseLow], config);
+    assert.deepEqual(later.window.falseLow, [recentFalseLow.number]);
+    assert.deepEqual(later.gate.missing, ['fałszywe Low: 1 (dozwolone 0)']);
+    // PR bez oceny nie wchodzi do okna, chyba że jest fałszywym Low przez zamknięcie bez merge'u.
+    const closed = pr({ state: 'closed', shadow: { ...verdict('merge', 0.9), at: at(26) } });
+    const unrated = pr({ shadow: { ...verdict('merge', 0.9), at: at(27) } });
+    const w = computeMetrics([...good, closed, unrated], config).window;
+    assert.ok(w.prs.includes(closed.number) && !w.prs.includes(unrated.number));
+  });
+
   it('kalibracja progu porównuje odsetek przyjętych PR w grupach pewności', () => {
     const records = [
       ...Array.from({ length: 5 }, () => pr({ shadow: verdict('merge', 0.95) })),
