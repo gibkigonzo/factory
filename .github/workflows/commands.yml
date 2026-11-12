@@ -100,6 +100,14 @@ jobs:
               ;;
             split)
               if [ "$IS_PR" = true ]; then gh pr comment "$NUMBER" --body "/split działa w issue, nie w PR."; exit 0; fi
+              # Za późno, gdy taśma już pracuje nad zadaniem: plan trwa (etykieta ready), otwarty PR fabryki albo plan,
+              # który nie czeka (kolejka, zgoda, blokada). Podział w tej chwili zdublowałby pracę planera i implementera.
+              LABELS=$(gh issue view "$NUMBER" --json labels --jq '[.labels[].name]')
+              OPEN=$(gh pr list --state open --limit 100 --json headRefName --jq "[.[] | select(.headRefName | startswith(\"factory/$NUMBER-\"))] | length")
+              if [ "$OPEN" -gt 0 ] || jq -e 'any(.[]; . == "ready") or (any(.[]; . == "planned") and (any(.[]; . == "queued" or . == "needs-approval" or . == "blocked") | not))' <<<"$LABELS" >/dev/null; then
+                gh issue comment "$NUMBER" --body "Za późno na \`/split\`: taśma już planuje albo realizuje #$NUMBER, a podział zdublowałby pracę. Odrzuć zadanie przez \`/reject\` i załóż nowe issue bez \`ready\`, a potem napisz w nim \`/split\`."
+                exit 0
+              fi
               label split
               gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=plan -f issue="$NUMBER" -f note=split
               ;;

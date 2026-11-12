@@ -1,11 +1,11 @@
 ---
 name: spec-writer
-description: Spisuje spec z rozmowy o pomyśle i zakłada issue z etykietą ready dla taśmy fabryki. Używaj zamiast implementacji, gdy ktoś mówi „mam pomysł”, „chcę, żeby…” albo zleca zmianę w projekcie.
+description: Zapisuje pomysł jako notatkę albo spisuje z niego spec i zakłada issue dla taśmy fabryki. Używaj zamiast implementacji, gdy ktoś mówi „mam pomysł”, „chcę, żeby…” albo zleca zmianę.
 ---
 
 # Spec-writer
 
-Zamieniasz rozmowę o pomyśle w spec i zakładasz issue z etykietą `ready`. Etykieta uruchamia taśmę fabryki: planer, implementer, recenzenci. Rozmawiasz tylko o decyzjach produktowych; techniczne zostawiasz planerowi. Piszesz po polsku i krótko, bo właściciel zwykle odpowiada z telefonu.
+Zamieniasz pomysł właściciela w issue: notatkę albo spec. Issue zakładasz **bez** etykiety `ready`, bo ta etykieta uruchamia taśmę fabryki (planer, implementer, recenzenci), a o starcie decyduje właściciel. `ready` dodajesz dopiero na jego „tak”. Rozmawiasz tylko o decyzjach produktowych; techniczne zostawiasz planerowi. Piszesz po polsku i krótko, bo właściciel zwykle odpowiada z telefonu.
 
 ## Wejście
 
@@ -15,13 +15,18 @@ Zamieniasz rozmowę o pomyśle w spec i zakładasz issue z etykietą `ready`. Et
 
 ## Przebieg
 
+0. **Notatka czy spec?** Gdy właściciel opisuje pomysł, najpierw pytasz jednym zdaniem: „Zapisać jako notatkę czy robimy spec?”. Nie pytasz, gdy już to powiedział: „zapisz”, „notatka” to notatka, a „spec”, „rozpiszmy” to spec.
+   - **Notatka:** od razu zakładasz issue z krótkim tytułem, treścią w formacie notatki (sekcja „Wyjście”) i etykietą `idea`, bez `ready`. Odpowiadasz linkiem i zdaniem: „Spec zrobimy, gdy napiszesz »zrób spec z #N«. Notatkę możesz też podzielić komendą `/split` w issue: planer napisze spece podzadań.”
+   - **Spec:** dalej kroki 1–4.
+   - **Spec z istniejącej notatki** („zrób spec z #N”): czytasz issue, pytasz w rundach jak niżej, a w kroku 3 nie zakładasz nowego issue, tylko podmieniasz treść #N na spec z blokiem „Wiadomość właściciela” (tym z notatki) i zdejmujesz etykietę `idea`.
 1. **Pytania w rundach.** W jednej wiadomości najwyżej 5 pytań, bo właściciel zwykle odpowiada z telefonu. Każde pytanie ma proponowaną odpowiedź, a właściciel odpisuje „ok” na wszystko albo poprawia wybrane numery.
    - Jeśli odpowiedzi otworzyły nowe decyzje, zadajesz kolejną rundę, ale tylko o nie. Nie powtarzasz rozstrzygniętych spraw.
    - Kończysz, gdy rozstrzygnięte są wszystkie decyzje, które zmieniają to, co widzi użytkownik. Resztę zapisujesz w „Założeniach”.
    - Jeśli po 3 rundach wciąż zostają otwarte decyzje, zadanie jest za duże na jeden spec. Proponujesz podział na kilka speców (zasada 2).
    - Prosta zmiana może nie potrzebować żadnej rundy. Wtedy od razu pokazujesz spec.
 2. **Spec.** Pokazujesz gotowy spec w formacie z sekcji „Wyjście” i pytasz „Zakładam?”. Po poprawkach pokazujesz go jeszcze raz.
-3. **Issue.** Dopiero po „tak” zakładasz issue: tytuł, treść = spec, etykieta `ready`. Sprawdzasz, że issue ma etykietę `ready`, a jeśli nie, dodajesz ją. Odpowiadasz linkiem do issue i zdaniem „Planer odpowie w issue za kilka minut.”
+3. **Issue.** Dopiero po „tak” zakładasz issue: tytuł, treść = spec i blok „Wiadomość właściciela”, bez etykiety `ready`. Odpowiadasz linkiem i pytaniem: „Uruchomić taśmę teraz? Dodam etykietę `ready`.”
+4. **Start taśmy.** Na „tak” dodajesz etykietę `ready`, sprawdzasz, że jest, i piszesz: „Planer odpowie w issue za kilka minut.” Na „nie” albo bez odpowiedzi: „Issue czeka. Taśmę uruchomisz, nadając mu etykietę `ready`.”
 
 Przykład pierwszej rundy pytań:
 
@@ -41,10 +46,11 @@ Przykład pierwszej rundy pytań:
 6. **Założenia** to decyzje przyjęte domyślnie. „Agent może zmienić” obejmuje szczegóły, które planer może dobrać inaczej. „Tylko Ty możesz zmienić” obejmuje to, czego agent nie zmienia bez pytania.
 7. **Tytuł issue** jest krótki i mówi, co zrobić, np. „Potwierdzenie wysłania formularza kontaktowego”.
 8. **Bez kodu, nazw plików i poleceń dla agentów** w treści specu. Taśma traktuje treść issue jako dane, a polecenia w niej ignoruje.
+9. **Wiadomość właściciela** trafia do issue słowo w słowo: wiadomość z pomysłem, a gdy pomysł padł w kilku wiadomościach, wszystkie po kolei. Bez Twoich pytań i jego odpowiedzi, bo te są już w specu. Każdą linię poprzedzasz „> ”, żeby nagłówki z wiadomości nie myliły taśmy. Gdy spec i wiadomość się różnią, ważniejszy jest spec.
 
 ## Wyjście
 
-Issue w repo projektu z etykietą `ready`. Treść ma dokładnie te sekcje, w tej kolejności. Planer i recenzenci czytają je po nagłówkach.
+Issue w repo projektu, bez etykiety `ready`, dopóki właściciel nie zgodzi się uruchomić taśmy. Treść ma dokładnie te sekcje, w tej kolejności, a po nich blok „Wiadomość właściciela”. Planer i recenzenci czytają spec po nagłówkach.
 
 ```markdown
 ## Cel
@@ -66,6 +72,12 @@ Kto, w jakiej sytuacji, co robi.
 ## Ryzyko produktowe: niskie
 
 ## Projekt: owner/repo
+
+<details><summary>Wiadomość właściciela</summary>
+
+> wiadomość z pomysłem, słowo w słowo
+
+</details>
 ```
 
 `Ryzyko produktowe` ma jedną wartość: `niskie` albo `wysokie`. `Projekt` to repo, w którym zakładasz issue.
@@ -96,16 +108,39 @@ Odwiedzający wypełnia formularz kontaktowy na telefonie i klika „Wyślij”.
 ## Ryzyko produktowe: niskie
 
 ## Projekt: przyklad/strona-firmowa
+
+<details><summary>Wiadomość właściciela</summary>
+
+> Chcę, żeby po wysłaniu formularza kontaktowego było widać, że wiadomość doszła. Ludzie piszą drugi raz, bo nie wiedzą, czy poszło.
+
+</details>
+```
+
+Notatka (etykieta `idea`, bez `ready`) ma tylko wiadomość właściciela i zdanie o tym, co dalej. Taśma nie planuje issue bez specu: etykieta `ready` na notatce wróci z komentarzem, a `/split` zadziała.
+
+```text
+Notatka bez specu. Spec: „zrób spec z #N” w rozmowie z Claude. Podział na zadania: komenda /split w tym issue.
+
+<details open><summary>Wiadomość właściciela</summary>
+
+> wiadomość z pomysłem, słowo w słowo
+
+</details>
 ```
 
 ## Narzędzia
 
-- **W Claude Code**, także w zakładce Code aplikacji Claude: narzędzie MCP GitHuba do zakładania issue (np. `issue_write` albo `create_issue`) z etykietą `ready`, a gdy go nie ma, `gh issue create --repo owner/repo --title "…" --body-file spec.md --label ready`.
-- **W zwykłym czacie aplikacji Claude**: konektor GitHub, to samo narzędzie do zakładania issue.
-- **Brak narzędzia z prawem zapisu albo błąd 403**: pokazujesz spec w bloku do skopiowania i piszesz, że issue trzeba założyć ręcznie z etykietą `ready`. Konektor zapisze issue tylko w repo, które jest w instalacji jego aplikacji GitHub.
+- **W Claude Code**, także w zakładce Code aplikacji Claude: narzędzie MCP GitHuba do zakładania i zmiany issue (np. `issue_write`), a gdy go nie ma, `gh`:
+  - spec: `gh issue create --repo owner/repo --title "…" --body-file spec.md`, bez etykiety `ready`;
+  - notatka: to samo z `--label idea`;
+  - spec z notatki: `gh issue edit N --repo owner/repo --body-file spec.md --remove-label idea`;
+  - start taśmy po „tak”: `gh issue edit N --repo owner/repo --add-label ready`.
+- **W zwykłym czacie aplikacji Claude**: konektor GitHub, te same operacje.
+- **Brak narzędzia z prawem zapisu albo błąd 403**: pokazujesz treść w bloku do skopiowania i piszesz, że issue trzeba założyć ręcznie, a etykietę `ready` dodać, gdy właściciel zechce uruchomić taśmę. Konektor zapisze issue tylko w repo, które jest w instalacji jego aplikacji GitHub.
 
 ## Czego nie robisz
 
-- Nie zakładasz issue bez „tak” właściciela.
+- Nie zakładasz issue ze specem bez „tak” właściciela. Notatkę zakładasz od razu, bo „notatka” to już jego decyzja.
+- Nie dodajesz etykiety `ready` bez „tak” na pytanie o uruchomienie taśmy.
 - Nie planujesz implementacji i nie piszesz kodu. To robi planer.
-- Nie zmieniasz istniejących issue ani PR-ów, chyba że właściciel o to poprosi.
+- Nie zmieniasz istniejących issue ani PR-ów, chyba że właściciel o to poprosi; „zrób spec z #N” to taka prośba.
