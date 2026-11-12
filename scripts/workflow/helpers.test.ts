@@ -174,6 +174,9 @@ describe('prompty etapów', () => {
     const plan = planPrompt({ work: '.factory/work', issue: 5 });
     assert.match(plan, /# Planer/);
     assert.match(plan, /`\.factory\/work\/issue\.md`/);
+    const visual = reviewPrompt({ work: 'w', agent: 'review-ux-visual', previousRound: 'w/previous-round.md' });
+    assert.match(visual, /Uwagi, na które odpowiadała ta runda .*`w\/previous-round\.md`/);
+    assert.doesNotMatch(reviewPrompt({ work: 'w', agent: 'review-ux-visual' }), /Uwagi, na które odpowiadała/);
     const change = implementPrompt({ work: 'w', issue: 5, change: true });
     assert.match(change, /`w\/change\.md`/);
     assert.ok(change.indexOf('To runda poprawek otwartego PR') < change.indexOf('Issue #5'), 'zadanie rundy przed issue');

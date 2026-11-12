@@ -199,6 +199,23 @@ describe('workflowy fabryki', () => {
     assert.match(workflows.journal!.text, /> "\$RAW\/changes\/\$PR\.json"/);
   });
 
+  it('rundy po /change właściciela nie liczą się do limitu: etykieta factory:change-N, a pętla i ryzyko liczą rundy automatyczne', () => {
+    const implement = workflows.implement!.text;
+    assert.match(implement, /if head -n 1 "\$W\/change\.md" \| grep -qF '<!-- factory:round -->'; then KIND=loop; else KIND=change; fi/);
+    assert.match(implement, /if \[ "\$KIND" = change \]; then[\s\S]*--add-label "factory:change-\$NEXT"/);
+    const review = workflows.review!.text;
+    assert.match(review, /AUTO=\$\(\(ROUND - CHANGES\)\)/);
+    assert.match(review, /echo "final=\$\(\[ "\$AUTO" -ge "\$MAX" \]/);
+    assert.match(review, /cli\.ts" loop .*--round "\$\{AUTO:-0\}"/);
+    assert.match(workflows.risk!.text, /- \(\[\.labels\[\]\.name \| select\(startswith\("factory:change-"\)\)\] \| length\)/);
+  });
+
+  it('recenzent wyglądu dostaje uwagi, na które odpowiadała runda', () => {
+    const review = workflows.review!.text;
+    assert.match(review, /> "\$W\/previous-round\.md"/);
+    assert.match(review, /if \[ "\$SCREENSHOTS" = true \] && grep -q '\[\^\[:space:\]\]' "\$W\/previous-round\.md" 2>\/dev\/null; then ARGS\+=\(--previous "\$W\/previous-round\.md"\); fi/);
+  });
+
   it('ocena ryzyka liczy diff od punktu rozgałęzienia zapisanego w recenzji, także gdy PR scalono w trakcie', () => {
     assert.match(workflows.review!.text, /git merge-base "origin\/\$BASE" HEAD > "\$W\/base\.sha"/);
     assert.match(workflows.review!.text, /panel\.ts" --base "\$\(cat "\$W\/base\.sha"\)"/);

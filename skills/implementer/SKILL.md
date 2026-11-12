@@ -49,7 +49,7 @@ PR z gałęzi `factory/*` do gałęzi głównej. Opis PR: `Closes #<numer>`, co 
 ```
 
 - `status`: `done`, gdy zadanie jest zrobione, a komendy z kontraktu przechodzą; `blocked`, gdy nie dało się go dokończyć (wtedy wymagane jest `blocker`). Nie oddajesz `done` z czerwonymi komendami.
-- `acceptance`: wszystkie kryteria ze specu, każde z dowodem: `test: <plik> › <nazwa>`, `zrzut: <ścieżka artefaktu>` albo `ci: <komenda>`, gdy dowodem jest wynik komendy z CI taśmy (kod wyjścia i końcówka wyjścia w `ci.json`, np. `ci: typecheck`). `criterion` to kryterium ze specu przepisane słowo w słowo, w kolejności specu, bez skrótów i dopisków; workflow łączy dowody z kryteriami po treści.
+- `acceptance`: wszystkie kryteria ze specu, każde z dowodem: `test: <plik> › <nazwa>` albo `zrzut: <ścieżka artefaktu>`. Format `ci: <komenda>` (kod wyjścia i końcówka wyjścia w `ci.json`) jest tylko dla kryterium, które dotyczy samego wyniku komendy, np. „typecheck kończy się bez błędów” → `ci: typecheck`. Kryterium sprawdzane przez test wskazuje ten test, a nie komendę, która go uruchamia. `criterion` to kryterium ze specu przepisane słowo w słowo, w kolejności specu, bez skrótów i dopisków; workflow łączy dowody z kryteriami po treści.
 - `summary`: co zmieniono, w jednym lub dwóch zdaniach; workflow wstawia go do opisu PR.
 - `assumptions`: najwyżej 5, po jednym zdaniu. Tylko decyzje i odstępstwa, których nie ma w specu ani w planie.
 - `evidence`: sam wskaźnik dowodu, bez komentarza.
