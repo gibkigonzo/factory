@@ -119,6 +119,8 @@ Komendy działają tylko od właściciela repo i kont z wejścia `trusted`. Wiel
 
 **Zatrzymanie taśmy** służy do tego, co w fabryce robi się przy wadzie linii: najpierw naprawa, potem dalsza produkcja. `/stop` otwiera issue „Taśma zatrzymana” z powodem. Przebieg, który już trwa, kończy bieżący etap, ale następny nie rusza i dostaje etykietę `factory:paused` z zapisem, co miało ruszyć. `/start` zamyka issue i wznawia zapisane etapy. Etapy wstrzymane w czasie postoju liczą się do dziennego limitu tak jak zwykłe przebiegi.
 
+**Limit subskrypcji Claude** (okno 5 h albo tygodniowe) zatrzymuje taśmę sam. Etap z Claude (plan, implementacja, recenzja, ocena ryzyka), który trafi na limit, nie kończy się blokadą ani ponowną próbą. Zapisuje się jako wstrzymany (`factory:paused`), a taśma otwiera issue „Taśma czeka na limit subskrypcji” z godziną resetu odczytaną z komunikatu (bez godziny: 5 h). Do tej godziny nowe etapy czekają, więc nie zużywają przebiegów na kolejne błędy. Pierwsze zdarzenie taśmy po resecie (etykieta `ready`, komenda, PR fabryki albo dzienny przegląd) zamyka to issue i wznawia etapy, tak jak `/start`. Wcześniej możesz napisać `/start` sam. Gdy limit trafi recenzenta albo oceniacza, wznawia się cała recenzja, bo ocena ryzyka korzysta z jej artefaktów.
+
 **Problemy taśmy** zgłaszają agenci, gdy kłopot dotyczy narzędzi albo komend projektu, a nie samego zadania. Przykład: komenda wypisuje błąd, którego zadanie nie usunie. Zgłoszenie widać w komentarzu z planem, w opisie PR albo w komentarzu z blokadą. Dziennik zbiera wszystkie zgłoszenia w sekcji „Problemy taśmy”, a pełna lista trafia do `problemy.csv` na gałęzi `factory-journal`. Zgłoszenie nie zatrzymuje taśmy: decyzja o `/stop` należy do Ciebie.
 
 ## Jak działa

@@ -60,6 +60,8 @@ jobs:
       over_budget: ${{ steps.budget.outputs.skip }}
       line: ${{ steps.collect.outputs.line }}
       kind: ${{ steps.data.outputs.kind }}
+      limited: ${{ steps.limit.outputs.limited }}
+      until: ${{ steps.limit.outputs.until }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -217,6 +219,11 @@ jobs:
         env:
           EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
+          # Limit subskrypcji: ponowna próba nic nie da, etap poczeka na reset (krok „Limit subskrypcji”).
+          if [ "$(node "$F/scripts/workflow/limit-cli.ts" limit --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" | sed -n 's/^limited=//p')" = true ]; then
+            echo "retry=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Awaria infrastruktury (np. pobieranie narzędzi akcji) albo błąd bez żadnej pracy: jedna ponowna próba.
           if node "$F/scripts/workflow/cli.ts" started --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}"; then
             echo "retry=false" >> "$GITHUB_OUTPUT"
@@ -229,6 +236,7 @@ jobs:
       - name: Implementer (ponowna próba)
         id: claude_retry
         if: steps.started.outputs.retry == 'true'
+        continue-on-error: true   # limit po ponownej próbie rozpoznaje krok „Limit subskrypcji”
         uses: anthropics/claude-code-action@402b5b79551e3ce6614c179fbccbfdb79291cead # v1.0.269
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -242,8 +250,17 @@ jobs:
             --disallowedTools WebFetch,WebSearch
             --json-schema '${{ steps.data.outputs.schema }}'
 
+      - name: Limit subskrypcji
+        id: limit
+        if: steps.claude.outcome == 'failure'
+        env:
+          EXEC: ${{ steps.claude_retry.outputs.execution_file || steps.claude.outputs.execution_file }}
+        run: node "$F/scripts/workflow/limit-cli.ts" limit --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" >> "$GITHUB_OUTPUT"
+
       - name: Błąd sesji Claude
-        if: steps.claude.outcome == 'failure' && steps.started.outputs.retry != 'true'
+        if: >-
+          steps.limit.outputs.limited != 'true' && (
+            (steps.claude.outcome == 'failure' && steps.started.outputs.retry != 'true') || steps.claude_retry.outcome == 'failure')
         run: |
           echo "::error::Sesja Claude zakończyła się błędem po rozpoczęciu pracy; szczegóły w kroku zużycia."
           exit 1
@@ -261,7 +278,7 @@ jobs:
 
       - name: Patch i sprawdzenie zmienionych ścieżek
         id: collect
-        if: steps.budget.outputs.skip != 'true' && steps.deps.outputs.blocker == ''
+        if: steps.budget.outputs.skip != 'true' && steps.deps.outputs.blocker == '' && steps.limit.outputs.limited != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           OUTPUT: ${{ steps.claude_retry.outputs.structured_output || steps.claude.outputs.structured_output }}
@@ -392,12 +409,46 @@ jobs:
           gh issue edit "$ISSUE" --remove-label blocked >/dev/null 2>&1 || true
           gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=review -f pr="$PR"
 
+  # Limit subskrypcji Claude: etap czeka na reset zamiast blokady. Zapis jak przy /stop (factory:paused) i issue
+  # „Taśma czeka na limit subskrypcji”; pierwsze zdarzenie taśmy po resecie wznowi etap.
+  limit:
+    needs: implement
+    if: needs.implement.result == 'success' && needs.implement.outputs.limited == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Etap czeka na limit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STAGE: implement
+          ISSUE: ${{ inputs.issue }}
+          PR: ${{ inputs.pr }}
+          NOTE: ${{ inputs.note }}
+          UNTIL: ${{ needs.implement.outputs.until }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .factory-src/scripts/workflow/limit-pause.sh
+
   # Implementer zgłosił blokadę, zależności się nie zainstalowały albo pierwsza implementacja nie ma żadnej zmiany:
   # bez PR i bez recenzji. Runda poprawek bez zmian ze statusem done idzie do publish.
   blocked:
     needs: implement
     if: >-
-      needs.implement.result == 'success' && needs.implement.outputs.over_budget != 'true' && (
+      needs.implement.result == 'success' && needs.implement.outputs.over_budget != 'true' &&
+      needs.implement.outputs.limited != 'true' && (
         needs.implement.outputs.blocker != '' || needs.implement.outputs.status == 'blocked' ||
         (needs.implement.outputs.empty == 'true' && inputs.pr == ''))
     runs-on: ubuntu-latest
