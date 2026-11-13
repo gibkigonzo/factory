@@ -123,6 +123,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 ### Zatrzymanie taśmy i problemy taśmy (11 listopada 2026)
 
 - `/stop <powód>` zatrzymuje taśmę jak linkę bezpieczeństwa w fabryce: otwiera issue „Taśma zatrzymana” (`factory:stopped`). Dyrygent nie uruchamia wtedy planu, implementacji, recenzji ani kolejki, tylko zapisuje wstrzymany etap (`factory:paused`). `/start` wznawia taśmę i zapisane etapy. Dziennik i komendy działają zawsze.
+- Limit subskrypcji Claude zatrzymuje taśmę sam (13 listopada 2026). Etap, który trafi na limit, zapisuje się jako wstrzymany zamiast blokady, a taśma otwiera issue „Taśma czeka na limit subskrypcji” z godziną resetu. Pierwsze zdarzenie taśmy po tej godzinie zamyka je i wznawia etapy jak `/start`. Lekcja z pilota: runda poprawek trafiła na limit 5 h i skończyła się blokadą zadania.
 - Agenci (planer, implementer) zgłaszają problem taśmy w polu `line_problem`: kłopot z narzędziami albo komendami projektu, a nie z zadaniem. Zgłoszenie nie zatrzymuje taśmy; dziennik zbiera je w sekcji „Problemy taśmy” i w `problemy.csv`, a decyzja o `/stop` należy do właściciela.
 - Lekcja z pilota: implementer cztery razy wpisał w założeniach PR, że typecheck „pada” (szum ostrzeżenia `vue-tsc` przy kodzie 0), i nikt tego nie zauważył.
 

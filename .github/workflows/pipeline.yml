@@ -36,11 +36,14 @@ jobs:
         startsWith(github.event.pull_request.head.ref, 'factory/'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    permissions:
-      issues: read
+    permissions:      # zapis tylko do automatycznego wznowienia po limicie subskrypcji
+      contents: read
+      issues: write
+      pull-requests: write
+      actions: write
     outputs:
-      stopped: ${{ steps.state.outputs.stopped }}
-      issue: ${{ steps.state.outputs.issue }}
+      stopped: ${{ steps.limit.outputs.stopped || steps.state.outputs.stopped }}
+      issue: ${{ steps.limit.outputs.issue || steps.state.outputs.issue }}
     steps:
       - name: Stan taśmy
         id: state
@@ -48,9 +51,45 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          N=$(gh issue list --label factory:stopped --state open --limit 1 --json number --jq '.[0].number // empty')
-          { echo "stopped=$([ -n "$N" ] && echo true || echo false)"; echo "issue=$N"; } >> "$GITHUB_OUTPUT"
-          if [ -n "$N" ]; then echo "::notice::Taśma zatrzymana (#$N); etap czeka na /start."; fi
+          gh issue list --label factory:stopped --state open --limit 20 --json number,body > "$RUNNER_TEMP/stops.json"
+          if [ "$(jq length "$RUNNER_TEMP/stops.json")" = 0 ]; then
+            { echo "stopped=false"; echo "issue="; echo "check=false"; } >> "$GITHUB_OUTPUT"
+          else
+            echo "check=true" >> "$GITHUB_OUTPUT"
+          fi
+      # Zatrzymanie: /stop trzyma taśmę do /start, a limit subskrypcji do godziny resetu. Po resecie pierwsze
+      # zdarzenie zamyka issue limitu, wznawia wstrzymane etapy i samo rusza dalej.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.state.outputs.check == 'true'
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.state.outputs.check == 'true'
+        with:
+          node-version: '22'
+      - name: Zatrzymanie albo limit po czasie
+        id: limit
+        if: steps.state.outputs.check == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WORKFLOW: ${{ inputs.workflow }}
+        run: |
+          STATE=$(node .factory-src/scripts/workflow/limit-cli.ts line-state --issues "$RUNNER_TEMP/stops.json")
+          STOPPED=$(sed -n 's/^stopped=//p' <<<"$STATE"); ISSUE=$(sed -n 's/^issue=//p' <<<"$STATE")
+          EXPIRED=$(sed -n 's/^expired=//p' <<<"$STATE")
+          if [ "$STOPPED" = false ] && [ -n "$EXPIRED" ]; then
+            # Dzienny przegląd sam uruchamia kolejkę, więc wznowienie jej nie dubluje.
+            QUEUE=$([ "$GITHUB_EVENT_NAME" = schedule ] && echo false || echo true)
+            RESUMED=$(MESSAGE="Limit subskrypcji odnowiony; taśma wznowiona automatycznie." QUEUE="$QUEUE" \
+              bash .factory-src/scripts/workflow/resume.sh $EXPIRED)
+            echo "::notice::Limit subskrypcji odnowiony; wznowione etapy: $RESUMED."
+          fi
+          { echo "stopped=$STOPPED"; echo "issue=$ISSUE"; } >> "$GITHUB_OUTPUT"
+          if [ "$STOPPED" = true ]; then echo "::notice::Taśma zatrzymana (#$ISSUE); etap czeka."; fi
 
   pause:
     # Taśma zatrzymana: zapis wywołania w issue albo PR (etykieta factory:paused i znacznik), żeby /start je wznowił.
@@ -167,6 +206,7 @@ jobs:
 
   merge:
     needs: risk
+    if: needs.risk.outputs.limited != 'true'   # oceniacz trafił na limit: werdykt powstanie po wznowieniu recenzji
     uses: $/.github/workflows/merge.yml
     with:
       pr: ${{ inputs.pr }}
@@ -217,6 +257,7 @@ jobs:
     with:
       trusted: ${{ inputs.trusted }}
       workflow: ${{ inputs.workflow }}
+      factory_ref: ${{ inputs.factory_ref }}
     permissions:
       contents: read
       issues: write

@@ -24,7 +24,7 @@ on:
     outputs:
       ok:
         description: 'true, gdy recenzja się skończyła i można liczyć ryzyko; false także wtedy, gdy PR wrócił do poprawek'
-        value: ${{ (jobs.guard.outputs.ok == 'true' && jobs.loop.outputs.retry != 'true') && 'true' || 'false' }}
+        value: ${{ (jobs.guard.outputs.ok == 'true' && jobs.loop.outputs.retry != 'true' && jobs.limit.outputs.limited != 'true') && 'true' || 'false' }}
 
 permissions: {}
 
@@ -369,6 +369,11 @@ jobs:
         env:
           EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
+          # Limit subskrypcji: ponowna próba nic nie da, etap poczeka na reset (krok „Limit subskrypcji”).
+          if [ "$(node "$F/scripts/workflow/limit-cli.ts" limit --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" | sed -n 's/^limited=//p')" = true ]; then
+            echo "retry=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Awaria infrastruktury (np. pobieranie narzędzi akcji) albo błąd bez żadnej pracy: jedna ponowna próba.
           if node "$F/scripts/workflow/cli.ts" started --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}"; then
             echo "retry=false" >> "$GITHUB_OUTPUT"
@@ -381,6 +386,7 @@ jobs:
       - name: Recenzent (ponowna próba)
         id: claude_retry
         if: steps.started.outputs.retry == 'true'
+        continue-on-error: true   # limit po ponownej próbie rozpoznaje krok „Limit subskrypcji”
         uses: anthropics/claude-code-action@402b5b79551e3ce6614c179fbccbfdb79291cead # v1.0.269
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -394,8 +400,17 @@ jobs:
             --disallowedTools ${{ steps.data.outputs.denied }}
             --json-schema '${{ steps.data.outputs.schema }}'
 
+      - name: Limit subskrypcji
+        id: limit
+        if: steps.claude.outcome == 'failure'
+        env:
+          EXEC: ${{ steps.claude_retry.outputs.execution_file || steps.claude.outputs.execution_file }}
+        run: node "$F/scripts/workflow/limit-cli.ts" limit --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" >> "$GITHUB_OUTPUT"
+
       - name: Błąd sesji Claude
-        if: steps.claude.outcome == 'failure' && steps.started.outputs.retry != 'true'
+        if: >-
+          steps.limit.outputs.limited != 'true' && (
+            (steps.claude.outcome == 'failure' && steps.started.outputs.retry != 'true') || steps.claude_retry.outcome == 'failure')
         run: |
           echo "::error::Sesja Claude zakończyła się błędem po rozpoczęciu pracy; szczegóły w kroku zużycia."
           exit 1
@@ -412,6 +427,7 @@ jobs:
           node "$F/scripts/workflow/cli.ts" usage --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" --stage review --name "$NAME" --out "usage/review-$NAME.json"
 
       - name: Sprawdzenie werdyktu
+        if: steps.limit.outputs.limited != 'true'
         env:
           OUTPUT: ${{ steps.claude_retry.outputs.structured_output || steps.claude.outputs.structured_output || steps.visual.outputs.verdict }}
           NAME: ${{ matrix.member.name }}
@@ -425,9 +441,23 @@ jobs:
           fi
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.limit.outputs.limited != 'true'
         with:
           name: factory-verdict-${{ matrix.member.name }}
           path: verdict/
+
+      # Limit subskrypcji: czas resetu dla joba limit (matryca nie ma pewnych wyjść, więc idzie przez artefakt).
+      - name: Czas resetu limitu
+        if: steps.limit.outputs.limited == 'true'
+        env:
+          UNTIL: ${{ steps.limit.outputs.until }}
+          NAME: ${{ matrix.member.name }}
+        run: mkdir -p limit && printf '%s\n' "$UNTIL" > "limit/$NAME.txt"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.limit.outputs.limited == 'true'
+        with:
+          name: factory-limit-${{ matrix.member.name }}
+          path: limit/
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -500,9 +530,60 @@ jobs:
           gh api "repos/$GH_REPO/issues/$PR/comments" -F body=@"$RUNNER_TEMP/gallery.md" > /dev/null
           for ID in $OLD; do gh api -X DELETE "repos/$GH_REPO/issues/comments/$ID" > /dev/null || true; done
 
+  # Limit subskrypcji u któregokolwiek recenzenta: recenzja czeka na reset i wznowi się cała; pętla i ocena ryzyka nie ruszają.
+  limit:
+    needs: [guard, reviewer]
+    if: always() && needs.guard.outputs.ok == 'true' && needs.reviewer.result != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    outputs:
+      limited: ${{ steps.until.outputs.limited }}
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: factory-limit-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/limit
+      - name: Czy recenzent trafił na limit
+        id: until
+        run: |
+          UNTIL=$(cat "$RUNNER_TEMP"/limit/*.txt 2>/dev/null | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+Z$' | sort | tail -n 1 || true)
+          if [ -n "$UNTIL" ]; then
+            { echo "limited=true"; echo "until=$UNTIL"; } >> "$GITHUB_OUTPUT"
+          else
+            echo "limited=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.until.outputs.limited == 'true'
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.until.outputs.limited == 'true'
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Recenzja czeka na limit
+        if: steps.until.outputs.limited == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STAGE: review
+          PR: ${{ inputs.pr }}
+          UNTIL: ${{ steps.until.outputs.until }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .factory-src/scripts/workflow/limit-pause.sh
+
   loop:
-    needs: [guard, ci, panel, reviewer]
-    if: always() && needs.guard.outputs.ok == 'true' && needs.ci.result == 'success' && needs.panel.result == 'success'
+    needs: [guard, ci, panel, reviewer, limit]
+    if: >-
+      always() && needs.guard.outputs.ok == 'true' && needs.ci.result == 'success' && needs.panel.result == 'success' &&
+      needs.limit.outputs.limited != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

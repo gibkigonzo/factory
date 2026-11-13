@@ -237,6 +237,39 @@ describe('workflowy fabryki', () => {
     assert.match(text, /Za późno na \\`\/split\\`/);
   });
 
+  it('limit subskrypcji: każdy etap z Claude rozpoznaje go, nie ponawia i zapisuje pauzę zamiast blokady', () => {
+    const claudeJobs: [string, string, string][] = [['plan', 'plan', 'plan'], ['implement', 'implement', 'implement'], ['review', 'reviewer', 'review'], ['risk', 'assess', 'review']];
+    for (const [file, job, stage] of claudeJobs) {
+      const steps = (workflows[file]!.data.jobs[job]!.steps ?? []) as (Step & { id?: string; name?: string; if?: string; 'continue-on-error'?: boolean })[];
+      const started = steps.find((step) => step.id === 'started')!;
+      assert.ok(started.run!.indexOf('limit-cli.ts" limit') < started.run!.indexOf('cli.ts" started'), `${file}: limit przed ponowną próbą`);
+      assert.equal(steps.find((step) => step.id === 'claude_retry')!['continue-on-error'], true, file);
+      const limit = steps.findIndex((step) => step.id === 'limit');
+      const error = steps.findIndex((step) => step.name === 'Błąd sesji Claude');
+      assert.ok(limit >= 0 && limit < error, `${file}: limit przed błędem sesji`);
+      assert.match(String(steps[error]!.if), /steps\.limit\.outputs\.limited != 'true'/, file);
+      const pause = workflows[file]!.text.includes('limit-pause.sh');
+      assert.ok(pause, `${file}: zapis pauzy`);
+      assert.match(workflows[file]!.text, new RegExp(`STAGE: ${stage}\\n`), `${file}: wznawiany etap ${stage}`);
+    }
+    assert.match(String((workflows.plan!.data.jobs.apply as { if?: string }).if), /needs\.plan\.outputs\.limited != 'true'/);
+    assert.match(String((workflows.implement!.data.jobs.blocked as { if?: string }).if), /needs\.implement\.outputs\.limited != 'true'/);
+    const loop = workflows.review!.data.jobs.loop as { needs?: string[]; if?: string };
+    assert.ok(loop.needs!.includes('limit') && /needs\.limit\.outputs\.limited != 'true'/.test(String(loop.if)), 'pętla czeka, gdy recenzent trafił na limit');
+    assert.match(workflows.review!.text, /jobs\.limit\.outputs\.limited != 'true'\) && 'true' \|\| 'false'/, 'bez oceny ryzyka');
+    assert.match(String((workflows.risk!.data.jobs.rules as { if?: string }).if), /needs\.assess\.outputs\.limited != 'true'/);
+    assert.match(String((workflows.pipeline!.data.jobs.merge as { if?: string }).if), /needs\.risk\.outputs\.limited != 'true'/);
+  });
+
+  it('po resecie limitu pierwsze zdarzenie taśmy samo zamyka issue limitu i wznawia etapy', () => {
+    const line = workflows.pipeline!.data.jobs.line as { steps?: Step[]; permissions?: Record<string, string> };
+    const run = line.steps!.find((step) => step.run?.includes('line-state'))!.run!;
+    assert.match(run, /limit-cli\.ts line-state --issues/);
+    assert.match(run, /if \[ "\$STOPPED" = false \] && \[ -n "\$EXPIRED" \]; then[\s\S]*resume\.sh \$EXPIRED/);
+    assert.match(run, /QUEUE=\$\(\[ "\$GITHUB_EVENT_NAME" = schedule \] && echo false \|\| echo true\)/);
+    assert.equal(line.permissions?.actions, 'write');
+  });
+
   it('ocena ryzyka liczy diff od punktu rozgałęzienia zapisanego w recenzji, także gdy PR scalono w trakcie', () => {
     assert.match(workflows.review!.text, /git merge-base "origin\/\$BASE" HEAD > "\$W\/base\.sha"/);
     assert.match(workflows.review!.text, /panel\.ts" --base "\$\(cat "\$W\/base\.sha"\)"/);
@@ -302,7 +335,7 @@ describe('workflowy fabryki', () => {
     assert.match(workflows.plan!.text, /--remove-label factory:approved/);
     const commands = workflows.commands!.text;
     assert.match(commands, /grep -qx needs-approval/);
-    assert.equal((commands.match(/^\s+queue$/gm) ?? []).length, 4, '/approve z zależnościami, /reject, /start po zatrzymaniu i bez niego');
+    assert.equal((commands.match(/^\s+queue$/gm) ?? []).length, 3, '/approve z zależnościami, /reject i /start bez zatrzymania; po zatrzymaniu kolejkę uruchamia resume.sh');
     assert.match(commands, /-f stage=queue/);
   });
 
@@ -382,8 +415,11 @@ describe('wzorzec workflowu projektu', () => {
     const commands = workflows.commands!.text;
     assert.match(commands, /\/\(approve\|veto\|reject\|change\|split\|stop\|start\)/);
     assert.match(commands, /gh issue create --title 'Taśma zatrzymana' --label factory:stopped/);
-    assert.match(commands, /<!-- factory:paused \(\\\{\[\^<>\]\*\\\}\) -->/, '/start czyta zapis wstrzymanego etapu');
-    assert.match(commands, /--remove-label factory:paused/);
+    assert.match(commands, /bash \.factory-src\/scripts\/workflow\/resume\.sh \$STOPS/, '/start wznawia przez wspólny skrypt');
+    const resume = readFileSync(new URL('./resume.sh', import.meta.url), 'utf8');
+    assert.match(resume, /<!-- factory:paused \(\\\{\[\^<>\]\*\\\}\) -->/, 'wznowienie czyta zapis wstrzymanego etapu');
+    assert.match(resume, /--remove-label factory:paused/);
+    assert.match(resume, /\^\(plan\|implement\|review\)\$/, 'wejście sprawdzone, zanim trafi do workflow_dispatch');
     assert.match(workflows.journal!.text, /--label factory:stopped --state open[^\n]*> "\$RAW\/stopped\.json"/);
   });
 

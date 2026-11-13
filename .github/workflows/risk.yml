@@ -14,6 +14,11 @@ on:
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: { required: true }
 
+    outputs:
+      limited:
+        description: 'true, gdy oceniacz trafił na limit subskrypcji; recenzja czeka wtedy na reset, a werdyktu nie ma'
+        value: ${{ jobs.assess.outputs.limited }}
+
 permissions: {}
 
 jobs:
@@ -23,6 +28,9 @@ jobs:
     continue-on-error: true
     permissions:
       contents: read
+    outputs:
+      limited: ${{ steps.limit.outputs.limited }}
+      until: ${{ steps.limit.outputs.until }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -100,6 +108,11 @@ jobs:
         env:
           EXEC: ${{ steps.claude.outputs.execution_file }}
         run: |
+          # Limit subskrypcji: ponowna próba nic nie da, etap poczeka na reset (krok „Limit subskrypcji”).
+          if [ "$(node "$F/scripts/workflow/limit-cli.ts" limit --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" | sed -n 's/^limited=//p')" = true ]; then
+            echo "retry=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           # Awaria infrastruktury (np. pobieranie narzędzi akcji) albo błąd bez żadnej pracy: jedna ponowna próba.
           if node "$F/scripts/workflow/cli.ts" started --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}"; then
             echo "retry=false" >> "$GITHUB_OUTPUT"
@@ -112,6 +125,7 @@ jobs:
       - name: Oceniacz ryzyka (ponowna próba)
         id: claude_retry
         if: steps.started.outputs.retry == 'true'
+        continue-on-error: true   # limit po ponownej próbie rozpoznaje krok „Limit subskrypcji”
         uses: anthropics/claude-code-action@402b5b79551e3ce6614c179fbccbfdb79291cead # v1.0.269
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
@@ -125,8 +139,17 @@ jobs:
             --disallowedTools ${{ steps.data.outputs.denied }}
             --json-schema '${{ steps.data.outputs.schema }}'
 
+      - name: Limit subskrypcji
+        id: limit
+        if: steps.claude.outcome == 'failure'
+        env:
+          EXEC: ${{ steps.claude_retry.outputs.execution_file || steps.claude.outputs.execution_file }}
+        run: node "$F/scripts/workflow/limit-cli.ts" limit --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" >> "$GITHUB_OUTPUT"
+
       - name: Błąd sesji Claude
-        if: steps.claude.outcome == 'failure' && steps.started.outputs.retry != 'true'
+        if: >-
+          steps.limit.outputs.limited != 'true' && (
+            (steps.claude.outcome == 'failure' && steps.started.outputs.retry != 'true') || steps.claude_retry.outcome == 'failure')
         run: |
           echo "::error::Sesja Claude zakończyła się błędem po rozpoczęciu pracy; szczegóły w kroku zużycia."
           exit 1
@@ -142,6 +165,7 @@ jobs:
           node "$F/scripts/workflow/cli.ts" usage --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" --stage assess --out "usage/assess.json"
 
       - name: Sprawdzenie oceny
+        if: steps.limit.outputs.limited != 'true'
         env:
           OUTPUT: ${{ steps.claude_retry.outputs.structured_output || steps.claude.outputs.structured_output }}
         run: |
@@ -161,9 +185,43 @@ jobs:
           path: usage/
           if-no-files-found: ignore
 
+  # Limit subskrypcji Claude: etap czeka na reset zamiast blokady. Zapis jak przy /stop (factory:paused) i issue
+  # „Taśma czeka na limit subskrypcji”; pierwsze zdarzenie taśmy po resecie wznowi etap.
+  # Ocena ryzyka korzysta z artefaktów recenzji z tego samego przebiegu, więc wznawia się całą recenzję.
+  limit:
+    needs: assess
+    if: always() && needs.assess.outputs.limited == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Etap czeka na limit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STAGE: review
+          ISSUE: ''
+          PR: ${{ inputs.pr }}
+          NOTE: ''
+          UNTIL: ${{ needs.assess.outputs.until }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: bash .factory-src/scripts/workflow/limit-pause.sh
+
   rules:
     needs: assess
-    if: always()
+    if: always() && needs.assess.outputs.limited != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

@@ -10,6 +10,7 @@ on:
     inputs:
       trusted: { type: string, default: '' }
       workflow: { type: string, default: factory.yml }
+      factory_ref: { type: string, default: main, description: 'Wersja skryptów fabryki (wznowienie taśmy)' }
 
 permissions: {}
 
@@ -52,6 +53,14 @@ jobs:
           UNKNOWN: ${{ steps.parse.outputs.unknown }}
         run: |
           gh issue comment "$NUMBER" --body "Nie znam komendy \`/$UNKNOWN\`, więc nic nie zrobiłem. Komendy taśmy: \`/approve\`, \`/veto\`, \`/reject\`, \`/change <uwagi>\`, \`/split\`, \`/stop <powód>\`, \`/start\`."
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.parse.outputs.command == 'start'
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
 
       - name: Wykonanie
         if: steps.parse.outputs.command != ''
@@ -136,29 +145,10 @@ jobs:
                 gh issue comment "$NUMBER" --body "Taśma działa; kolejka sprawdza czekające zadania."
                 exit 0
               fi
-              for STOP in $STOPS; do gh issue close "$STOP" --comment "Taśma wznowiona komendą \`/start\` w #$NUMBER."; done
-              # Wstrzymane etapy: issue i PR z etykietą factory:paused, ostatni znacznik factory:paused od konta workflowów.
-              RESUMED=0
-              for T in $( { gh issue list --label factory:paused --state open --limit 100 --json number --jq '.[].number'
-                            gh pr list --label factory:paused --state open --limit 100 --json number --jq '.[].number'; } | sort -un); do
-                DATA=$(gh api --paginate "repos/$GH_REPO/issues/$T/comments" --jq '.[] | select(.user.login == "github-actions[bot]") | .body' \
-                  | sed -nE 's#.*<!-- factory:paused (\{[^<>]*\}) -->.*#\1#p' | tail -n 1)
-                [ -n "$DATA" ] || DATA='{}'
-                S=$(jq -r '.stage // ""' <<<"$DATA"); I=$(jq -r '.issue // ""' <<<"$DATA")
-                P=$(jq -r '.pr // ""' <<<"$DATA"); N=$(jq -r '.note // ""' <<<"$DATA")
-                gh issue edit "$T" --remove-label factory:paused >/dev/null 2>&1 || true
-                if ! [[ "$S" =~ ^(plan|implement|review)$ && "$I" =~ ^[0-9]*$ && "$P" =~ ^[0-9]*$ && "$N" =~ ^[A-Za-z0-9_-]*$ ]]; then
-                  echo "::warning::#$T: brak poprawnego zapisu wstrzymanego etapu; pomijam."
-                  continue
-                fi
-                ARGS=(-f stage="$S")
-                if [ -n "$I" ]; then ARGS+=(-f issue="$I"); fi
-                if [ -n "$P" ]; then ARGS+=(-f pr="$P"); fi
-                if [ -n "$N" ]; then ARGS+=(-f note="$N"); fi
-                gh workflow run "$WORKFLOW" --ref "$DEFAULT" "${ARGS[@]}"
-                RESUMED=$((RESUMED + 1))
-              done
-              queue
+              # Zamyka issue zatrzymania (/stop i limit subskrypcji), wznawia wstrzymane etapy i uruchamia kolejkę.
+              # shellcheck disable=SC2086
+              RESUMED=$(MESSAGE="Taśma wznowiona komendą \`/start\` w #$NUMBER." WORKFLOW="$WORKFLOW" \
+                bash .factory-src/scripts/workflow/resume.sh $STOPS)
               gh issue comment "$NUMBER" --body "▶️ Taśma wznowiona. Wstrzymane etapy, które ruszyły ponownie: $RESUMED; kolejka sprawdza czekające zadania."
               ;;
           esac
