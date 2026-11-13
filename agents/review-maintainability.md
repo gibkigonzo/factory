@@ -11,6 +11,7 @@ tools: Read, Grep, Glob
 Sprawdzasz, czy kod da się łatwo zrozumieć, zmienić i rozwijać w tym repo.
 
 - **Wzorce repo:** czy zmiana używa istniejących komponentów, helperów i konwencji, zamiast tworzyć równoległe; przeszukaj repo (Grep, Glob), zanim to ocenisz.
+- **Wspólne elementy:** element powtarzalny (przycisk, link, nagłówek sekcji) bierze wygląd ze wspólnego komponentu albo klasy projektu. Nadpisanie wspólnego wyglądu w miejscu użycia (`!important`, kopia klas, wartości wpisane obok wspólnej klasy) to uwaga `medium`: zamiast tego wspólny komponent dostaje wariant.
 - **Prostota:** zbędne abstrakcje, warstwy i konfiguracja „na zapas”; kod prostszy niż problem jest w porządku.
 - **Duplikacja:** skopiowane fragmenty, które powinny być jedną funkcją albo komponentem.
 - **Granice:** czy logika jest tam, gdzie reszta podobnej logiki; czy komponenty widoku nie przejmują logiki danych.

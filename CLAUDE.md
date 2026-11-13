@@ -107,6 +107,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Sesja z AI ustala reguły projektu, zanim taśma dostanie pierwsze zadanie. Wynik to konwencje w `CLAUDE.md` projektu i `factory.yml`.
 - Fabryka jest generyczna, więc nie ma stałej listy pytań. Agent dobiera je do typu projektu, np. dla frontendu podejście do stylów i tokeny wyglądu, dla gry nazwy i strukturę scen.
 - Lekcja z pilota: bez spisanych konwencji agent sam wybrał styl kodu, a recenzent nie miał czego pilnować.
+- Dla frontendu konwencje obejmują też wspólne elementy: które są wspólne, gdzie leżą i gdzie je widać (strona wzorców, a przy większym projekcie np. Storybook), oraz semantykę HTML (13 listopada 2026).
 
 ### Kolejka zadań (8 listopada 2026)
 
@@ -139,6 +140,13 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Wzorzec jest celem także wtedy, gdy kryteria sprawdzają tylko wymiary i liczbę elementów. Różnica widoczna od razu to `high` u `ux-visual`, a implementer poprawia ją przed oddaniem zmiany. „Agent może zmienić” w specu dotyczy tylko tego, czego wzorzec nie pokazuje. Lekcja z pilota: recenzent opisał różnice trafnie, ale nazwał je „stylistycznymi” i zatwierdził.
 - Recenzent wyglądu dostaje uwagi, na które odpowiadała runda, i nie żąda ich odwrotności. Sąsiednie grubości czcionki i podobny krój to najwyżej `medium`. Lekcja z pilota: recenzent kolejnej rundy uznał za „za gruby” nagłówek pogrubiony na prośbę poprzedniej i zablokował PR na High (12 listopada 2026).
 - Później, gdy projekt tego potrzebuje: zrzuty pojedynczych komponentów.
+
+### Wspólne elementy (13 listopada 2026)
+
+- O wspólnych elementach decyduje właściciel: ustala je w konwencjach projektu, a nowy wspólny komponent albo wariant widzi w planie jako założenie „Wspólny element: …”.
+- Planer i implementer biorą wspólne elementy z komponentów projektu. Gdy element nie pasuje, wspólny komponent dostaje wariant zamiast nadpisania wyglądu w miejscu użycia; `maintainability` zgłasza takie nadpisanie jako `medium`.
+- Element, który wygląda jak przycisk albo link, jest `button` albo `a`, także gdy na razie nic nie robi. Pilnuje tego `accessibility-web`, którą projekt WWW włącza w `reviewers.extra`.
+- Lekcja z pilota: agent zrobił przycisk ze `span` ze wspólną klasą nadpisaną przez `!important`. Nikt tego nie zgłosił, bo pilot nie miał recenzenta dostępności, a konwencja mówiła tylko o wyglądzie.
 
 ## Otwarte pytania
 

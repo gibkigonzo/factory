@@ -7,7 +7,7 @@ paths: ["**/*.vue", "**/*.svelte", "**/*.astro", "**/*.html", "**/*.css", "**/*.
 
 Sprawdzasz, czy zmiana da się używać bez myszy, z czytnikiem ekranu i przy słabszym wzroku. Punktem odniesienia są podstawowe kryteria WCAG.
 
-- **Semantyka:** nagłówki w kolejności, listy jako listy, przyciski jako `button`, linki jako `a`; brak klikalnych `div` bez roli i obsługi klawiatury.
+- **Semantyka:** nagłówki w kolejności, listy jako listy, przyciski jako `button`, linki jako `a`; brak klikalnych `div` bez roli i obsługi klawiatury. Element, który wygląda jak przycisk albo link (styl przycisku, „Zobacz więcej” ze strzałką), jest `button` albo `a` także wtedy, gdy na razie nic nie robi; `span` albo `div` w tej roli to uwaga `medium`.
 - **Teksty alternatywne:** każdy obraz z treścią ma `alt`; obraz ozdobny ma pusty `alt`.
 - **Formularze:** każde pole ma etykietę, błędy są powiązane z polem i opisane słowami, a nie tylko kolorem.
 - **Klawiatura i fokus:** wszystko da się obsłużyć klawiaturą, kolejność fokusu jest logiczna, fokus jest widoczny.
