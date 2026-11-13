@@ -22,7 +22,7 @@ Fabryka oprogramowania oparta na Claude Code i GitHub Actions. Zamienia rozmowę
 - automatyczny merge (Etap 1): wymaga rulesetu na `main` i aplikacji GitHub fabryki; w repo prywatnym ruleset wymaga GitHub Pro;
 - podgląd wdrożenia w PR (`evidence.preview_deploy`), etykiety kierujące do człowieka (`human_gates`), agenci cykliczni (`schedules`): pola są w kontrakcie, ale taśma ich jeszcze nie używa;
 - presety i CI dla Godota, hooki pluginu;
-- sesja `factory-init`, która ustala konwencje projektu. Na razie konwencje (np. podejście do stylów, język nazw w kodzie) zapisujesz sam w `CLAUDE.md` projektu. Bez nich agent wybierze styl sam, a recenzent nie będzie miał czego pilnować.
+- sesja `factory-init`, która ustala konwencje projektu. Na razie konwencje (np. podejście do stylów, język nazw w kodzie, wspólne komponenty) zapisujesz sam w `CLAUDE.md` projektu. Bez nich agent wybierze styl sam, a recenzent nie będzie miał czego pilnować.
 
 ## Szybki start
 
@@ -59,7 +59,7 @@ npm ci
 npm run validate -- ścieżka/do/factory.yml
 ```
 
-Konwencje kodu projektu zapisz w jego `CLAUDE.md`. Czytają je planer, implementer i recenzenci.
+Konwencje kodu projektu zapisz w jego `CLAUDE.md`. Czytają je planer, implementer i recenzenci. W projekcie z interfejsem spisz też wspólne elementy (np. przycisk, link, nagłówek sekcji): gdzie leżą i gdzie je widać, np. na stronie wzorców. Bez tego agent stylizuje element w miejscu użycia, a recenzent nie ma czego pilnować.
 
 ### 4. Workflow taśmy
 
