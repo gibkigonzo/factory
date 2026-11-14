@@ -272,7 +272,6 @@ describe('teksty publikowane przez workflow', () => {
     const assessment: Assessment = {
       level: 'High',
       split: false,
-      notes: [],
       rules: [{ rule: 'zones', name: 'Strefy', level: 'High', reasons: ['src/lib/a.ts: strefa shared'] }],
       gates: { status: 'pass', findings: [] },
     };

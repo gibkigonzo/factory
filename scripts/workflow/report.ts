@@ -25,7 +25,6 @@ export function renderReport(assessment: Assessment, panel?: PanelSummary): stri
     lines.push(`${index + 1}. **${rule.name}: ${rule.level}**`);
     lines.push(...rule.reasons.map((reason) => `   - ${reason}`));
   });
-  lines.push(...assessment.notes.map((note) => `\n_${note}_`));
   if (assessment.gates.findings.length > 0) {
     lines.push('', '**Bramki jakości:**');
     lines.push(...assessment.gates.findings.map((f) => `- ${f.status === 'block' ? 'blokada' : 'ostrzeżenie'}: \`${f.path}\` – ${f.message}`));

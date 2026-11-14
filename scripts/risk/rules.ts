@@ -2,7 +2,7 @@
 
 import type { FactoryConfig, Level } from '../config/spec.ts';
 import { matchesAny } from './glob.ts';
-import { maxLevel, rank, raise } from './types.ts';
+import { maxLevel, rank } from './types.ts';
 import type { ChangedFile, Evidence, RuleResult } from './types.ts';
 
 const MAX_LISTED = 10;
@@ -75,9 +75,8 @@ export function testsRule(files: readonly ChangedFile[], repoFiles: readonly str
     untested.set(zone, [...(untested.get(zone) ?? []), path]);
   }
   if (untested.size === 0) return { rule: 'tests', name, level: 'Low', reasons: ['zmieniony kod jest w strefach z testami'] };
-  const raised = [...untested.keys()].map((zone) => raise(config.risk.zone_levels[zone]!));
   const reasons = [...untested].map(([zone, paths]) => `strefa ${zone} nie ma testów, więc nie ma Low: ${listed(paths).join(', ')}`);
-  return { rule: 'tests', name, level: maxLevel(raised), reasons };
+  return { rule: 'tests', name, level: 'High', reasons };
 }
 
 export function excludedFromSize(path: string, config: FactoryConfig): boolean {

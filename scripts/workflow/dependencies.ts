@@ -29,7 +29,3 @@ export function installCommands(dependencies: readonly Dependency[], config: Pic
   }
   return { ok: true, commands };
 }
-
-export function describeDependencies(dependencies: readonly Dependency[]): string {
-  return dependencies.map((d) => `\`${d.name}@${d.version}\`${d.dev ? ' (dev)' : ''}`).join(', ');
-}

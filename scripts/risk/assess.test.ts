@@ -26,7 +26,6 @@ describe('ocena zmiany', () => {
     const result = assess(input([changed('src/lib/a.ts')], { repoFiles: ['src/lib/a.test.ts'], evidence: fullEvidence(config) }), config);
     assert.equal(result.level, 'High');
     assert.deepEqual(result.rules.map((r) => r.level), ['High', 'Low', 'Low', 'Low', 'Low']);
-    assert.deepEqual(result.notes, []);
   });
 
   it('za duża zmiana dostaje znacznik podziału', () => {

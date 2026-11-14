@@ -32,7 +32,7 @@ function legacyBody(record: object): string {
 }
 
 function assessment(overrides: Partial<Assessment> = {}): Assessment {
-  return { level: 'Low', split: false, rules: [], notes: [], gates: { status: 'pass', findings: [] }, ...overrides };
+  return { level: 'Low', split: false, rules: [], gates: { status: 'pass', findings: [] }, ...overrides };
 }
 
 function verdict(action: Action, confidence = 0.9, reaction?: 'up' | 'down'): NonNullable<PrRecord['shadow']> {
