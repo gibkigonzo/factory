@@ -58,6 +58,7 @@ function options(args: string[]) {
       agent: { type: 'string' },
       criteria: { type: 'string' },
       change: { type: 'boolean', default: false },
+      conflicts: { type: 'string' },
       out: { type: 'string' },
       skip: { type: 'string', default: '' },
       rounds: { type: 'string', default: '0' },
@@ -100,7 +101,7 @@ function prompt(stage: string | undefined, v: Values): string {
   if (stage === 'plan') return planPrompt(ctx);
   if (stage === 'implement') {
     const cfg = optionalJson(join(ctx.work, 'config.json')) as FactoryConfig | undefined;
-    return implementPrompt({ ...ctx, change: v.change, screenshots: cfg?.evidence?.screenshots });
+    return implementPrompt({ ...ctx, change: v.change, screenshots: cfg?.evidence?.screenshots, conflicts: v.conflicts });
   }
   if (stage === 'review') {
     return reviewPrompt({ ...ctx, agent: required(v.agent, '--agent'), criteria: v.criteria, previousRound: v.previous });

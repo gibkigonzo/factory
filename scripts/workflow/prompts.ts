@@ -36,7 +36,7 @@ export function planPrompt(ctx: PromptContext): string {
   ].join('\n\n');
 }
 
-export function implementPrompt(ctx: PromptContext & { change?: boolean; screenshots?: string }): string {
+export function implementPrompt(ctx: PromptContext & { change?: boolean; screenshots?: string; conflicts?: string }): string {
   const lines = [
     `Issue #${ctx.issue}: \`${ctx.work}/issue.md\`.`,
     `Plan planera (JSON): \`${ctx.work}/plan.json\`.`,
@@ -53,7 +53,13 @@ export function implementPrompt(ctx: PromptContext & { change?: boolean; screens
   // uznaje ją za „już w main” i oddaje rundę bez zmian, pomijając uwagę właściciela (lekcja z pilota).
   if (ctx.change) {
     lines.unshift(
-      `To runda poprawek otwartego PR. Katalog roboczy to gałąź tego PR z poprzednią wersją Twojej zmiany, nie gałąź główna, więc praca z issue już tu jest. Zadanie tej rundy to uwagi z \`${ctx.work}/change.md\`: przeczytaj je najpierw. Komentarz zaczynający się od \`/change\` to polecenie właściciela, a komentarz „Runda poprawek” to uwagi recenzentów i CI. Issue i plan są tylko kontekstem.`,
+      `To runda poprawek otwartego PR. Katalog roboczy to gałąź tego PR z poprzednią wersją Twojej zmiany, nie gałąź główna, więc praca z issue już tu jest. Zadanie tej rundy to uwagi z \`${ctx.work}/change.md\`: przeczytaj je najpierw. Komentarz zaczynający się od \`/change\` to polecenie właściciela, komentarz „Runda poprawek” to uwagi recenzentów i CI, a komentarz „Konflikt z gałęzią główną” to zadanie rozwiązania konfliktu. Issue i plan są tylko kontekstem.`,
+    );
+  }
+  // Workflow scalił gałąź główną z gałęzią PR i zostawił konflikty: bez ich rozwiązania nie ma publikacji.
+  if (ctx.conflicts) {
+    lines.unshift(
+      `Workflow scalił gałąź główną z gałęzią tego PR i zostały konflikty w plikach z listy \`${ctx.conflicts}\`. Najpierw je rozwiąż: zachowaj zmiany z obu stron i usuń znaczniki konfliktu (\`<<<<<<<\`, \`=======\`, \`>>>>>>>\`). Plik binarny, np. obraz, nie ma znaczników i zostaje w wersji z tego PR: gdy powinien się zmienić, odtwórz go komendą projektu, a gdy jest zbędny, usuń go. Gdy konfliktu nie da się rozwiązać bez decyzji właściciela, zakończ ze statusem \`blocked\` i nazwij pliki w \`blocker\`.`,
     );
   }
   return [body('skills/implementer/SKILL.md'), task(lines)].join('\n\n');

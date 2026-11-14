@@ -7,7 +7,7 @@ import { describe, it } from 'node:test';
 import { parse } from 'yaml';
 import { ROOT } from '../agents/files.ts';
 
-type Step = { uses?: string; run?: string; with?: Record<string, unknown>; env?: Record<string, unknown> };
+type Step = { name?: string; uses?: string; run?: string; with?: Record<string, unknown>; env?: Record<string, unknown> };
 type Job = { permissions?: Record<string, string>; steps?: Step[]; uses?: string; with?: Record<string, unknown> };
 type Workflow = { permissions?: unknown; on: unknown; jobs: Record<string, Job> };
 
@@ -148,7 +148,8 @@ describe('workflowy fabryki', () => {
     assert.ok(steps.indexOf(deps) < steps.indexOf(claude));
     assert.match(String((data.jobs.publish as { if?: string }).if), /outputs\.status == 'done'/);
     assert.ok(data.jobs.blocked && !usesClaude(data.jobs.blocked));
-    assert.match(text, /git diff --cached --name-only --no-renames > "\$W\/paths\.txt"/, 'git mv pliku chronionego nie omija sprawdzenia');
+    assert.match(text, /git diff --cached --name-only --no-renames "\$FROM" > "\$W\/paths\.txt"/, 'git mv pliku chronionego nie omija sprawdzenia');
+    assert.match(text, /FROM=\$\{BASELINE:-HEAD\}/, 'patch od wyniku scalenia gałęzi głównej, a bez niego od HEAD');
     assert.match(text, /--add-label blocked/);
     const env = steps.findIndex((step) => step.run?.includes('FACTORY_SCREENSHOTS=$GITHUB_WORKSPACE/.factory/work/screenshots'));
     assert.ok(env >= 0 && env < steps.indexOf(claude), 'katalog zrzutów ustawiony przed implementerem, poza patchem');
@@ -163,7 +164,11 @@ describe('workflowy fabryki', () => {
     const download = publish.steps!.find((step) => step.uses?.startsWith('actions/download-artifact'))!;
     assert.match(String(download.if), /outputs\.empty == 'false'/, 'bez patcha nie ma artefaktu');
     const run = publish.steps!.find((step) => step.run?.includes('pr-body'))!.run!;
-    assert.match(run, /^if \[ "\$EMPTY" != true \]; then\n(?: .*\n)*  git apply --index .*\n(?: .*\n)*fi\n/m, 'commit tylko z patchem');
+    assert.match(
+      run,
+      /^if \[ "\$EMPTY" != true \] \|\| \[ -n "\$MERGE_SHA" \]; then\n(?: .*\n)*  bash "\$F\/scripts\/workflow\/apply-change\.sh" "\$PATCH" "\$MERGE_SHA"\n(?: .*\n)*fi\n/m,
+      'commit tylko z patchem albo scaleniem gałęzi głównej',
+    );
     assert.match(run, /-f stage=review -f pr="\$PR"/);
   });
 
@@ -201,13 +206,35 @@ describe('workflowy fabryki', () => {
 
   it('rundy po /change właściciela nie liczą się do limitu: etykieta factory:change-N, a pętla i ryzyko liczą rundy automatyczne', () => {
     const implement = workflows.implement!.text;
-    assert.match(implement, /if head -n 1 "\$W\/change\.md" \| grep -qF '<!-- factory:round -->'; then KIND=loop; else KIND=change; fi/);
+    assert.match(implement, /'<!-- factory:round -->'\*\) KIND=loop ;;\n\s*'<!-- factory:conflict -->'\*\) KIND=conflict ;;\n\s*\*\) KIND=change ;;/);
     assert.match(implement, /if \[ "\$KIND" = change \]; then[\s\S]*--add-label "factory:change-\$NEXT"/);
+    assert.match(implement, /elif \[ "\$KIND" = conflict \]; then[\s\S]*--add-label "factory:conflict-\$NEXT"/);
     const review = workflows.review!.text;
     assert.match(review, /AUTO=\$\(\(ROUND - CHANGES\)\)/);
     assert.match(review, /echo "final=\$\(\[ "\$AUTO" -ge "\$MAX" \]/);
     assert.match(review, /cli\.ts" loop .*--round "\$\{AUTO:-0\}"/);
-    assert.match(workflows.risk!.text, /- \(\[\.labels\[\]\.name \| select\(startswith\("factory:change-"\)\)\] \| length\)/);
+    assert.match(workflows.risk!.text, /- \(\[\.labels\[\]\.name \| select\(startswith\("factory:change-"\) or startswith\("factory:conflict-"\)\)\] \| length\)/);
+    assert.match(review, /select\(startswith\("factory:change-"\) or startswith\("factory:conflict-"\)\)/);
+  });
+
+  it('konflikty z gałęzią główną: runda scala ją przed implementerem, zapis robi commit scalenia, kolejka wykrywa konflikt', () => {
+    const { text, data } = workflows.implement!;
+    const steps = data.jobs.implement!.steps ?? [];
+    const sync = steps.find((step) => step.run?.includes('sync-base.sh')) as Step & { if?: string; id?: string };
+    assert.equal(sync.id, 'sync');
+    assert.match(String(sync.if), /inputs\.pr != ''/, 'tylko w rundzie poprawek otwartego PR');
+    const setup = steps.findIndex((step) => step.name === 'Komenda setup z factory.yml');
+    const claude = steps.findIndex((step) => step.uses?.startsWith(CLAUDE));
+    assert.ok(steps.indexOf(sync) < setup && setup < claude, 'scalenie przed setup i przed implementerem');
+    assert.match(text, /merge_sha: \$\{\{ steps\.sync\.outputs\.sha \}\}/);
+    assert.match(text, /grep -IlE '\^\(<<<<<<<\|>>>>>>>\)\( \|\$\)'/, 'znacznik konfliktu blokuje publikację');
+    const publish = data.jobs.publish as { steps?: (Step & { with?: Record<string, unknown> })[] };
+    const checkout = publish.steps!.find((step) => step.uses?.startsWith('actions/checkout') && step.with?.ref !== undefined)!;
+    assert.equal(checkout.with!['fetch-depth'], 0, 'scalenie w jobie zapisu potrzebuje historii');
+    assert.ok(!usesClaude(data.jobs.publish!), 'commit scalenia bez Claude');
+    const queue = workflows.queue!.data.jobs.release!.steps ?? [];
+    const conflicts = queue.find((step) => step.run?.includes('conflicts.sh')) as Step & { 'continue-on-error'?: boolean };
+    assert.ok(conflicts && conflicts['continue-on-error'], 'błąd wykrywania nie zatrzymuje kolejki');
   });
 
   it('recenzent wyglądu dostaje uwagi, na które odpowiadała runda', () => {

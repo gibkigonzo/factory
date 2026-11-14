@@ -1,5 +1,6 @@
 # Kolejka zadań: uruchamia implementera dla issue z etykietą `queued`, które mieszczą się w limicie WIP
-# i nie dzielą plików z zadaniami w toku. Projekt wywołuje ją po zamknięciu PR fabryki i raz dziennie.
+# i nie dzielą plików z zadaniami w toku, a dla otwartych PR fabryki z konfliktem rundę jego rozwiązania.
+# Projekt wywołuje ją po zamknięciu PR fabryki i raz dziennie.
 # Kodu z PR nie pobiera: czyta factory.yml z gałęzi głównej i dane z API.
 name: factory-queue
 
@@ -64,3 +65,14 @@ jobs:
           done
           WAITING=$(jq '[.[] | select(any(.labels[]; .name == "queued"))] | length' "$RAW/issues.json")
           echo "Czekało zadań: $WAITING. Rusza: $(tr '\n' ' ' <<<"${STARTED:-nic}")" >> "$GITHUB_STEP_SUMMARY"
+
+      # Scalony PR fabryki mógł wprowadzić konflikt w innych otwartych PR. Taśma rozwiązuje go rundą implementera.
+      - name: Konflikty otwartych PR z gałęzią główną
+        continue-on-error: true   # błąd tu nie zatrzymuje kolejki; sprawdzi to dzienny przegląd
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          WORKFLOW: ${{ inputs.workflow }}
+        run: |
+          N=$(bash "$F/scripts/workflow/conflicts.sh")
+          echo "Rundy rozwiązania konfliktu: $N" >> "$GITHUB_STEP_SUMMARY"

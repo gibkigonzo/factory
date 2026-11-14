@@ -111,8 +111,9 @@ jobs:
         run: |
           LABELS=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json labels)
           ROUND=$(jq '[.labels[].name | select(startswith("factory:round-")) | ltrimstr("factory:round-") | tonumber] | max // 0' <<<"$LABELS")
-          # Rundy po /change właściciela (etykiety factory:change-N) nie liczą się do limitu automatycznych rund.
-          CHANGES=$(jq '[.labels[].name | select(startswith("factory:change-"))] | length' <<<"$LABELS")
+          # Rundy po /change właściciela i rundy konfliktu z gałęzią główną (etykiety factory:change-N
+          # i factory:conflict-N) nie liczą się do limitu automatycznych rund.
+          CHANGES=$(jq '[.labels[].name | select(startswith("factory:change-") or startswith("factory:conflict-"))] | length' <<<"$LABELS")
           AUTO=$((ROUND - CHANGES))
           if [ "$AUTO" -lt 0 ]; then AUTO=0; fi
           MAX=$(jq .risk.max_review_rounds "$W/config.json")
