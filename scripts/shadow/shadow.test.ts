@@ -390,7 +390,7 @@ describe('metryki i Bramka 1', () => {
     assert.equal(m.agreement, undefined);
     assert.equal(m.avgRounds, undefined);
     assert.equal(m.medianHoursToMerge, undefined);
-    assert.deepEqual(m.gate, { passed: false, missing: ['brakuje 20 ocenionych PR (0 z 20)'] });
+    assert.deepEqual(m.gate, { passed: false, missing: ['brakuje 20 ocenionych PR (0 z 20)', 'trafne Low: 0, potrzeba co najmniej 8'] });
   });
 
   it('bramka przechodzi przy dość ocenach, wysokiej zgodności i bez fałszywych Low', () => {
@@ -401,6 +401,21 @@ describe('metryki i Bramka 1', () => {
     assert.equal(m.gate.passed, false);
     assert.equal(m.agreement, 0.9, 'zgodność na progu wystarcza');
     assert.deepEqual(m.gate.missing, ['fałszywe Low: 1 (dozwolone 0)']);
+  });
+
+  it('Bramka 1 wymaga co najmniej min_low trafnych Low w oknie, bo sama zgodność z eskalacjami nie wystarcza', () => {
+    const escalations = (n: number) => Array.from({ length: n }, () => pr({ shadow: verdict('escalate', 0.9, 'up') }));
+    const lows = (n: number) => Array.from({ length: n }, () => pr({ shadow: verdict('merge', 0.9, 'up') }));
+    const onlyEscalations = computeMetrics(escalations(20), config);
+    assert.equal(onlyEscalations.window.agreement, 1);
+    assert.deepEqual(onlyEscalations.gate.missing, ['trafne Low: 0, potrzeba co najmniej 8']);
+    assert.deepEqual(computeMetrics([...escalations(13), ...lows(7)], config).gate.missing, ['trafne Low: 7, potrzeba co najmniej 8']);
+    assert.deepEqual(computeMetrics([...escalations(12), ...lows(8)], config).gate, { passed: true, missing: [] });
+    // Low zamknięte bez merge'u albo cofnięte nie jest trafne, nawet z 👍.
+    const reverted = pr({ reverted: true, shadow: verdict('merge', 0.9, 'up') });
+    const m = computeMetrics([...escalations(11), ...lows(8), reverted], config);
+    assert.equal(m.window.low, 8);
+    assert.deepEqual(m.window.falseLow, [reverted.number]);
   });
 
   it('Bramka 1 liczy okno ostatnich gate_prs PR: stary błąd wypada z okna, nowy w nim zostaje', () => {
@@ -447,7 +462,7 @@ describe('dziennik', () => {
       pr({ number: 41, title: 'Menu', state: 'open' }),
     ];
     const body = renderJournal(records, config, '2026-11-07 10:00 UTC');
-    assert.match(body, /^\*\*Bramka 1: jeszcze nie\.\*\* brakuje 19 ocenionych PR \(1 z 20\); zgodność 0%, potrzeba co najmniej 90%; fałszywe Low: 1 \(dozwolone 0\)\./);
+    assert.match(body, /^\*\*Bramka 1: jeszcze nie\.\*\* brakuje 19 ocenionych PR \(1 z 20\); zgodność 0%, potrzeba co najmniej 90%; fałszywe Low: 1 \(dozwolone 0\); trafne Low: 0, potrzeba co najmniej 8\./);
     assert.match(body, /- Fałszywe Low: 1 \(#42\)/);
     assert.match(body, /- #42 Przycisk · Low, scaliłaby · 👎 · zamknięty bez merge'u · \*\*fałszywe Low\*\*/);
     assert.match(body, /- #41 Menu · bez werdyktu · otwarty/);
