@@ -1,6 +1,5 @@
-// Reguła 5: dowody. Low wymaga kompletu dowodów; braki dają Medium. Nierozstrzygnięta uwaga high lub critical,
-// osłabienie testów (usunięty plik testów przy zachowanym kodzie, ubytek asercji), niskie pokrycie zmienionych
-// linii i uwagi nierozstrzygnięte po limicie rund poprawek dają High.
+// Reguła 5: dowody. Low wymaga kompletu dowodów; każdy brak daje High. Powody osłabienia testów i uwag
+// nierozstrzygniętych po limicie rund są na początku listy, bo są najpoważniejsze.
 
 import type { FactoryConfig, Level } from '../config/spec.ts';
 import { matchesAny } from './glob.ts';
@@ -14,23 +13,20 @@ export function evidenceRule(
 ): RuleResult {
   const sorted = [...files].sort((a, b) => a.path.localeCompare(b.path));
   const tests = testProblems(sorted, config);
-  const high = [
+  const reasons = [
     ...seriousFindings(evidence),
-    ...tests.high,
+    ...tests.weakened,
     ...coverageProblems(evidence, config),
     ...unresolved(evidence, config),
-  ];
-  const medium = [
     ...ciProblems(evidence),
     ...acceptanceProblems(evidence),
     ...regressionProblems(evidence),
     ...reviewProblems(evidence, config, required),
     ...citationProblems(sorted, evidence),
-    ...tests.medium,
+    ...tests.moved,
     ...newMarkers(sorted, config),
   ];
-  const level: Level = high.length > 0 ? 'High' : medium.length > 0 ? 'Medium' : 'Low';
-  const reasons = [...high.map((p) => `High: ${p}`), ...medium];
+  const level: Level = reasons.length > 0 ? 'High' : 'Low';
   return { rule: 'evidence', name: 'Dowody', level, reasons: reasons.length > 0 ? reasons : ['komplet dowodów dla Low'] };
 }
 
@@ -58,7 +54,7 @@ export function effectiveVerdict(review: Review): Review['verdict'] {
   return review.findings.some((f) => SERIOUS.includes(f.severity)) ? 'request_changes' : review.verdict;
 }
 
-/** Recenzenci, którzy się różnią, albo pewność poniżej progu dają Medium. */
+/** Recenzenci, którzy się różnią, albo pewność poniżej progu nie pozwalają na Low. */
 function reviewProblems(evidence: Evidence, config: FactoryConfig, required?: readonly string[]): string[] {
   const perspectives = [...new Set(required ?? [...config.reviewers.perspectives, ...config.reviewers.extra])];
   const minimum = config.risk.min_confidence;
@@ -135,11 +131,11 @@ export function stem(path: string): string {
 }
 
 /**
- * Usunięty plik testów daje High, chyba że ta sama zmiana usuwa też testowany kod (Medium) albo dodaje testy
- * z co najmniej taką liczbą asercji, jaką miały usunięte (Medium). Drugi przypadek to zwykle przeniesienie
- * z przepisaniem, którego git nie rozpozna jako zmiany nazwy. Medium zostawia człowiekowi czas na weto.
+ * Usunięty plik testów albo ubytek asercji to osłabienie testów. Usunięcie testów razem z testowanym kodem albo
+ * przy nowych testach z co najmniej taką liczbą asercji (zwykle przeniesienie z przepisaniem, którego git nie
+ * rozpozna jako zmiany nazwy) opisujemy łagodniej. Każdy z tych przypadków odbiera zmianie Low.
  */
-function testProblems(files: readonly ChangedFile[], config: FactoryConfig): { high: string[]; medium: string[] } {
+function testProblems(files: readonly ChangedFile[], config: FactoryConfig): { weakened: string[]; moved: string[] } {
   const isTest = (path: string) => matchesAny(path, config.files.tests);
   const deletedCode = new Set(files.filter((f) => f.status === 'deleted' && !isTest(f.path)).map((f) => stem(f.path)));
   const tests = files.filter((f) => isTest(f.path));
@@ -148,23 +144,23 @@ function testProblems(files: readonly ChangedFile[], config: FactoryConfig): { h
   const addedTests = tests.filter((f) => f.status === 'added');
   const addedAssertions = addedTests.reduce((sum, f) => sum + assertions(f.addedLines), 0);
   const replaced = addedTests.length > 0 && addedAssertions >= removedAssertions;
-  const high: string[] = [];
-  const medium: string[] = [];
+  const weakened: string[] = [];
+  const moved: string[] = [];
   for (const file of tests) {
     if (file.status === 'deleted') {
-      if (deletedCode.has(stem(file.path))) medium.push(`usunięty plik testów razem z testowanym kodem: ${file.path}`);
+      if (deletedCode.has(stem(file.path))) moved.push(`usunięty plik testów razem z testowanym kodem: ${file.path}`);
       else if (replaced) {
-        medium.push(`usunięty plik testów, ale zmiana dodaje testy z co najmniej tyloma asercjami (${addedAssertions} ≥ ${removedAssertions}): ${file.path}`);
-      } else high.push(`usunięty plik testów, a testowany kod został: ${file.path}`);
+        moved.push(`usunięty plik testów, ale zmiana dodaje testy z co najmniej tyloma asercjami (${addedAssertions} ≥ ${removedAssertions}): ${file.path}`);
+      } else weakened.push(`usunięty plik testów, a testowany kod został: ${file.path}`);
       continue;
     }
     const removed = -config.assertion_markers.reduce((sum, marker) => sum + netAdded(file, marker), 0);
-    if (removed > 0) high.push(`ubyło asercji w ${file.path}: ${removed}`);
+    if (removed > 0) weakened.push(`ubyło asercji w ${file.path}: ${removed}`);
   }
-  return { high, medium };
+  return { weakened, moved };
 }
 
-/** Nowe wyłączenie reguły lub testu w kodzie daje Medium i wymaga uzasadnienia. */
+/** Nowe wyłączenie reguły lub testu w kodzie odbiera zmianie Low; decyduje właściciel. */
 function newMarkers(files: readonly ChangedFile[], config: FactoryConfig): string[] {
   return files
     .filter((file) => matchesAny(file.path, config.files.source))

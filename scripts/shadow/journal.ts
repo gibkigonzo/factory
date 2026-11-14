@@ -19,10 +19,10 @@ function groupLine(label: string, group: Group): string {
 function prLine(record: PrRecord): string {
   const parts = [`#${record.number} ${record.title}`];
   if (record.shadow) {
-    const { level, action } = record.shadow.record;
-    const reaction =
-      record.shadow.reaction === 'up' ? '👍' : record.shadow.reaction === 'down' ? `👎${record.shadow.implied === 'change' ? ' (po /change)' : ''}` : 'bez oceny';
-    parts.push(`${level}, ${ACTION_SHORT[action]}`, reaction);
+    const { level, action, recalculated } = record.shadow.record;
+    const implied = record.shadow.implied === 'change' ? ' (po /change)' : '';
+    const reaction = record.shadow.reaction === 'up' ? `👍${implied}` : record.shadow.reaction === 'down' ? `👎${implied}` : 'bez oceny';
+    parts.push(`${level}${recalculated ? ` (było ${recalculated})` : ''}, ${ACTION_SHORT[action]}`, reaction);
   } else {
     parts.push('bez werdyktu');
   }

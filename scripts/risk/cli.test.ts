@@ -47,8 +47,8 @@ describe('risk-rules.ts na repo git', () => {
     assert.equal(result.status, 0, result.stderr);
     const output = JSON.parse(result.stdout);
     assert.equal(output.config, 'factory.yml (baza)');
-    assert.deepEqual(output.rules.map((r: { level: string }) => r.level), ['Low', 'Medium', 'Low', 'Low', 'Medium']);
-    assert.equal(output.level, 'Medium');
+    assert.deepEqual(output.rules.map((r: { level: string }) => r.level), ['Low', 'High', 'Low', 'Low', 'High']);
+    assert.equal(output.level, 'High');
   });
 
   it('z kompletem dowodów zmiana komponentu jest Low', () => {

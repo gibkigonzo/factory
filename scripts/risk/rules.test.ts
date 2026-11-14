@@ -7,35 +7,35 @@ import { behaviorRule, sizeRule, testsRule, zoneOf, zonesRule } from './rules.ts
 const config = configWith();
 
 describe('reguła 1: strefy', () => {
-  it('zwykły kod to Low, logika współdzielona Medium', () => {
+  it('zwykły kod to Low, logika współdzielona High', () => {
     assert.equal(zonesRule([changed('src/components/Button.vue')], config).level, 'Low');
-    assert.equal(zonesRule([changed('src/lib/api.ts')], config).level, 'Medium');
+    assert.equal(zonesRule([changed('src/lib/api.ts')], config).level, 'High');
   });
 
-  it('preset nuxt: komponenty i strony Low, serwer i composables Medium, middleware High', () => {
+  it('preset nuxt: komponenty i strony Low, serwer, composables i middleware High', () => {
     const nuxt = loadConfig('project: x\nextends: [base, typescript, web, nuxt]\ncommands: { test: t, build: b }\n', 'factory.yml');
     assert.ok(nuxt.ok, nuxt.ok ? '' : nuxt.errors.join('\n'));
     const level = (path: string) => zoneOf(path, nuxt.config).level;
     assert.equal(level('app/components/SiteHeader.vue'), 'Low');
     assert.equal(level('app/pages/index.vue'), 'Low');
-    assert.equal(level('app/composables/useCart.ts'), 'Medium');
-    assert.equal(level('app/app.vue'), 'Medium');
-    assert.equal(level('server/api/products.get.ts'), 'Medium');
-    assert.equal(level('nuxt.config.ts'), 'Medium');
+    assert.equal(level('app/composables/useCart.ts'), 'High');
+    assert.equal(level('app/app.vue'), 'High');
+    assert.equal(level('server/api/products.get.ts'), 'High');
+    assert.equal(level('nuxt.config.ts'), 'High');
     assert.equal(level('app/middleware/auth.ts'), 'High');
     assert.equal(level('server/middleware/log.ts'), 'High');
   });
 
-  it('plik testów spoza mapy stref liczy się jak code, inna ścieżka spoza mapy dostaje Medium', () => {
+  it('plik testów spoza mapy stref liczy się jak code, inna ścieżka spoza mapy dostaje High', () => {
     const result = zonesRule([changed('e2e/header.spec.ts'), changed('tests/naming.test.ts')], config);
     assert.equal(result.level, 'Low');
     assert.deepEqual(result.reasons, ['e2e/header.spec.ts: strefa code', 'tests/naming.test.ts: strefa code']);
-    assert.equal(zonesRule([changed('e2e/header.spec.ts'), changed('scripts/x.sh')], config).level, 'Medium');
+    assert.equal(zonesRule([changed('e2e/header.spec.ts'), changed('scripts/x.sh')], config).level, 'High');
   });
 
-  it('ścieżka spoza mapy stref dostaje Medium', () => {
+  it('ścieżka spoza mapy stref dostaje High', () => {
     const result = zonesRule([changed('scripts/deploy.sh')], config);
-    assert.equal(result.level, 'Medium');
+    assert.equal(result.level, 'High');
     assert.deepEqual(result.reasons, ['scripts/deploy.sh: poza mapą stref']);
   });
 
@@ -63,7 +63,7 @@ describe('reguła 1: strefy', () => {
 
 describe('reguła 2: zachowanie i odwracalność', () => {
   it('brak oceny nie pozwala na Low', () => {
-    assert.equal(behaviorRule({}).level, 'Medium');
+    assert.equal(behaviorRule({}).level, 'High');
   });
 
   it('przyjmuje poziom oceniacza', () => {
@@ -79,8 +79,8 @@ describe('reguła 2: zachowanie i odwracalność', () => {
 });
 
 describe('reguła 3: brak testów', () => {
-  it('zwykły kod bez testów to Medium, logika współdzielona bez testów to High', () => {
-    assert.equal(testsRule([changed('src/components/A.vue')], [], config).level, 'Medium');
+  it('kod bez testów nie ma Low: zwykły kod i logika współdzielona bez testów to High', () => {
+    assert.equal(testsRule([changed('src/components/A.vue')], [], config).level, 'High');
     assert.equal(testsRule([changed('src/lib/a.ts')], [], config).level, 'High');
   });
 
@@ -91,7 +91,7 @@ describe('reguła 3: brak testów', () => {
 
   it('testy w osobnym katalogu liczą się, gdy projekt przypisze go do strefy', () => {
     const repo = ['e2e/home.spec.ts'];
-    assert.equal(testsRule([changed('src/components/A.vue')], repo, config).level, 'Medium');
+    assert.equal(testsRule([changed('src/components/A.vue')], repo, config).level, 'High');
     const mapped = configWith('zones:\n  code: ["e2e/**"]\n');
     assert.equal(testsRule([changed('src/components/A.vue')], repo, mapped).level, 'Low');
   });
@@ -103,7 +103,7 @@ describe('reguła 3: brak testów', () => {
     const mapped = configWith('zone_tests:\n  code: ["qa/**"]\n  shared: ["qa/**"]\n');
     assert.equal(testsRule(files, repo, mapped).level, 'Low');
     const onlyCode = configWith('zone_tests:\n  code: ["qa/**"]\n');
-    assert.deepEqual(testsRule(files, repo, onlyCode).reasons, ['strefa shared nie ma testów: Medium → High (src/app.ts)']);
+    assert.deepEqual(testsRule(files, repo, onlyCode).reasons, ['strefa shared nie ma testów, więc nie ma Low: src/app.ts']);
     assert.equal(testsRule(files, ['qa/README.md'], mapped).level, 'High', 'liczą się tylko pliki testów');
   });
 
@@ -119,12 +119,12 @@ describe('reguła 4: rozmiar', () => {
 
   it('progi Low: 100 linii i 5 plików', () => {
     assert.equal(sizeRule(lines(100, 5), config).level, 'Low');
-    assert.equal(sizeRule(lines(101, 5), config).level, 'Medium');
-    assert.equal(sizeRule(lines(10, 6), config).level, 'Medium');
+    assert.equal(sizeRule(lines(101, 5), config).level, 'High');
+    assert.equal(sizeRule(lines(10, 6), config).level, 'High');
   });
 
-  it('progi Medium: 400 linii i 15 plików, większa zmiana wraca do podziału', () => {
-    assert.deepEqual(pick(sizeRule(lines(400, 15), config)), ['Medium', false]);
+  it('próg podziału: 400 linii i 15 plików, większa zmiana wraca do podziału', () => {
+    assert.deepEqual(pick(sizeRule(lines(400, 15), config)), ['High', false]);
     assert.deepEqual(pick(sizeRule(lines(401, 15), config)), ['High', true]);
     assert.deepEqual(pick(sizeRule(lines(20, 16), config)), ['High', true]);
   });
@@ -135,7 +135,7 @@ describe('reguła 4: rozmiar', () => {
   });
 
   it('linie usunięte też się liczą', () => {
-    assert.equal(sizeRule([changed('src/a.ts', { additions: 60, deletions: 41 })], config).level, 'Medium');
+    assert.equal(sizeRule([changed('src/a.ts', { additions: 60, deletions: 41 })], config).level, 'High');
   });
 
   it('testy, lockfile, pliki generowane i tłumaczenia się nie liczą', () => {
@@ -153,7 +153,7 @@ describe('reguła 4: rozmiar', () => {
 
   it('plik binarny liczy się jako plik bez linii', () => {
     const images = Array.from({ length: 6 }, (_, i) => changed(`public/${i}.png`, { binary: true, additions: 0 }));
-    assert.equal(sizeRule(images, config).level, 'Medium');
+    assert.equal(sizeRule(images, config).level, 'High');
   });
 });
 

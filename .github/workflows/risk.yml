@@ -326,8 +326,9 @@ jobs:
           jq -n --arg sha "$SHA" --arg title "Poziom ryzyka: $LEVEL" --rawfile summary risk/report.md \
             '{name: "factory/risk", head_sha: $sha, status: "completed", conclusion: "neutral", output: {title: $title, summary: $summary}}' \
             | gh api "repos/$GH_REPO/check-runs" --input - >/dev/null
+          # Dwa poziomy: risk:low i risk:high. Dawną etykietę risk:medium też zdejmujemy.
+          gh label create "risk:$LOWER" --force >/dev/null
           for label in risk:low risk:medium risk:high; do
-            gh label create "$label" --force >/dev/null
             if [ "$label" != "risk:$LOWER" ]; then gh pr edit "$PR" --remove-label "$label" >/dev/null 2>&1 || true; fi
           done
           gh pr edit "$PR" --add-label "risk:$LOWER"

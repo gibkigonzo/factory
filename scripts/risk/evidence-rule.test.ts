@@ -33,7 +33,7 @@ describe('reguła 5: komplet dowodów daje Low', () => {
   });
 });
 
-describe('reguła 5: braki dają Medium', () => {
+describe('reguła 5: każdy brak odbiera zmianie Low', () => {
   const cases: [string, Evidence, string][] = [
     ['czerwone CI', { ci: 'failure' }, 'CI: failure'],
     ['brak kryteriów', { acceptance: [] }, 'brak kryteriów akceptacji'],
@@ -45,7 +45,7 @@ describe('reguła 5: braki dają Medium', () => {
   ];
   for (const [title, override, reason] of cases) {
     it(title, () => {
-      assert.deepEqual([result(override).level, result(override).reasons], ['Medium', [reason]]);
+      assert.deepEqual([result(override).level, result(override).reasons], ['High', [reason]]);
     });
   }
 
@@ -58,7 +58,7 @@ describe('reguła 5: braki dają Medium', () => {
     const file = changed('src/a.ts', { addedLines: ['// eslint-disable-next-line', 'x()'], additions: 2 });
     assert.deepEqual(result({}, [file]).reasons, ['nowy znacznik wyłączenia „eslint-disable” w src/a.ts']);
     const skipped = changed('src/a.test.ts', { addedLines: ["it.skip('menu', () => {})"] });
-    assert.equal(result({}, [skipped]).level, 'Medium');
+    assert.equal(result({}, [skipped]).level, 'High');
   });
 });
 
@@ -73,7 +73,7 @@ describe('reguła 5: werdykty recenzentów', () => {
       assert.deepEqual([outcome.level, outcome.reasons], [
         'High',
         [
-          `High: nierozstrzygnięta uwaga ${severity} recenzenta correctness: brak alt (src/components/A.vue:1)`,
+          `nierozstrzygnięta uwaga ${severity} recenzenta correctness: brak alt (src/components/A.vue:1)`,
           'recenzent correctness: approve z uwagą high lub critical liczy się jak request_changes',
         ],
       ]);
@@ -91,30 +91,30 @@ describe('reguła 5: werdykty recenzentów', () => {
     const invented = result({ reviews: withFinding({ ...finding, evidence: 'console.log(token)' }) }, [component]);
     assert.deepEqual(invented.reasons, ['recenzent correctness: cytat nie występuje w diffie (src/components/A.vue:1)']);
     const otherFile = result({ reviews: withFinding({ ...finding, file: 'src/other.ts' }) }, [component]);
-    assert.equal(otherFile.level, 'Medium');
+    assert.equal(otherFile.level, 'High');
   });
 });
 
 describe('reguła 5: usunięte testy, spadek pokrycia i nierozstrzygnięte uwagi dają High', () => {
   it('usunięty plik testów, gdy testowany kod został', () => {
     const deleted = changed('src/components/A.test.ts', { status: 'deleted', additions: 0, deletions: 20 });
-    assert.deepEqual(result({}, [deleted]).reasons, ['High: usunięty plik testów, a testowany kod został: src/components/A.test.ts']);
+    assert.deepEqual(result({}, [deleted]).reasons, ['usunięty plik testów, a testowany kod został: src/components/A.test.ts']);
   });
 
-  it('usunięcie testów razem z testowanym kodem to tylko Medium', () => {
+  it('usunięcie testów razem z testowanym kodem też odbiera Low, z łagodniejszym opisem', () => {
     const test = changed('src/components/A.test.ts', { status: 'deleted', additions: 0, deletions: 20 });
     const code = changed('src/components/A.vue', { status: 'deleted', additions: 0, deletions: 40 });
     assert.deepEqual([result({}, [test, code]).level, result({}, [test, code]).reasons], [
-      'Medium',
+      'High',
       ['usunięty plik testów razem z testowanym kodem: src/components/A.test.ts'],
     ]);
   });
 
-  it('przeniesienie testów z przepisaniem: nowe testy z co najmniej tyloma asercjami dają Medium zamiast High', () => {
+  it('przeniesienie testów z przepisaniem: nowe testy z co najmniej tyloma asercjami opisane jako przeniesienie', () => {
     const old = changed('e2e/naglowek.spec.ts', { status: 'deleted', additions: 0, deletions: 3, removedLines: ['expect(a).toBe(1);', 'expect(b).toBe(2);', 'x'] });
     const moved = changed('e2e/header.spec.ts', { status: 'added', addedLines: ['expect(a).toBe(1);', 'expect(b).toBe(2);', 'expect(c).toBe(3);'] });
     assert.deepEqual([result({}, [old, moved]).level, result({}, [old, moved]).reasons], [
-      'Medium',
+      'High',
       ['usunięty plik testów, ale zmiana dodaje testy z co najmniej tyloma asercjami (3 ≥ 2): e2e/naglowek.spec.ts'],
     ]);
     const fewer = changed('e2e/header.spec.ts', { status: 'added', addedLines: ['expect(a).toBe(1);'] });
@@ -126,22 +126,22 @@ describe('reguła 5: usunięte testy, spadek pokrycia i nierozstrzygnięte uwagi
       addedLines: ['expect(a).toBe(1);'],
       removedLines: ['expect(a).toBe(1);', 'expect(b).toBe(2);'],
     });
-    assert.deepEqual([result({}, [file]).level, result({}, [file]).reasons], ['High', ['High: ubyło asercji w src/a.test.ts: 1']]);
+    assert.deepEqual([result({}, [file]).level, result({}, [file]).reasons], ['High', ['ubyło asercji w src/a.test.ts: 1']]);
     const reworded = changed('src/a.test.ts', { addedLines: ['expect(a).toEqual(1);'], removedLines: ['expect(a).toBe(1);'] });
     assert.equal(result({}, [reworded]).level, 'Low');
   });
 
   it('pokrycie zmienionych linii poniżej progu 80%', () => {
-    assert.deepEqual(result({ diff_coverage: 79.5 }).reasons, ['High: pokrycie zmienionych linii 79.5%, próg 80%']);
+    assert.deepEqual(result({ diff_coverage: 79.5 }).reasons, ['pokrycie zmienionych linii 79.5%, próg 80%']);
     assert.equal(result({ diff_coverage: 80 }).level, 'Low');
     assert.equal(result({}).level, 'Low', 'bez danych o pokryciu warunek nie działa');
   });
 
   it('uwagi nierozstrzygnięte po 3 rundach poprawek', () => {
     const open = [{ ...reviews[0]!, verdict: 'request_changes' as const }, ...reviews.slice(1)];
-    assert.equal(result({ reviews: open, review_rounds: 2 }).level, 'Medium');
+    assert.equal(result({ reviews: open, review_rounds: 2 }).level, 'High');
     assert.deepEqual(result({ reviews: open, review_rounds: 3 }).reasons, [
-      'High: uwagi nierozstrzygnięte po 3 rundach poprawek (correctness)',
+      'uwagi nierozstrzygnięte po 3 rundach poprawek (correctness)',
       'recenzent correctness: request_changes',
     ]);
     assert.equal(result({ review_rounds: 5 }).level, 'Low');

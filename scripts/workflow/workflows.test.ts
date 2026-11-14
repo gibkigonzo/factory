@@ -267,6 +267,16 @@ describe('workflowy fabryki', () => {
     }
   });
 
+  it('dwa poziomy ryzyka: etykiety risk:low i risk:high, a /veto odpowiada, że okna weta nie ma', () => {
+    const risk = workflows.risk!.text;
+    assert.match(risk, /gh label create "risk:\$LOWER" --force/);
+    assert.match(risk, /for label in risk:low risk:medium risk:high; do\n\s*if \[ "\$label" != "risk:\$LOWER" \]; then gh pr edit "\$PR" --remove-label/, 'dawna risk:medium znika z PR');
+    const commands = workflows.commands!.text;
+    assert.match(commands, /veto\)\n\s*gh issue comment "\$NUMBER" --body "Okna weta już nie ma/);
+    assert.doesNotMatch(commands, /label veto/);
+    assert.doesNotMatch(commands, /Komendy taśmy: [^\n]*\/veto/);
+  });
+
   it('recenzent wyglądu dostaje uwagi, na które odpowiadała runda', () => {
     const review = workflows.review!.text;
     assert.match(review, /> "\$W\/previous-round\.md"/);

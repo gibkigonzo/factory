@@ -129,7 +129,7 @@ function evidence(v: Values): string {
     ci: optionalJson(join(work, 'ci.json')) as CiResult | undefined,
     implementation: optionalJson(join(work, 'implementation.json')) as Implementation | undefined,
     reviews,
-    behavior: optionalJson(join(work, 'behavior.json')) as { level: 'Low' | 'Medium' | 'High'; reason: string } | undefined,
+    behavior: optionalJson(join(work, 'behavior.json')) as { level: 'Low' | 'High'; reason: string } | undefined,
     rounds: Number(v.rounds),
   });
   return JSON.stringify(result, null, 2);
@@ -248,7 +248,6 @@ function run(command: string | undefined, rest: string[]): string {
           json(required(v.evidence, '--evidence')) as Evidence,
           usageFile(v.usage),
         ),
-        config(v.config),
       );
     case 'journal': {
       const cfg = config(v.config);

@@ -147,9 +147,9 @@ function getPath(data: unknown, path: string): unknown {
 function checkBaseThresholds(data: Obj, out: Issue[]): void {
   for (const measure of ['lines', 'files']) {
     const low = getPath(data, `risk.size.low.${measure}`);
-    const medium = getPath(data, `risk.size.medium.${measure}`);
-    if (typeof low === 'number' && typeof medium === 'number' && low > medium) {
-      out.push({ path: `risk.size.low.${measure}`, message: `próg Low (${low}) jest wyższy niż Medium (${medium})` });
+    const split = getPath(data, `risk.size.split.${measure}`);
+    if (typeof low === 'number' && typeof split === 'number' && low > split) {
+      out.push({ path: `risk.size.low.${measure}`, message: `próg Low (${low}) jest wyższy niż próg podziału (${split})` });
     }
   }
   const warn = getPath(data, 'gates.file_lines.warn');

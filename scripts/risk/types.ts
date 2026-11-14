@@ -100,10 +100,9 @@ export interface GateFinding {
 
 export interface Assessment {
   level: Level;
-  /** Zmiana za duża nawet na Medium: wraca do planera do podziału. */
+  /** Zmiana ponad próg podziału: wraca do planera do podziału. */
   split: boolean;
   rules: RuleResult[];
-  notes: string[];
   gates: { status: 'pass' | 'warn' | 'block'; findings: GateFinding[] };
 }
 
@@ -115,6 +114,3 @@ export function maxLevel(levels: readonly Level[]): Level {
   return levels.reduce<Level>((max, level) => (rank(level) > rank(max) ? level : max), 'Low');
 }
 
-export function raise(level: Level): Level {
-  return LEVELS[Math.min(rank(level) + 1, LEVELS.length - 1)]!;
-}

@@ -43,7 +43,7 @@ describe('poprawny kontrakt', () => {
     const result = loadConfig(MINIMAL, 'factory.yml');
     assert.ok(result.ok, result.ok ? '' : result.errors.join('\n'));
     const { config } = result;
-    assert.equal(config.risk.unassigned, 'Medium');
+    assert.equal(config.risk.unassigned, 'High');
     assert.deepEqual(config.files.tests, []);
     assert.deepEqual(config.exceptions, []);
     assert.deepEqual(config.reviewers.extra, []);
@@ -55,14 +55,11 @@ describe('poprawny kontrakt', () => {
 human_gates:
   playtest: [feel]
 schedules: { po: weekly, qa: nightly }
-risk:
-  medium_veto_hours: 0
 `;
     const result = loadConfig(text, 'factory.yml');
     assert.ok(result.ok, result.ok ? '' : result.errors.join('\n'));
     assert.equal(result.config.commands.scene_check, './tools/check.sh');
     assert.deepEqual(result.config.human_gates, { playtest: ['feel'] });
-    assert.equal(result.config.risk.medium_veto_hours, 0);
   });
 
   it('każdy preset z presets/ daje się dołączyć', () => {
@@ -115,7 +112,7 @@ describe('błędny kontrakt: komunikat wskazuje pole', () => {
 
   it('projekt nie zmienia progów z base', () => {
     assertError(`${MINIMAL}gates:\n  complexity: 30\n`, 'factory.yml: gates: progi bramek jakości ustala warstwa base');
-    assertError(`${MINIMAL}risk:\n  size: { low: { lines: 1000, files: 50 }, medium: { lines: 2000, files: 90 } }\n`, 'factory.yml: risk.size: progi rozmiaru ustala warstwa base');
+    assertError(`${MINIMAL}risk:\n  size: { low: { lines: 1000, files: 50 }, split: { lines: 2000, files: 90 } }\n`, 'factory.yml: risk.size: progi rozmiaru ustala warstwa base');
   });
 
   it('niezacytowany wzorzec z „*” na początku', () => {
@@ -196,7 +193,7 @@ describe('warstwy', () => {
   it('progi base muszą być spójne', () => {
     const broken = base.replace('low: { lines: 100', 'low: { lines: 1000');
     const errors = errorsOf(MINIMAL, source({ base: broken }));
-    assert.ok(errors.includes('presets/base.yml: risk.size.low.lines: próg Low (1000) jest wyższy niż Medium (400)'), errors.join('\n'));
+    assert.ok(errors.includes('presets/base.yml: risk.size.low.lines: próg Low (1000) jest wyższy niż próg podziału (400)'), errors.join('\n'));
   });
 
   it('listy się sumują, więc projekt nie usunie ochrony z base', () => {
@@ -226,9 +223,9 @@ describe('presets/base.yml', () => {
     const result = loadConfig(MINIMAL, 'factory.yml');
     assert.ok(result.ok);
     const { risk, gates, reviewers } = result.config;
-    assert.deepEqual(risk.size, { low: { lines: 100, files: 5 }, medium: { lines: 400, files: 15 } });
+    assert.deepEqual(risk.size, { low: { lines: 100, files: 5 }, split: { lines: 400, files: 15 } });
+    assert.deepEqual([risk.unassigned, risk.zone_levels.shared, risk.zone_levels.code], ['High', 'High', 'Low'], 'dwa poziomy: Low i High');
     assert.equal(risk.min_confidence, 0.8);
-    assert.equal(risk.medium_veto_hours, 24);
     assert.deepEqual(gates, { file_lines: { warn: 300, block: 500 }, function_lines: 50, complexity: 15, nesting: 4 });
     assert.equal(reviewers.perspectives.length, 5);
     assert.equal(result.config.zones.factory?.includes('factory.yml'), true);
