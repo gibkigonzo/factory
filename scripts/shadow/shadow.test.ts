@@ -26,6 +26,11 @@ const spend = (stage: Usage['stage'], cost: number, output = 1000): Usage => ({
 
 const config = configWith();
 
+/** Komentarz werdyktu z dowolnymi danymi, np. dawnym poziomem Medium sprzed dwóch poziomów ryzyka. */
+function legacyBody(record: object): string {
+  return `${SHADOW_MARKER}\n<!-- factory:shadow-data ${JSON.stringify(record)} -->`;
+}
+
 function assessment(overrides: Partial<Assessment> = {}): Assessment {
   return { level: 'Low', split: false, rules: [], notes: [], gates: { status: 'pass', findings: [] }, ...overrides };
 }
@@ -34,7 +39,7 @@ function verdict(action: Action, confidence = 0.9, reaction?: 'up' | 'down'): No
   const record: ShadowRecord = {
     pr: 1,
     round: 0,
-    level: action === 'merge' ? 'Low' : action === 'veto-window' ? 'Medium' : 'High',
+    level: action === 'merge' ? 'Low' : 'High',
     action,
     reviews: [{ perspective: 'correctness', verdict: 'approve', confidence }],
   };
@@ -47,9 +52,8 @@ function pr(overrides: Partial<PrRecord> = {}): PrRecord {
 }
 
 describe('decyzja mergera', () => {
-  it('Low scala, Medium czeka na weto, High przekazuje właścicielowi', () => {
+  it('dwa poziomy: Low scala, High przekazuje właścicielowi', () => {
     assert.equal(decide(assessment()), 'merge');
-    assert.equal(decide(assessment({ level: 'Medium' })), 'veto-window');
     assert.equal(decide(assessment({ level: 'High' })), 'escalate');
   });
 
@@ -63,7 +67,7 @@ describe('decyzja mergera', () => {
 describe('komentarz z werdyktem', () => {
   const record = shadowRecord(
     7,
-    assessment({ level: 'Medium' }),
+    assessment({ level: 'High' }),
     { review_rounds: 2, reviews: [{ perspective: 'tests', verdict: 'approve', confidence: 0.7, summary: 's', findings: [] }] },
   );
 
@@ -71,26 +75,32 @@ describe('komentarz z werdyktem', () => {
     assert.deepEqual(record, {
       pr: 7,
       round: 2,
-      level: 'Medium',
-      action: 'veto-window',
+      level: 'High',
+      action: 'escalate',
       reviews: [{ perspective: 'tests', verdict: 'approve', confidence: 0.7 }],
     });
   });
 
   it('mówi właścicielowi, co fabryka by zrobiła i jak ocenić werdykt', () => {
-    const body = shadowComment(record, config);
+    const body = shadowComment(record);
     assert.ok(body.startsWith(SHADOW_MARKER));
     assert.match(body, /runda 2/);
-    assert.match(body, /czekałaby 24 h na \/veto/);
+    assert.match(body, /przekazałaby decyzję Tobie\*\* \(poziom High\)/);
+    assert.doesNotMatch(body, /veto/);
     assert.match(body, /👍 zgoda, 👎 niezgoda/);
   });
 
   it('dane z komentarza wracają bez zmian, a podrobione albo uszkodzone są odrzucane', () => {
-    assert.deepEqual(parseShadow(shadowComment(record, config)), record);
+    assert.deepEqual(parseShadow(shadowComment(record)), record);
     assert.equal(parseShadow(`<!-- factory:shadow-data ${JSON.stringify(record)} -->`), undefined, 'bez znacznika');
     assert.equal(parseShadow(`${SHADOW_MARKER}\n<!-- factory:shadow-data {"pr": 7, -->`), undefined);
     const bad = { ...record, action: 'deploy' };
     assert.equal(parseShadow(`${SHADOW_MARKER}\n<!-- factory:shadow-data ${JSON.stringify(bad)} -->`), undefined);
+  });
+
+  it('dawny werdykt Medium z oknem weta czyta jako eskalację do właściciela, z adnotacją', () => {
+    const old = { pr: 7, round: 0, level: 'Medium', action: 'veto-window', reviews: [] };
+    assert.deepEqual(parseShadow(legacyBody(old)), { ...old, level: 'High', action: 'escalate', recalculated: 'Medium' });
   });
 });
 
@@ -103,7 +113,7 @@ describe('dane z GitHuba', () => {
   };
   const comment = (id: number, record: ShadowRecord, login = 'github-actions[bot]') => ({
     id,
-    body: shadowComment(record, config),
+    body: shadowComment(record),
     user: { login },
     created_at: `2026-11-0${id % 9}T10:00:00Z`,
   });
@@ -131,7 +141,7 @@ describe('dane z GitHuba', () => {
   ]);
   write('issues/7.json', { created_at: '2026-11-04T08:00:00Z' });
   write('comments/10.json', [
-    comment(1, { ...low, level: 'Medium', action: 'veto-window', usage: [spend('review', 0.5), spend('assess', 0.1)] }),
+    { ...comment(1, low), body: legacyBody({ ...low, level: 'Medium', action: 'veto-window', usage: [spend('review', 0.5), spend('assess', 0.1)] }) },
     comment(2, { ...low, usage: [spend('review', 0.4)] }),
     comment(3, { ...high, usage: [spend('review', 99)] }, 'mallory'),
   ]);
@@ -200,7 +210,7 @@ describe('dane z GitHuba', () => {
       ]));
       mkdirSync(join(own, 'comments'));
       writeFileSync(join(own, 'comments', '40.json'), JSON.stringify([
-        { id: 1, body: shadowComment({ pr: 40, round: 1, level: 'Low', action: 'merge', reviews: [], usage: [named('spec', 0.2)] }, config), user: { login: 'github-actions[bot]' }, created_at: '2026-11-02T10:00:00Z' },
+        { id: 1, body: shadowComment({ pr: 40, round: 1, level: 'Low', action: 'merge', reviews: [], usage: [named('spec', 0.2)] }), user: { login: 'github-actions[bot]' }, created_at: '2026-11-02T10:00:00Z' },
       ]));
       mkdirSync(join(own, 'rounds'));
       writeFileSync(join(own, 'rounds', '40.json'), JSON.stringify([
@@ -214,18 +224,18 @@ describe('dane z GitHuba', () => {
     }
   });
 
-  it('/change właściciela po werdykcie „scal” liczy ten werdykt jako 👎; po eskalacji i bez /change liczy się ostatni', () => {
+  it('/change po „scal” liczy ten werdykt jako 👎; po eskalacji to zgoda; dawne Medium liczy się jak eskalacja', () => {
     const own = mkdtempSync(join(tmpdir(), 'factory-change-'));
     try {
       const put = (path: string, value: unknown) => {
         mkdirSync(join(own, path, '..'), { recursive: true });
         writeFileSync(join(own, path), JSON.stringify(value));
       };
-      const verdict = (id: number, round: number, level: ShadowRecord['level'], action: ShadowRecord['action'], at: string) => ({
-        id, body: shadowComment({ pr: 50, round, level, action, reviews: [] }, config), user: { login: 'github-actions[bot]' }, created_at: at,
+      const verdict = (id: number, round: number, level: string, action: string, at: string) => ({
+        id, body: legacyBody({ pr: 50, round, level, action, reviews: [] }), user: { login: 'github-actions[bot]' }, created_at: at,
       });
       const pr = (number: number) => ({ number, title: `PR ${number}`, state: 'MERGED', createdAt: '2026-11-12T05:00:00Z', mergedAt: '2026-11-12T07:00:00Z', headRefName: `factory/${number}-x` });
-      put('prs.json', [pr(50), pr(51), pr(52), pr(53)]);
+      put('prs.json', [pr(50), pr(51), pr(52), pr(53), pr(54)]);
       const twoVerdicts = (first: ShadowRecord['action'], level: ShadowRecord['level']) => [
         verdict(1, 0, level, first, '2026-11-12T05:58:00Z'),
         verdict(2, 1, 'Low', 'merge', '2026-11-12T06:53:00Z'),
@@ -240,10 +250,13 @@ describe('dane z GitHuba', () => {
       // #52: /change od kogoś spoza właścicieli się nie liczy.
       put('comments/52.json', twoVerdicts('merge', 'Low'));
       put('changes/52.json', [{ user: { login: 'mallory' }, created_at: '2026-11-12T06:43:00Z' }]);
-      // #53: Medium, 👍 właściciela na tym werdykcie i mimo to /change: reakcja ma pierwszeństwo.
+      // #53: dawne Medium (dziś eskalacja), 👍 właściciela na tym werdykcie i /change: reakcja ma pierwszeństwo.
       put('comments/53.json', [verdict(7, 0, 'Medium', 'veto-window', '2026-11-12T05:58:00Z'), verdict(8, 1, 'Low', 'merge', '2026-11-12T06:53:00Z')]);
       put('reactions/7.json', [{ content: '+1', user: { login: 'owner' }, created_at: '2026-11-12T06:00:00Z' }]);
       put('changes/53.json', [{ user: { login: 'owner' }, created_at: '2026-11-12T06:43:00Z' }]);
+      // #54: dawne Medium bez reakcji, potem /change, a ostatni werdykt bez oceny: eskalacja z /change to 👍.
+      put('comments/54.json', [verdict(9, 0, 'Medium', 'veto-window', '2026-11-12T05:58:00Z'), verdict(10, 1, 'Low', 'merge', '2026-11-12T06:53:00Z')]);
+      put('changes/54.json', [{ user: { login: 'owner' }, created_at: '2026-11-12T06:43:00Z' }]);
       const records = collectRecords(own, ['owner'], 7);
       const shadow = (n: number) => records.find((r) => r.number === n)?.shadow;
       assert.deepEqual([shadow(50)?.record.round, shadow(50)?.reaction, shadow(50)?.implied], [0, 'down', 'change']);
@@ -251,6 +264,9 @@ describe('dane z GitHuba', () => {
       assert.deepEqual([shadow(51)?.record.round, shadow(51)?.implied], [1, undefined]);
       assert.deepEqual([shadow(52)?.record.round, shadow(52)?.implied], [1, undefined]);
       assert.deepEqual([shadow(53)?.record.round, shadow(53)?.reaction, shadow(53)?.implied], [0, 'up', undefined]);
+      assert.deepEqual([shadow(54)?.record.action, shadow(54)?.record.recalculated, shadow(54)?.reaction, shadow(54)?.implied], ['escalate', 'Medium', 'up', 'change']);
+      assert.ok(!isFalseLow(records.find((r) => r.number === 54)!));
+      assert.match(renderJournal(records, config, 'teraz'), /#54 .*High \(było Medium\), do Ciebie · 👍 \(po \/change\)/);
       assert.match(renderJournal(records, config, 'teraz'), /#50 .*👎 \(po \/change\)/);
       assert.match(journalCsv(taskRows(records, [])), /👎 \(po \/change\)/);
     } finally {
@@ -354,7 +370,7 @@ describe('metryki i Bramka 1', () => {
   it('liczy zgodność, rundy poprawek i medianę czasu od ready do merge’u', () => {
     const records = [
       pr({ rounds: 2, readyAt: '2026-11-01T00:00:00Z', mergedAt: '2026-11-01T10:00:00Z', shadow: verdict('merge', 0.9, 'up') }),
-      pr({ rounds: 0, readyAt: '2026-11-01T00:00:00Z', mergedAt: '2026-11-01T02:00:00Z', shadow: verdict('veto-window', 0.9, 'up') }),
+      pr({ rounds: 0, readyAt: '2026-11-01T00:00:00Z', mergedAt: '2026-11-01T02:00:00Z', shadow: verdict('escalate', 0.9, 'up') }),
       pr({ state: 'closed', rounds: 1, shadow: verdict('escalate', 0.9, 'down') }),
       pr({ state: 'open', rounds: 5, shadow: verdict('merge') }),
       pr({ state: 'open' }),

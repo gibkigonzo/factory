@@ -9,14 +9,13 @@ risk:
     release: High       # konfiguracja wydania i podpisywania
     dependencies: High  # nowa zależność, aktualizacja major, łatki na zależności
     factory: High       # bramki fabryki: CI, konfiguracja Claude, factory.yml, hooki, lint, typy, testy
-    shared: Medium      # logika współdzielona: dane, start aplikacji, routing, stan globalny, lockfile
+    shared: High        # logika współdzielona: dane, start aplikacji, routing, stan globalny, lockfile
     code: Low           # zwykły kod i treść: ekrany, komponenty, teksty, dokumentacja
-  unassigned: Medium    # ścieżka spoza mapy stref
+  unassigned: High      # ścieżka spoza mapy stref
   size:                 # linie i pliki kodu produkcyjnego; testy, lockfile, pliki generowane i tłumaczenia się nie liczą
     low: { lines: 100, files: 5 }
-    medium: { lines: 400, files: 15 }
+    split: { lines: 400, files: 15 }   # powyżej: zmiana wraca do planera do podziału
   min_confidence: 0.8   # Low wymaga approve każdej perspektywy z co najmniej taką pewnością
-  medium_veto_hours: 24 # okno weta dla Medium; 0 oznacza, że Medium = High
   max_review_rounds: 3  # uwagi recenzentów nierozstrzygnięte po tylu rundach poprawek dają High
   min_diff_coverage: 80 # pokrycie zmienionych linii poniżej progu daje High; działa, gdy CI je liczy
 

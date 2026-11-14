@@ -50,7 +50,7 @@ describe('sprawdzanie wyjścia', () => {
 
   it('błąd wskazuje pole', () => {
     assert.deepEqual(errors('plan', { ...PLAN, expected_level: 'low' }), [
-      'odpowiedź.md: expected_level: oczekiwano jednej z wartości: Low, Medium, High; jest: "low"',
+      'odpowiedź.md: expected_level: oczekiwano jednej z wartości: Low, High; jest: "low"',
     ]);
   });
 
@@ -103,7 +103,7 @@ describe('output.ts z linii poleceń', () => {
       assert.deepEqual(JSON.parse(ok.stdout), { level: 'Low', reason: 'tylko wygląd' });
       const bad = spawnSync(process.execPath, [CLI, 'behavior', join(dir, 'bad.md')], { encoding: 'utf8' });
       assert.equal(bad.status, 1);
-      assert.match(bad.stderr, /level: oczekiwano jednej z wartości: Low, Medium, High; jest: "Wysoki"/);
+      assert.match(bad.stderr, /level: oczekiwano jednej z wartości: Low, High; jest: "Wysoki"/);
       const usage = spawnSync(process.execPath, [CLI, 'raport'], { encoding: 'utf8' });
       assert.equal(usage.status, 1);
       assert.match(usage.stderr, /^Użycie:/);

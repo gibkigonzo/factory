@@ -6,7 +6,7 @@
 # Przebieg: etykieta `ready` na issue → plan → implementacja (PR z gałęzi factory/*) → recenzja → ocena ryzyka
 # → werdykt mergera. Kolejne etapy uruchamiają się przez workflow_dispatch. Czerwone CI albo prośba recenzenta
 # o zmiany odsyła PR do implementera (do risk.max_review_rounds rund); werdykt powstaje po tej pętli.
-# Komendy w komentarzach: /approve, /veto, /reject, /change, /split, /stop <powód> i /start (zatrzymanie taśmy).
+# Komendy w komentarzach: /approve, /reject, /change, /split, /stop <powód> i /start (zatrzymanie taśmy).
 # W Etapie 0 (tryb cienia) fabryka niczego nie scala: o każdym PR decydujesz Ty, a werdykt fabryki oceniasz 👍 albo 👎.
 # Dziennik z metrykami prowadzi przypięte issue „Tryb cienia”.
 # Kolejka: zadanie ponad wip_limit albo ze wspólnymi plikami z zadaniem w toku czeka z etykietą `queued`

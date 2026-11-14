@@ -22,11 +22,11 @@ describe('ocena zmiany', () => {
     assert.deepEqual(result.rules.map((r) => r.level), ['Low', 'High', 'Low', 'Low', 'Low']);
   });
 
-  it('medium_veto_hours: 0 zamienia Medium na High', () => {
-    const noVeto = configWith('risk:\n  medium_veto_hours: 0\n');
-    const result = assess(input([changed('src/lib/a.ts')], { repoFiles: ['src/lib/a.test.ts'], evidence: fullEvidence(noVeto) }), noVeto);
+  it('dwa poziomy: logika współdzielona z testami i kompletem dowodów to High, bo strefa nie pozwala na Low', () => {
+    const result = assess(input([changed('src/lib/a.ts')], { repoFiles: ['src/lib/a.test.ts'], evidence: fullEvidence(config) }), config);
     assert.equal(result.level, 'High');
-    assert.deepEqual(result.notes, ['medium_veto_hours: 0, więc Medium liczy się jak High']);
+    assert.deepEqual(result.rules.map((r) => r.level), ['High', 'Low', 'Low', 'Low', 'Low']);
+    assert.deepEqual(result.notes, []);
   });
 
   it('za duża zmiana dostaje znacznik podziału', () => {
@@ -53,8 +53,8 @@ describe('ocena zmiany', () => {
 
   it('podsumowanie wymienia poziom, reguły i bramki', () => {
     const text = formatAssessment(assess(input([component]), config));
-    assert.match(text, /^Poziom ryzyka: Medium/);
-    assert.match(text, /3\. Brak testów: Medium/);
+    assert.match(text, /^Poziom ryzyka: High/);
+    assert.match(text, /3\. Brak testów: High/);
     assert.match(text, /Bramki jakości: przechodzą/);
   });
 });

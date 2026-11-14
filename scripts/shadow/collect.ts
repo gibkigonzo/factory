@@ -33,7 +33,7 @@ export interface PrRecord {
   readyAt?: string;
   rounds: number;
   reverted: boolean;
-  /** `implied`: ocena wynika z `/change` właściciela po werdykcie, a nie z reakcji na komentarz. */
+  /** `implied`: ocena wynika z `/change` właściciela po werdykcie (po „scal” to 👎, po eskalacji 👍), a nie z reakcji na komentarz. */
   shadow?: { record: ShadowRecord; at: string; reaction?: 'up' | 'down'; implied?: 'change' };
   /** Zużycie wszystkich etapów i rund dla tego PR, zsumowane na etap. */
   usage?: Usage[];
@@ -96,10 +96,12 @@ function ownerReaction(dir: string, comment: RawComment, owners: readonly string
 
 /**
  * Werdykt, który liczy się do kalibracji, i ocena właściciela. Zwykle to ostatni werdykt PR z reakcją 👍/👎.
- * Wyjątek: werdykt „scal” (Low) albo „okno weta” (Medium), po którym właściciel napisał `/change` przed kolejnym
- * werdyktem. W Etapie 1 taki PR scaliłby się bez tej poprawki, więc liczy się ten werdykt, jako 👎
- * (przy Low to fałszywe Low). Reakcja właściciela na ten sam werdykt ma pierwszeństwo przed `/change`.
- * Eskalacja (High) i `/change` to zgoda: decyzja i tak należała do właściciela.
+ * Wyjątek: werdykt „scal” (Low), po którym właściciel napisał `/change` przed kolejnym werdyktem. Po wyjściu
+ * z trybu cienia taki PR scaliłby się bez tej poprawki, więc liczy się ten werdykt, jako 👎 (fałszywe Low).
+ * Reakcja właściciela na ten sam werdykt ma pierwszeństwo przed `/change`.
+ * Eskalacja (High) i `/change` to zgoda: decyzja i tak należała do właściciela. Gdy ostatni werdykt nie ma
+ * reakcji, a po eskalacji padło `/change`, liczy się ta eskalacja jako 👍. Dotyczy to też dawnych werdyktów
+ * Medium z oknem weta, które dziennik przelicza jako eskalacje.
  */
 function latestShadow(dir: string, pr: number, owners: readonly string[]): PrRecord['shadow'] {
   const comments = read<RawComment[]>(join(dir, 'comments', `${pr}.json`), [])
@@ -113,16 +115,28 @@ function latestShadow(dir: string, pr: number, owners: readonly string[]): PrRec
   const changes = read<{ user?: { login?: string }; created_at?: string }[]>(join(dir, 'changes', `${pr}.json`), [])
     .filter((c) => owners.includes(c.user?.login ?? '') && c.created_at)
     .map((c) => c.created_at!);
-  for (const [i, verdict] of comments.entries()) {
-    if (verdict.record.action !== 'merge' && verdict.record.action !== 'veto-window') continue;
+  const changedAfter = (i: number) => {
+    const at = comments[i]!.comment.created_at;
     const next = comments[i + 1]?.comment.created_at ?? '\uffff';
-    if (!changes.some((at) => at > verdict.comment.created_at && at < next)) continue;
+    return changes.some((c) => c > at && c < next);
+  };
+  for (const [i, verdict] of comments.entries()) {
+    if (verdict.record.action !== 'merge' || !changedAfter(i)) continue;
     const reaction = ownerReaction(dir, verdict.comment, owners);
     return { record: verdict.record, at: verdict.comment.created_at, ...(reaction ? { reaction } : { reaction: 'down', implied: 'change' as const }) };
   }
   const shadow: NonNullable<PrRecord['shadow']> = { record: last.record, at: last.comment.created_at };
   const reaction = ownerReaction(dir, last.comment, owners);
-  if (reaction) shadow.reaction = reaction;
+  if (reaction) {
+    shadow.reaction = reaction;
+    return shadow;
+  }
+  const escalated = comments.findIndex((verdict, i) => verdict.record.action === 'escalate' && changedAfter(i));
+  if (escalated >= 0) {
+    const verdict = comments[escalated]!;
+    const own = ownerReaction(dir, verdict.comment, owners);
+    return { record: verdict.record, at: verdict.comment.created_at, ...(own ? { reaction: own } : { reaction: 'up', implied: 'change' as const }) };
+  }
   return shadow;
 }
 

@@ -29,7 +29,14 @@ Factory to generyczna fabryka oprogramowania oparta na Claude Code, dla stron WW
 
 ### Reguły ryzyka v1 (5 listopada 2026)
 
-Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwracalność (LLM, tylko w górę), brak testów (+1 poziom), rozmiar, dowody. Progi są w README. Ścieżka spoza mapy stref dostaje Medium.
+Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwracalność (LLM, tylko w górę), brak testów (bez Low), rozmiar, dowody. Progi są w README. Ścieżka spoza mapy stref dostaje High.
+
+### Dwa poziomy ryzyka (14 listopada 2026)
+
+- Poziomy są dwa: Low fabryka scala sama, High wymaga decyzji właściciela. Medium i okno weta 24 h zniknęły, bo łatwo w nim przegapić PR, który wymagał poprawki. Dane z pilota: w 2 z 10 werdyktów Medium właściciel napisał `/change`.
+- Wszystko, co dawało Medium, daje High: strefa `shared`, ścieżka spoza mapy stref, brak oceny oceniacza ryzyka, rozmiar ponad próg Low, każdy brak dowodu. Raport mówi, dlaczego zmiana nie jest Low. Próg rozmiaru 400 linii / 15 plików to teraz `risk.size.split`, czyli tylko próg podziału.
+- `/veto` i `risk.medium_veto_hours` zniknęły; na `/veto` taśma odpowiada, że okna weta nie ma. Etap „Medium z wetem” wypada z planu autonomii.
+- Dziennik przelicza dawne werdykty Medium jako eskalacje i oznacza je „(było Medium)”. Gdy ostatni werdykt nie ma oceny, a po eskalacji padło `/change`, liczy się ta eskalacja jako 👍.
 
 ### Dystrybucja (8 listopada 2026)
 
@@ -47,7 +54,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 ### Praca z telefonu
 
 - Wymaganie: każdy krok użytkownika (akceptacja propozycji, rozmowa o specu, decyzja przy High, playtest, zatrzymanie i wznowienie taśmy) musi dać się zrobić z telefonu, bez komputera.
-- Taśma działa na GitHub Actions, więc komputer nie jest potrzebny. Komendy `/approve`, `/veto` i inne działają z aplikacji GitHub Mobile. Wielkość liter nie ma znaczenia (autokorekta pisze „/Change”), a na nieznaną komendę taśma odpowiada.
+- Taśma działa na GitHub Actions, więc komputer nie jest potrzebny. Komendy `/approve`, `/change` i inne działają z aplikacji GitHub Mobile. Wielkość liter nie ma znaczenia (autokorekta pisze „/Change”), a na nieznaną komendę taśma odpowiada.
 - Do zakładania issue z aplikacji Claude służy oficjalny serwer MCP GitHuba podłączony jako konektor claude.ai. Zwykły czat w aplikacji mobilnej zakłada issue (sprawdzone w #3), więc `spec-writer` może działać w zwykłym czacie.
 - Konektor łączy się przez inną aplikację GitHub niż Claude Code. Ta aplikacja musi mieć repo w swojej instalacji, inaczej zapis kończy się 403 `Resource not accessible by integration`.
 
@@ -77,7 +84,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł: strefy, zachowanie i odwraca
 - Po każdej ocenie ryzyka `merge.yml` dodaje w PR nowy komentarz z werdyktem mergera, a właściciel ocenia go 👍 albo 👎. Decyzję liczy `scripts/shadow/decision.ts`; ten sam kod zdecyduje o merge'u w Etapie 1.
 - Dziennik to przypięte issue „Tryb cienia”. Odświeża się po werdykcie, po zamknięciu PR fabryki i raz dziennie, bo reakcje nie uruchamiają workflowów.
 - Kalibracja progu pewności porównuje odsetek przyjętych PR w grupach pewności, a nie zgodność z werdyktem, bo werdykt sam zależy od pewności.
-- Werdykt „scal” albo „okno weta”, po którym właściciel napisał `/change`, liczy się jako 👎 (przy Low jako fałszywe Low), bo w Etapie 1 PR scaliłby się bez poprawki. Reakcja na ten werdykt ma pierwszeństwo; `/change` po eskalacji to zgoda (12 listopada 2026).
+- Werdykt „scal”, po którym właściciel napisał `/change`, liczy się jako 👎 (fałszywe Low), bo po wyjściu z trybu cienia PR scaliłby się bez poprawki. Reakcja na ten werdykt ma pierwszeństwo; `/change` po eskalacji to zgoda (12 listopada 2026, okno weta usunięte 14 listopada 2026).
 - Progi Bramki 1 są w sekcji `shadow` w `base`. Bramka liczy okno ostatnich `gate_prs` PR z oceną, a nie całą historię: po naprawie błędu fabryka musi pokazać tyle dobrych werdyktów pod rząd (12 listopada 2026).
 - Statystyki wszystkich zadań, także bez PR, dziennik zapisuje w `journal.csv` i `journal.json` na gałęzi `factory-journal`: koszt na etap i recenzenta oraz ocenę właściciela. Koszt zablokowanej implementacji trafia do komentarza z blokadą, a koszt recenzji rundy odesłanej do implementera do komentarza rundy (11 listopada 2026).
 

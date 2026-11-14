@@ -1,6 +1,6 @@
 # Merger: co fabryka robi z PR po ocenie ryzyka. Decyduje skrypt (scripts/shadow/decision.ts), nie model.
 # Etap 0, tryb cienia: nigdy nie scala. Dodaje w PR nowy komentarz z werdyktem: Low scaliłaby od razu,
-# Medium po oknie weta, High przekazałaby Tobie. Oceniasz go reakcją 👍 albo 👎, a oceny zbiera journal.yml.
+# High przekazałaby Tobie. Oceniasz go reakcją 👍 albo 👎, a oceny zbiera journal.yml.
 # Wywołuj w tym samym uruchomieniu co risk.yml (needs), bo czyta jego artefakt factory-risk.
 name: factory-merge
 

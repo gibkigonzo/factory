@@ -2,7 +2,7 @@
 // Każda ocena (także po poprawkach) dostaje nowy komentarz, żeby reakcja dotyczyła konkretnego werdyktu.
 // Dane dla dziennika są w niewidocznym komentarzu HTML w tym samym komentarzu.
 
-import type { FactoryConfig, Level } from '../config/spec.ts';
+import type { Level } from '../config/spec.ts';
 import { LEVELS } from '../config/spec.ts';
 import type { Assessment, Evidence } from '../risk/types.ts';
 import { parseUsageList } from '../workflow/usage.ts';
@@ -21,6 +21,8 @@ export interface ShadowRecord {
   reviews: { perspective: string; verdict: string; confidence: number }[];
   /** Zużycie tej rundy oceny: recenzenci i oceniacz ryzyka. */
   usage?: Usage[];
+  /** Werdykt sprzed dwóch poziomów (Medium, okno weta), przeliczony jako eskalacja do właściciela. */
+  recalculated?: 'Medium';
 }
 
 export function shadowRecord(pr: number, assessment: Assessment, evidence: Evidence, usage: readonly Usage[] = []): ShadowRecord {
@@ -30,12 +32,12 @@ export function shadowRecord(pr: number, assessment: Assessment, evidence: Evide
   return record;
 }
 
-export function shadowComment(record: ShadowRecord, config: FactoryConfig): string {
+export function shadowComment(record: ShadowRecord): string {
   return [
     SHADOW_MARKER,
     `## Werdykt fabryki (tryb cienia)${record.round > 0 ? ` · runda ${record.round}` : ''}`,
     '',
-    `Fabryka **${describeAction(record.action, config)}** (poziom ${record.level}).`,
+    `Fabryka **${describeAction(record.action)}** (poziom ${record.level}).`,
     '',
     'Zgadzasz się? Zareaguj na ten komentarz: 👍 zgoda, 👎 niezgoda. Uzasadnienie jest w raporcie oceny.',
     'W Etapie 0 fabryka niczego nie scala: o PR decydujesz Ty.',
@@ -49,6 +51,12 @@ export function parseShadow(body: string): ShadowRecord | undefined {
   if (!body.includes(SHADOW_MARKER) || !match) return undefined;
   try {
     const record = JSON.parse(match[1]!) as ShadowRecord;
+    // Dawny poziom Medium z oknem weta liczy się dziś jak High: eskalacja do właściciela.
+    if ((record.level as string) === 'Medium') {
+      record.level = 'High';
+      record.recalculated = 'Medium';
+      if ((record.action as string) === 'veto-window') record.action = 'escalate';
+    }
     const valid =
       Number.isInteger(record.pr) &&
       Number.isInteger(record.round) &&

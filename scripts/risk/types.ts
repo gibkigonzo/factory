@@ -100,7 +100,7 @@ export interface GateFinding {
 
 export interface Assessment {
   level: Level;
-  /** Zmiana za duża nawet na Medium: wraca do planera do podziału. */
+  /** Zmiana ponad próg podziału: wraca do planera do podziału. */
   split: boolean;
   rules: RuleResult[];
   notes: string[];

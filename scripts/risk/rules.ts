@@ -55,12 +55,12 @@ export function behaviorRule(evidence: Evidence): RuleResult {
   const name = 'Zachowanie i odwracalność';
   const assessed: RuleResult = evidence.behavior
     ? { rule: 'behavior', name, level: evidence.behavior.level, reasons: [evidence.behavior.reason] }
-    : { rule: 'behavior', name, level: 'Medium', reasons: ['brak oceny oceniacza ryzyka'] };
+    : { rule: 'behavior', name, level: 'High', reasons: ['brak oceny oceniacza ryzyka'] };
   if (evidence.product_risk !== 'high') return assessed;
   return { ...assessed, level: 'High', reasons: ['ryzyko produktowe w specu: wysokie', ...assessed.reasons] };
 }
 
-/** Reguła 3: kod w strefie bez testów jest o poziom wyżej. Testy strefy to pliki testów
+/** Reguła 3: kod w strefie bez testów nie może mieć Low (o poziom wyżej, czyli High). Testy strefy to pliki testów
  * pasujące do jej wzorców albo do wzorców tej strefy w zone_tests. */
 export function testsRule(files: readonly ChangedFile[], repoFiles: readonly string[], config: FactoryConfig): RuleResult {
   const name = 'Brak testów';
@@ -76,9 +76,7 @@ export function testsRule(files: readonly ChangedFile[], repoFiles: readonly str
   }
   if (untested.size === 0) return { rule: 'tests', name, level: 'Low', reasons: ['zmieniony kod jest w strefach z testami'] };
   const raised = [...untested.keys()].map((zone) => raise(config.risk.zone_levels[zone]!));
-  const reasons = [...untested].map(
-    ([zone, paths]) => `strefa ${zone} nie ma testów: ${config.risk.zone_levels[zone]} → ${raise(config.risk.zone_levels[zone]!)} (${listed(paths).join(', ')})`,
-  );
+  const reasons = [...untested].map(([zone, paths]) => `strefa ${zone} nie ma testów, więc nie ma Low: ${listed(paths).join(', ')}`);
   return { rule: 'tests', name, level: maxLevel(raised), reasons };
 }
 
@@ -87,8 +85,8 @@ export function excludedFromSize(path: string, config: FactoryConfig): boolean {
   return matchesAny(path, [...tests, ...lockfiles, ...generated, ...translations]);
 }
 
-/** Reguła 4: rozmiar kodu produkcyjnego. Za duża zmiana ma High (bezpieczna wartość domyślna) i znacznik podziału:
- * wraca do planera, a do właściciela trafia dopiero, gdy podziału nie da się zrobić. */
+/** Reguła 4: rozmiar kodu produkcyjnego. Ponad próg Low zmiana ma High. Ponad próg podziału dostaje też znacznik
+ * podziału: wraca do planera, a do właściciela trafia dopiero, gdy podziału nie da się zrobić. */
 export function sizeRule(
   files: readonly ChangedFile[],
   config: FactoryConfig,
@@ -96,13 +94,13 @@ export function sizeRule(
 ): RuleResult & { split: boolean } {
   const counted = files.filter((f) => !excludedFromSize(f.path, config));
   const lines = counted.reduce((sum, f) => sum + f.additions + f.deletions, 0);
-  const { low, medium } = config.risk.size;
+  const { low, split } = config.risk.size;
   const fits = (limit: { lines: number; files: number }) => lines <= limit.lines && counted.length <= limit.files;
-  const tooBig = !fits(medium);
-  const level: Level = fits(low) ? 'Low' : fits(medium) ? 'Medium' : 'High';
+  const tooBig = !fits(split);
+  const level: Level = fits(low) ? 'Low' : 'High';
   const reasons = [
     `kod produkcyjny: zmienionych linii: ${lines}, plików: ${counted.length}`,
-    `progi: Low do ${low.lines} linii i ${low.files} plików, Medium do ${medium.lines} linii i ${medium.files} plików`,
+    `progi: Low do ${low.lines} linii i ${low.files} plików, podział powyżej ${split.lines} linii albo ${split.files} plików`,
   ];
   const skipped = files.length - counted.length;
   if (skipped > 0) reasons.push(`pominięte pliki (testy, lockfile, generowane, tłumaczenia): ${skipped}`);

@@ -270,16 +270,16 @@ describe('teksty publikowane przez workflow', () => {
 
   it('raport ryzyka na telefon: poziom, reguły, panel', () => {
     const assessment: Assessment = {
-      level: 'Medium',
+      level: 'High',
       split: false,
       notes: [],
-      rules: [{ rule: 'zones', name: 'Strefy', level: 'Medium', reasons: ['src/lib/a.ts: strefa shared'] }],
+      rules: [{ rule: 'zones', name: 'Strefy', level: 'High', reasons: ['src/lib/a.ts: strefa shared'] }],
       gates: { status: 'pass', findings: [] },
     };
     const report = renderReport(assessment, { run: [{ name: 'tests', reason: 'zawsze' }], skipped: [{ name: 'ux-visual', reason: 'nie dotyczy' }] });
     assert.ok(report.startsWith(REPORT_MARKER));
-    assert.match(report, /\*\*Poziom ryzyka: Medium\*\*/);
-    assert.match(report, /1\. \*\*Strefy: Medium\*\*\n {3}- src\/lib\/a\.ts: strefa shared/);
+    assert.match(report, /\*\*Poziom ryzyka: High\*\*/);
+    assert.match(report, /1\. \*\*Strefy: High\*\*\n {3}- src\/lib\/a\.ts: strefa shared/);
     assert.match(report, /\*\*Pominięte:\*\* ux-visual \(nie dotyczy\)/);
     assert.match(report, /fabryka niczego nie scala/);
   });

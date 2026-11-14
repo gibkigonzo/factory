@@ -1,6 +1,6 @@
 // Schemat kontraktu projektu: pola factory.yml i presetów, warstwy i pola wymagane.
 
-export const LEVELS = ['Low', 'Medium', 'High'] as const;
+export const LEVELS = ['Low', 'High'] as const;
 export type Level = (typeof LEVELS)[number];
 
 export const GATES = ['file_lines', 'function_lines', 'complexity', 'nesting'] as const;
@@ -52,9 +52,8 @@ const risk: Spec = {
   fields: {
     zone_levels: namedMap(level),
     unassigned: level,
-    size: { kind: 'object', fields: { low: sizeLimit, medium: sizeLimit }, required: ['low', 'medium'] },
+    size: { kind: 'object', fields: { low: sizeLimit, split: sizeLimit }, required: ['low', 'split'] },
     min_confidence: { kind: 'number', min: 0, max: 1 },
-    medium_veto_hours: { kind: 'integer', min: 0 },
     max_review_rounds: positive,
     min_diff_coverage: { kind: 'number', min: 0, max: 100 },
   },
@@ -157,7 +156,6 @@ export const REQUIRED: Record<LayerKind, readonly string[]> = {
     'risk.unassigned',
     'risk.size',
     'risk.min_confidence',
-    'risk.medium_veto_hours',
     'risk.max_review_rounds',
     'risk.min_diff_coverage',
     'gates.file_lines',
@@ -210,9 +208,8 @@ export interface FactoryConfig {
   risk: {
     zone_levels: Record<string, Level>;
     unassigned: Level;
-    size: { low: SizeLimit; medium: SizeLimit };
+    size: { low: SizeLimit; split: SizeLimit };
     min_confidence: number;
-    medium_veto_hours: number;
     max_review_rounds: number;
     min_diff_coverage: number;
   };

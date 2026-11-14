@@ -12,7 +12,7 @@ Fabryka oprogramowania oparta na Claude Code i GitHub Actions. Zamienia rozmowę
 - **Recenzja.** CI uruchamia komendy projektu. Pięć perspektyw (poprawność, testy, bezpieczeństwo, utrzymanie, zgodność ze specem) ocenia PR, każda w świeżym kontekście. Projekt może dodać własne perspektywy.
 - **Zrzuty ekranu.** Komenda projektu robi po CI zrzuty sekcji obok wzorca, przed zmianą i po niej. Recenzent wyglądu ocenia tylko sekcje, które zmienił PR, a Ty dostajesz w PR linki do tych samych par.
 - **Pętla poprawek.** Czerwone CI albo prośba recenzenta o zmiany odsyła PR do implementera z listą uwag, do 3 rund.
-- **Ocena ryzyka.** Deterministyczne reguły (strefy plików, testy, rozmiar, dowody) i ocena modelu, która może poziom tylko podnieść. Wynik: Low, Medium albo High, raport w PR czytelny na telefonie.
+- **Ocena ryzyka.** Deterministyczne reguły (strefy plików, testy, rozmiar, dowody) i ocena modelu, która może poziom tylko podnieść. Wynik: Low (fabryka scala sama) albo High (decydujesz Ty), raport w PR czytelny na telefonie.
 - **Tryb cienia i dziennik.** Werdykt fabryki w PR oceniasz 👍 albo 👎. Przypięte issue „Tryb cienia” pokazuje zgodność, rundy poprawek, czas i koszt na PR, etap i recenzenta.
 - **Kolejka i limity.** Zadania na tych samych plikach idą po kolei, a reszta równolegle w granicach `wip_limit`. Dzienny limit przebiegów z Claude pilnuje kosztu, a zadanie ponad limit rusza samo następnego dnia.
 - **Nowe zależności tylko za Twoją zgodą.** Plan z nowym pakietem czeka na `/approve`, a pakiet instaluje workflow, nie model.
@@ -47,7 +47,7 @@ Skopiuj [`templates/factory.yml`](templates/factory.yml) do korzenia repo projek
 
 - `extends`: presety języka i frameworka, np. `[base, typescript, web, nuxt]`;
 - `commands`: komendy CI, wymagane `test` i `build`. **`setup` musi zainstalować wszystko**, czego potrzebują pozostałe komendy, także przeglądarki do testów e2e. Implementer uruchamia tylko komendy z tej listy i tylko dosłownie;
-- `zones`: ścieżki z danymi trwałymi, autoryzacją i logiką współdzieloną (ścieżka spoza mapy dostaje Medium);
+- `zones`: ścieżki z danymi trwałymi, autoryzacją i logiką współdzieloną (ścieżka spoza mapy dostaje High);
 - `zone_tests`: testy spoza ścieżek strefy, które ją sprawdzają, np. e2e całej strony;
 - `dependencies`: komendy instalacji nowych pakietów (bez nich plan z nową zależnością się zablokuje);
 - `protected_files`: pliki, których agenci nie zmienią.
@@ -103,12 +103,12 @@ Ręcznie, na razie, synchronizujesz tylko kopię skilla `spec-writer` w `.claude
 | `factory:paused` | taśma jest zatrzymana, a etap czeka; ruszy sam po `/start` (też w PR) |
 | `factory:stopped` | issue „Taśma zatrzymana”: otwarte, dopóki taśma stoi |
 
-W PR: `risk:low`, `risk:medium`, `risk:high` (poziom z oceny ryzyka) i `factory:round-N` (runda poprawek).
+W PR: `risk:low` albo `risk:high` (poziom z oceny ryzyka) i `factory:round-N` (runda poprawek).
 
 | Komenda w komentarzu | Gdzie | Co robi |
 | --- | --- | --- |
 | `/approve` | issue z `needs-approval` | zgoda na nowe pakiety z planu; zadanie trafia do kolejki |
-| `/approve`, `/veto` | PR | zapisują Twoją decyzję etykietą; w Etapie 1 sterują merge'em Medium i High |
+| `/approve` | PR | zapisuje Twoją zgodę etykietą `factory:approved`; po wyjściu z trybu cienia pozwoli scalić PR z High |
 | `/change <opis>` | PR | runda poprawek według Twojego opisu; implementer ją wykonuje albo zgłasza blokadę z powodem |
 | `/reject` | issue albo PR | odrzuca zadanie, zamyka PR i zwalnia kolejkę |
 | `/split` | issue | planer dzieli zadanie na mniejsze issue |
@@ -148,9 +148,8 @@ flowchart TD
   H3(["Oceniasz werdykt 👍 albo 👎 i sam decydujesz o PR"]):::human
   S8["Dziennik trybu cienia: metryki i Bramka 1"]:::script
   M1["Merger scala od razu"]:::script
-  M2["Merger scala po 24 h bez /veto"]:::script
   H4(["Decydujesz Ty"]):::human
-  H5(["Komendy w komentarzu: /change, /veto, /reject, /split, /approve"]):::human
+  H5(["Komendy w komentarzu: /change, /reject, /split, /approve"]):::human
   H6(["/approve w issue: zgoda na nowe zależności z planu"]):::human
   L{"Pętla poprawek: czerwone CI albo prośba o zmiany, runda poniżej limitu?"}:::script
 
@@ -167,9 +166,8 @@ flowchart TD
   L -->|"nie"| A5 --> S6
   S6 --> D
   D -->|"Etap 0"| S7 --> H3 --> S8
-  D -->|"Etap 1, Low"| M1
-  D -->|"Etap 1, Medium"| M2
-  D -->|"Etap 1, High"| H4
+  D -->|"po trybie cienia, Low"| M1
+  D -->|"High"| H4
   H5 -->|"/change"| A3
 
   classDef human fill:#dbeafe,stroke:#1d4ed8,color:#0b1f33
@@ -177,7 +175,7 @@ flowchart TD
   classDef script fill:#dcfce7,stroke:#15803d,color:#0f2e16
 ```
 
-W Etapie 1 merger zrobi to, co dziś opisuje werdykt: Low scali od razu, Medium po 24 h, jeśli nikt nie da `/veto`, a High zostawi Tobie. Scala deterministyczny skrypt, a nie model.
+Poziomy są dwa. Po wyjściu z trybu cienia merger scali Low od razu, a High zostawi Tobie. Okna weta nie ma, bo łatwo w nim przegapić PR, który wymagał poprawki. Scala deterministyczny skrypt, a nie model. Który Low scala się sam, mówią etapy: najpierw treści (dokumentacja, testy, teksty, poprawki zależności), potem kod.
 
 ### Pętla poprawek, blokady i nowe zależności
 
@@ -217,7 +215,7 @@ evidence:
 
 ### Tryb cienia
 
-1. Po ocenie ryzyka `merge.yml` dodaje w PR komentarz z werdyktem fabryki. Low: scaliłaby od razu. Medium: czekałaby 24 h na `/veto`. High: przekazałaby decyzję Tobie. Zmiana za duża albo zablokowana przez bramki jakości: odesłałaby ją do podziału albo do poprawek.
+1. Po ocenie ryzyka `merge.yml` dodaje w PR komentarz z werdyktem fabryki. Low: scaliłaby od razu. High: przekazałaby decyzję Tobie. Zmiana za duża albo zablokowana przez bramki jakości: odesłałaby ją do podziału albo do poprawek.
 2. Na komentarz reagujesz 👍 (zgoda) albo 👎 (niezgoda). Każda kolejna ocena (np. po `/change`) dostaje nowy komentarz, więc reakcja dotyczy konkretnego werdyktu. O samym PR decydujesz jak zwykle: merge, `/reject` albo revert.
 3. `journal.yml` prowadzi przypięte issue „Tryb cienia” (etykieta `factory:journal`): stan Bramki 1, metryki i listę PR-ów fabryki. Reakcje nie uruchamiają workflowów, więc dziennik odświeża się po każdym werdykcie, po zamknięciu PR fabryki i raz dziennie. Na żądanie: Actions → factory → Run workflow → `journal`.
 4. Przy każdym odświeżeniu dziennik zapisuje statystyki w plikach na gałęzi `factory-journal`. Link do nich jest w issue z dziennikiem.
@@ -226,7 +224,7 @@ evidence:
 
 Metryki liczy skrypt, nie model:
 
-- **zgodność**: odsetek werdyktów, które oceniłeś 👍. Liczy się ostatni werdykt PR, z jednym wyjątkiem: werdykt „scaliłaby” albo „okno weta”, po którym napisałeś `/change`, liczy się jako 👎 („👎 (po /change)” w dzienniku), bo w Etapie 1 PR scaliłby się bez Twojej poprawki. Twoja reakcja na ten sam werdykt ma pierwszeństwo, a `/change` po eskalacji (High) to zgoda;
+- **zgodność**: odsetek werdyktów, które oceniłeś 👍. Liczy się ostatni werdykt PR, z jednym wyjątkiem: werdykt „scaliłaby”, po którym napisałeś `/change`, liczy się jako 👎 („👎 (po /change)” w dzienniku), bo po wyjściu z trybu cienia PR scaliłby się bez Twojej poprawki. Twoja reakcja na ten sam werdykt ma pierwszeństwo, a `/change` po eskalacji (High) to zgoda: gdy ostatni werdykt nie ma oceny, liczy się ta eskalacja jako 👍. Dawne werdykty Medium z oknem weta dziennik przelicza jako eskalacje i oznacza „(było Medium)”;
 - **fałszywe Low**: werdykt „scaliłaby”, który oceniłeś 👎 (także przez `/change`), PR zamknięty bez merge'u albo merge cofnięty w ciągu `revert_days` dni;
 - **rundy poprawek** i **czas od `ready` do merge'u**;
 - **próg pewności recenzentów**: zakończone PR-y dzielone według najniższej pewności w panelu (≥ 0,8 i < 0,8) z odsetkiem przyjętych (scalonych i niecofniętych) w każdej grupie. Jeśli odsetek jest podobny, pewność nie przewiduje Twoich decyzji i próg zastąpią zgodność recenzentów oraz cytaty, które da się sprawdzić;
@@ -242,10 +240,10 @@ Poziom zmiany to najwyższy wynik z pięciu reguł. Reguły i oceniacz mogą go 
 
 | Reguła | Co sprawdza |
 | --- | --- |
-| 1. Strefy | ścieżki plików według mapy stref projektu; ścieżka spoza mapy dostaje Medium, a plik testów spoza mapy liczy się jak `code` |
-| 2. Zachowanie i odwracalność | ocena LLM, która może poziom tylko podnieść; zmiana sposobu liczenia kwot to Medium |
-| 3. Brak testów | strefa bez testów jest o poziom wyżej; testy strefy leżą w jej ścieżkach albo wskazuje je `zone_tests` |
-| 4. Rozmiar | Low: maks. 100 linii i 5 plików; Medium: maks. 400 linii i 15 plików; większe zmiany planer dzieli |
+| 1. Strefy | ścieżki plików według mapy stref projektu; ścieżka spoza mapy dostaje High, a plik testów spoza mapy liczy się jak `code` |
+| 2. Zachowanie i odwracalność | ocena LLM, która może poziom tylko podnieść; zmiana sposobu liczenia kwot to High |
+| 3. Brak testów | kod w strefie bez testów nie dostaje Low; testy strefy leżą w jej ścieżkach albo wskazuje je `zone_tests` |
+| 4. Rozmiar | Low: maks. 100 linii i 5 plików; powyżej 400 linii albo 15 plików planer dzieli zmianę |
 | 5. Dowody | zielone CI, dowód dla każdego kryterium akceptacji (kryterium ze specu, dosłownie albo jednoznaczna parafraza z tej samej pozycji z tymi samymi liczbami), test regresyjny przy poprawce błędu, approve recenzentów z pewnością ≥ 0,8 |
 
 Bramki jakości nie są ryzykiem: blokują merge, ale fabryka poprawia je sama.
@@ -259,7 +257,7 @@ Bramki jakości nie są ryzykiem: blokują merge, ale fabryka poprawia je sama.
 
 ### Kontrakt projektu (`factory.yml`)
 
-Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy składają się w kolejności `base` → presety z `extends` → `factory.yml`. Listy z warstw się sumują, więc projekt może dopisać strefę albo chroniony plik, ale nie może usunąć tych z `base`. Pojedyncze wartości z późniejszej warstwy nadpisują wcześniejsze. Presety: `base`, `typescript`, `web`, `nuxt` (Nuxt 4: komponenty, strony i zasoby w `app/` to Low, serwer, composables, layouty i pluginy to Medium, middleware to High).
+Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy składają się w kolejności `base` → presety z `extends` → `factory.yml`. Listy z warstw się sumują, więc projekt może dopisać strefę albo chroniony plik, ale nie może usunąć tych z `base`. Pojedyncze wartości z późniejszej warstwy nadpisują wcześniejsze. Presety: `base`, `typescript`, `web`, `nuxt` (Nuxt 4: komponenty, strony i zasoby w `app/` to Low, serwer, composables, layouty, pluginy i middleware to High).
 
 | Pole | Kto ustawia | Co znaczy |
 | --- | --- | --- |
@@ -273,7 +271,6 @@ Przykład jest w [`templates/factory.yml`](templates/factory.yml). Warstwy skła
 | `assertion_markers` | wszystkie warstwy | znaczniki asercji w testach (`expect(`, `assert`); ich ubytek daje High |
 | `protected_files` | wszystkie warstwy | pliki, których agenci nie zapisują |
 | `risk.zone_levels`, `risk.unassigned`, `risk.size`, `risk.min_confidence`, `risk.max_review_rounds`, `risk.min_diff_coverage` | tylko `base` | poziomy stref i progi reguł ryzyka |
-| `risk.medium_veto_hours` | `base`, projekt | okno weta dla Medium; `0` = Medium jak High |
 | `gates` | tylko `base` | progi bramek jakości |
 | `exceptions` | projekt | wyjątek od bramki jakości dla ścieżki: `path`, `gate`, `max`, `reason` |
 | `reviewers` | `base` (`perspectives`), projekt (`extra`) | perspektywy recenzji: podstawowe zawsze, dodatkowe z katalogu albo z `.factory/perspectives/` |
@@ -298,8 +295,8 @@ node scripts/risk-rules.ts --repo ścieżka/do/projektu --base origin/main --hea
 - **Reguła 1:** każdy zmieniony plik (przy zmianie nazwy stara i nowa ścieżka) trafia do najwyższej pasującej strefy. Plik testów spoza mapy stref liczy się jak `code`, bo ryzyko samych testów sprawdza reguła 5.
 - **Reguła 2:** poziom przychodzi od oceniacza ryzyka w `evidence.json`. Bez tej oceny zmiana nie dostanie Low. Ryzyko produktowe „wysokie” ze specu (`product_risk`) daje High bez względu na ocenę.
 - **Reguła 3:** dotyczy kodu (`files.source`) w przypisanej strefie. Strefa ma testy, gdy w repo jest plik z `files.tests` pasujący do jej wzorców albo do jej wzorców w `zone_tests`.
-- **Reguła 4:** liczy dodane i usunięte linie oraz pliki bez testów, lockfile'ów, plików generowanych i tłumaczeń. Zmiana ponad progi Medium dostaje High (bezpieczna wartość domyślna) i znacznik podziału: wraca do planera, a do właściciela trafia dopiero, gdy planer stwierdzi, że podziału nie da się zrobić (`split_impossible`).
-- **Reguła 5:** Low wymaga zielonego CI, dowodu dla każdego kryterium akceptacji, testu regresji przy poprawce błędu, `approve` każdej perspektywy z panelu z pewnością co najmniej `min_confidence` i braku nowych znaczników wyłączeń w kodzie. Każdy brak daje Medium, także cytat recenzenta, którego nie ma w diffie. `approve` z uwagą o wadze `high` lub `critical` liczy się jak `request_changes`. High dają: nierozstrzygnięta uwaga `high` lub `critical`, usunięty plik testów, gdy testowany kod został (Medium, gdy zmiana usuwa też testowany kod albo dodaje testy z co najmniej tyloma asercjami, czyli testy przeniesiono z przepisaniem), ubytek asercji, pokrycie zmienionych linii poniżej `min_diff_coverage` (gdy CI je liczy) i uwagi nierozstrzygnięte po `max_review_rounds` rundach poprawek.
+- **Reguła 4:** liczy dodane i usunięte linie oraz pliki bez testów, lockfile'ów, plików generowanych i tłumaczeń. Zmiana ponad próg Low dostaje High, a ponad próg podziału (`risk.size.split`) także znacznik podziału: wraca do planera, a do właściciela trafia dopiero, gdy planer stwierdzi, że podziału nie da się zrobić (`split_impossible`).
+- **Reguła 5:** Low wymaga zielonego CI, dowodu dla każdego kryterium akceptacji, testu regresji przy poprawce błędu, `approve` każdej perspektywy z panelu z pewnością co najmniej `min_confidence` i braku nowych znaczników wyłączeń w kodzie. Każdy brak daje High, także cytat recenzenta, którego nie ma w diffie. `approve` z uwagą o wadze `high` lub `critical` liczy się jak `request_changes`. Raport wymienia najpierw najpoważniejsze powody: nierozstrzygniętą uwagę `high` lub `critical`, usunięty plik testów, gdy testowany kod został, ubytek asercji, pokrycie zmienionych linii poniżej `min_diff_coverage` (gdy CI je liczy) i uwagi nierozstrzygnięte po `max_review_rounds` rundach poprawek. Usunięcie testów razem z testowanym kodem albo przeniesienie testów z przepisaniem opisuje łagodniej, ale też odbiera Low.
 - **Bramki:** długość pliku liczy skrypt (linie bez pustych i komentarzy). Długość funkcji, złożoność i zagnieżdżenie bierze z raportu `eslint --format json`. Liczą się tylko zmienione pliki.
 
 `evidence.json` składają workflowy:
@@ -428,7 +425,7 @@ Wspólne workflowy to `workflow_call` w tym repo. Projekt wywołuje tylko dyryge
 | `merge.yml` | po ocenie ryzyka, w tym samym uruchomieniu | w Etapie 0 tylko werdykt trybu cienia w nowym komentarzu |
 | `journal.yml` | po werdykcie, po zamknięciu PR fabryki, raz dziennie | dziennik trybu cienia w przypiętym issue i statystyki zadań na gałęzi `factory-journal`; po scaleniu PR fabryki zamyka jego issue |
 | `queue.yml` | po zamknięciu PR fabryki, po `/reject`, po zgodzie na zależności, raz dziennie | uruchamia implementację czekających zadań, które mieszczą się w limitach |
-| `commands.yml` | komentarz od właściciela | `/approve`, `/veto`, `/reject`, `/change <opis>`, `/split`, `/stop <powód>`, `/start` |
+| `commands.yml` | komentarz od właściciela | `/approve`, `/reject`, `/change <opis>`, `/split`, `/stop <powód>`, `/start` |
 
 **Ustawienia** (wejścia w szablonie): `factory_ref` (wersja skryptów fabryki, ta sama co w `uses`; w Etapie 0 `main`), `runs_on` (np. `'["self-hosted", "vps"]'` dla własnego runnera w repo prywatnym), `trusted` (dodatkowe zaufane konta), `max_parallel` (recenzenci naraz). Modele i limity bierze z `factory.yml`.
 

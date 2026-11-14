@@ -1,4 +1,5 @@
-# Komendy właściciela w komentarzu: /approve, /veto, /reject, /change, /split, /stop, /start.
+# Komendy właściciela w komentarzu: /approve, /reject, /change, /split, /stop, /start. Na dawne /veto taśma
+# odpowiada, że okna weta już nie ma (dwa poziomy ryzyka: Low scala fabryka, High czeka na właściciela).
 # /approve w issue z etykietą needs-approval to zgoda na nowe zależności z planu.
 # /stop <powód> zatrzymuje taśmę (issue „Taśma zatrzymana”), a /start ją wznawia razem z wstrzymanymi etapami.
 # Działają tylko od właściciela repo i kont z listy `trusted`; konto workflowów nie wydaje komend.
@@ -52,7 +53,7 @@ jobs:
           NUMBER: ${{ github.event.issue.number }}
           UNKNOWN: ${{ steps.parse.outputs.unknown }}
         run: |
-          gh issue comment "$NUMBER" --body "Nie znam komendy \`/$UNKNOWN\`, więc nic nie zrobiłem. Komendy taśmy: \`/approve\`, \`/veto\`, \`/reject\`, \`/change <uwagi>\`, \`/split\`, \`/stop <powód>\`, \`/start\`."
+          gh issue comment "$NUMBER" --body "Nie znam komendy \`/$UNKNOWN\`, więc nic nie zrobiłem. Komendy taśmy: \`/approve\`, \`/reject\`, \`/change <uwagi>\`, \`/split\`, \`/stop <powód>\`, \`/start\`."
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.parse.outputs.command == 'start'
@@ -81,7 +82,7 @@ jobs:
           queue() { gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=queue || echo "::warning::Nie udało się uruchomić kolejki; ruszy przy dziennym przeglądzie."; }
           case "$COMMAND" in
             approve)
-              label factory:approved; unlabel veto
+              label factory:approved
               # Zgoda na nowe zależności z planu: zadanie trafia do kolejki, a ta uruchamia implementera.
               if [ "$IS_PR" != true ] && gh issue view "$NUMBER" --json labels --jq '.labels[].name' | grep -qx needs-approval; then
                 unlabel needs-approval
@@ -89,7 +90,9 @@ jobs:
                 queue
               fi
               ;;
-            veto) label veto; unlabel factory:approved ;;
+            veto)
+              gh issue comment "$NUMBER" --body "Okna weta już nie ma: Low fabryka scala sama, a High czeka na Twoją decyzję. Żeby zatrzymać PR, napisz \`/reject\` albo \`/change <uwagi>\`."
+              ;;
             reject)
               label rejected
               if [ "$IS_PR" = true ]; then gh pr close "$NUMBER" --comment "Odrzucone komendą /reject."; fi

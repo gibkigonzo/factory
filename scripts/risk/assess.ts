@@ -1,4 +1,5 @@
 // Ocena ryzyka zmiany: maksimum z pięciu reguł plus bramki jakości. Ten sam wejściowy diff daje zawsze ten sam wynik.
+// Poziomy są dwa: Low fabryka scala sama, High idzie do właściciela.
 
 import type { FactoryConfig } from '../config/spec.ts';
 import { checkGates } from './gates.ts';
@@ -21,12 +22,8 @@ export function assess(input: RiskInput, config: FactoryConfig): Assessment {
     { rule: size.rule, name: size.name, level: size.level, reasons: size.reasons },
     evidenceRule(files, input.evidence, config, required),
   ];
-  let level = maxLevel(rules.map((r) => r.level));
+  const level = maxLevel(rules.map((r) => r.level));
   const notes: string[] = [];
-  if (level === 'Medium' && config.risk.medium_veto_hours === 0) {
-    level = 'High';
-    notes.push('medium_veto_hours: 0, więc Medium liczy się jak High');
-  }
   return { level, split: size.split, rules, notes, gates: checkGates(files, input.sizes, input.lint, config) };
 }
 
