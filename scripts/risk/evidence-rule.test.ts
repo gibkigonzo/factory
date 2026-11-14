@@ -93,6 +93,15 @@ describe('reguła 5: werdykty recenzentów', () => {
     const otherFile = result({ reviews: withFinding({ ...finding, file: 'src/other.ts' }) }, [component]);
     assert.equal(otherFile.level, 'High');
   });
+
+  it('cytat skopiowany ze znakiem diffu (+ albo -) też się liczy, ale sam znak nie jest cytatem', () => {
+    const line = component.addedLines[0]!;
+    assert.equal(result({ reviews: withFinding({ ...finding, evidence: `+${line}` }) }, [component]).level, 'Low');
+    assert.equal(result({ reviews: withFinding({ ...finding, evidence: `+  ${line}\n+${line}` }) }, [component]).level, 'Low');
+    assert.equal(result({ reviews: withFinding({ ...finding, evidence: `-${line}` }) }, [component]).level, 'Low');
+    assert.equal(result({ reviews: withFinding({ ...finding, evidence: '+console.log(token)' }) }, [component]).level, 'High');
+    assert.equal(result({ reviews: withFinding({ ...finding, evidence: '+' }) }, [component]).level, 'High');
+  });
 });
 
 describe('reguła 5: usunięte testy, spadek pokrycia i nierozstrzygnięte uwagi dają High', () => {

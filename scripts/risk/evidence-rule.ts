@@ -78,12 +78,18 @@ function citationProblems(files: readonly ChangedFile[], evidence: Evidence): st
   );
 }
 
+/**
+ * Cytat to linie z diffu. Recenzent często kopiuje je ze znakiem diffu na początku (`+export {}`), a skrypt zna
+ * treść linii bez niego, więc linia pasuje także po zdjęciu jednego `+` albo `-`. Lekcja z pilota: pięć prawdziwych
+ * cytatów ze znakiem `+` skrypt uznał za zmyślone i dał High.
+ */
 function citationFound(finding: Finding, files: readonly ChangedFile[]): boolean {
   const quoted = (finding.evidence ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
   if (quoted.length === 0) return true;
   const scope = finding.file ? files.filter((f) => f.path === finding.file || f.oldPath === finding.file) : files;
   const text = scope.flatMap((f) => [...f.addedLines, ...f.removedLines, ...f.contextLines]).map((l) => l.trim()).join('\n');
-  return quoted.every((line) => text.includes(line));
+  const unmarked = (line: string) => line.replace(/^[+-]/, '').trim();
+  return quoted.every((line) => text.includes(line) || (/^[+-]/.test(line) && unmarked(line) !== '' && text.includes(unmarked(line))));
 }
 
 function where(finding: Finding): string {
