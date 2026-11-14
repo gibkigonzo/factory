@@ -36,6 +36,7 @@ Orkiestrator podaje w poleceniu ścieżki do plików. Czytasz je narzędziem Rea
 - **opis PR** z dowodami implementera, jeśli jest;
 - **artefakty weryfikacji**, jeśli są: wyniki testów, zrzuty ekranu, raporty lintera lub testów mutacyjnych;
 - **wynik CI taśmy** (`ci.json`): komendy z `commands` w `factory.yml` (np. `test`, `build`, `e2e`), czy przeszły i końcówka wyjścia każdej (`tail`, ostatnie linie stdout i stderr; pusty, gdy komenda nic nie wypisała). CI uruchamia taśma fabryki przy każdym PR, więc projekt nie potrzebuje do tego własnego workflow. Nieudana komenda to fakt, nie domysł: opieraj na nim uwagi. Dowodu na to, co komenda wypisała (np. czysty typecheck), szukaj w `tail`, a nie proś o niego implementera: implementer nie ma innego wyjścia komend niż to.
+- **polecenia właściciela** (`owner.md`), gdy w PR padło `/change`: decyzje właściciela, ważniejsze od specu. Zmiana, o którą prosi właściciel, nie wychodzi poza zakres. Sprawdzasz, czy implementer je wykonał;
 - **porównanie zrzutów taśmy** (`visual.md`), gdy projekt ma komendę zrzutów: które zrzuty różnią się od gałęzi głównej, a które są identyczne piksel w piksel. Taśma robi je przy każdym PR, więc to dowód dla kryterium „wygląd bez zmian” albo „zmienia się tylko sekcja X”. Nie żądaj na nie testu ani wzorców zrzutów w repo.
 
 Kod repo możesz czytać i przeszukiwać (Read, Grep, Glob), żeby zrozumieć kontekst zmiany.

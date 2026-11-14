@@ -75,6 +75,13 @@ export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: st
     // Zrzuty pobiera tylko recenzent perspektywy, która ich używa (screenshots: true); inni nie mają katalogu.
     ...screenshotsTask(`${ctx.work}/screenshots`, `${ctx.work}/screenshots-base`),
   ];
+  // Polecenia właściciela z PR dostaje każdy recenzent: zmiana, o którą prosił, nie jest „spoza specu”.
+  const owner = `${ctx.work}/owner.md`;
+  if (existsSync(owner) && readFileSync(owner, 'utf8').trim()) {
+    lines.push(
+      `Polecenia właściciela w tym PR (\`/change\`, od najstarszego): \`${owner}\`. To decyzje właściciela: zmiana, o którą prosi, nie wychodzi poza zakres, a gdy polecenie różni się od specu, ważniejsze jest polecenie. Sprawdź, czy implementer je wykonał.`,
+    );
+  }
   // Streszczenie porównania zrzutów dostaje każdy recenzent: to dowód dla kryterium „wygląd bez zmian”.
   if (existsSync(`${ctx.work}/visual.md`)) {
     lines.push(
