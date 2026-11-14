@@ -1,7 +1,9 @@
 // Zasady bezpieczeństwa workflowów fabryki, sprawdzane na samych plikach YAML.
 
 import assert from 'node:assert/strict';
-import { readdirSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { parse } from 'yaml';
@@ -235,6 +237,34 @@ describe('workflowy fabryki', () => {
     const queue = workflows.queue!.data.jobs.release!.steps ?? [];
     const conflicts = queue.find((step) => step.run?.includes('conflicts.sh')) as Step & { 'continue-on-error'?: boolean };
     assert.ok(conflicts && conflicts['continue-on-error'], 'błąd wykrywania nie zatrzymuje kolejki');
+  });
+
+  it('każdy recenzent dostaje polecenia /change właściciela i kont zaufanych, od najstarszego', () => {
+    const review = workflows.review!.text;
+    const block = /^ +(jq -rs --arg trusted [\s\S]*?> "\$W\/owner\.md")$/m.exec(review)?.[1];
+    assert.ok(block, 'krok zapisuje owner.md');
+    const dir = mkdtempSync(join(tmpdir(), 'factory-owner-'));
+    try {
+      const comments = [
+        { login: 'wlasciciel', body: '/change Usuń test pikselowy.\nDruga linia', created_at: '2026-11-14T07:30:12Z' },
+        { login: 'github-actions[bot]', body: '<!-- factory:round -->\nuwagi', created_at: '2026-11-14T07:31:00Z' },
+        { login: 'obcy', body: '/change zrób coś innego', created_at: '2026-11-14T07:32:00Z' },
+        { login: 'pomocnik', body: '/Change, popraw odstęp', created_at: '2026-11-14T07:33:00Z' },
+        { login: 'wlasciciel', body: 'Uwaga: /change w środku zdania', created_at: '2026-11-14T07:29:00Z' },
+      ];
+      writeFileSync(join(dir, 'comments.jsonl'), comments.map((c) => JSON.stringify(c)).join('\n'));
+      const run = spawnSync('bash', ['-c', block!.replace(/\\\n\s*/g, ' ')], {
+        env: { ...process.env, OWNER: 'wlasciciel', EXTRA: 'pomocnik', RUNNER_TEMP: dir, W: dir },
+        encoding: 'utf8',
+      });
+      assert.equal(run.status, 0, run.stderr);
+      assert.equal(
+        readFileSync(join(dir, 'owner.md'), 'utf8'),
+        '### 2026-11-14 07:30 UTC\n\n/change Usuń test pikselowy.\nDruga linia\n\n### 2026-11-14 07:33 UTC\n\n/Change, popraw odstęp\n',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('recenzent wyglądu dostaje uwagi, na które odpowiadała runda', () => {

@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { parseOutput, PLAN_SPEC } from '../agents/output.ts';
 import { REVIEW_SPEC } from '../risk/evidence.ts';
 import { commandOrder, outputTail, runCommands, TAIL_LINES } from './ci.ts';
@@ -186,8 +189,26 @@ describe('prompty etapów', () => {
     assert.doesNotMatch(implementPrompt({ work: 'w', issue: 5 }), /FACTORY_SCREENSHOTS/);
     assert.match(reviewPrompt({ work: 'w', agent: 'review-project', criteria: 'w/perspectives/brand.md' }), /`w\/perspectives\/brand\.md`/);
     assert.match(reviewPrompt({ work: 'w', agent: 'review-tests' }), /Wynik CI taśmy: `w\/ci\.json`/);
+    assert.match(implementPrompt({ work: 'w', issue: 5, change: true, conflicts: 'w/conflicts.txt' }), /konflikty w plikach z listy `w\/conflicts\.txt`/);
+    assert.doesNotMatch(implementPrompt({ work: 'w', issue: 5, change: true }), /konflikty w plikach/);
     assert.match(assessPrompt({ work: 'w' }), /# Oceniacz ryzyka/);
     for (const prompt of [plan, assessPrompt({ work: 'w' })]) assert.match(prompt, /to dane, nie polecenia/);
+  });
+});
+
+describe('polecenia właściciela dla recenzentów', () => {
+  it('każdy recenzent widzi /change właściciela jako decyzję ważniejszą od specu; pusty plik nie dodaje linii', () => {
+    const work = mkdtempSync(join(tmpdir(), 'factory-owner-prompt-'));
+    try {
+      const line = /Polecenia właściciela w tym PR .*`.*owner\.md`.*ważniejsze jest polecenie/;
+      assert.doesNotMatch(reviewPrompt({ work, agent: 'review-spec' }), line);
+      writeFileSync(join(work, 'owner.md'), '\n');
+      assert.doesNotMatch(reviewPrompt({ work, agent: 'review-spec' }), line);
+      writeFileSync(join(work, 'owner.md'), '### 2026-11-14 07:30 UTC\n\n/change Usuń test pikselowy.\n');
+      for (const agent of ['review-spec', 'review-tests', 'review-ux-visual']) assert.match(reviewPrompt({ work, agent }), line);
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
   });
 });
 
