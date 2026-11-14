@@ -78,6 +78,8 @@ Jak taśma działa, opisuje README. Tu są decyzje i ich powody.
 - Dziennik to przypięte issue „Tryb cienia”, odświeżane po werdykcie, po zamknięciu PR fabryki i raz dziennie, bo reakcje nie uruchamiają workflowów. Statystyki wszystkich zadań, także bez PR, trafiają do `journal.csv` i `journal.json` na gałęzi `factory-journal`.
 - „Scal” z późniejszym `/change` to 👎 (fałszywe Low), bo po trybie cienia PR scaliłby się bez poprawki. Reakcja na werdykt ma pierwszeństwo, a `/change` po eskalacji to zgoda (12 listopada).
 - Bramka 1 (progi w `shadow` w `base`) liczy okno ostatnich `gate_prs` ocenionych PR, a nie całą historię: po naprawie błędu fabryka musi pokazać tyle dobrych werdyktów pod rząd (12 listopada).
+- Bramka 1 wymaga też co najmniej `min_low` trafnych Low w oknie, bo po trybie cienia fabryka scali sama właśnie Low, a zgodność z samymi eskalacjami tego nie sprawdza. W pilocie Low było 5 z 26 werdyktów, w tym jedno fałszywe (14 listopada).
+- Bramka 2 (do Etapu 2, Low dla kodu) wymaga 20 automerge'ów treści bez incydentu, a PR-y z kodem w Etapie 1 dalej dostają werdykt trybu cienia i muszą spełniać warunki Bramki 1. Inaczej Etap 2 otworzyłby Low dla kodu na podstawie danych sprzed Etapu 1 (14 listopada).
 - Kalibracja progu pewności porównuje odsetek przyjętych PR w grupach pewności, a nie zgodność, bo werdykt sam zależy od pewności.
 
 ### Spec (7, 11 i 12 listopada 2026)

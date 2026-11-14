@@ -76,7 +76,7 @@ export function renderJournal(records: readonly PrRecord[], config: FactoryConfi
     `- PR z werdyktem fabryki: ${m.withVerdict}, z Twoją oceną: ${m.evaluated}`,
     `- Zgodność: ${percent(m.agreement)}${m.evaluated ? ` (${m.agreed} z ${m.evaluated})` : ''}`,
     `- Fałszywe Low: ${m.falseLow.length}${m.falseLow.length ? ` (${m.falseLow.map((n) => `#${n}`).join(', ')})` : ''}`,
-    `- Okno Bramki 1 (ostatnie ${config.shadow.gate_prs} PR z oceną): ${m.window.prs.length} PR, zgodność ${percent(m.window.agreement)}${m.window.evaluated ? ` (${m.window.agreed} z ${m.window.evaluated})` : ''}, fałszywe Low: ${m.window.falseLow.length}${m.window.prs.length ? `, od #${Math.min(...m.window.prs)}` : ''}`,
+    `- Okno Bramki 1 (ostatnie ${config.shadow.gate_prs} PR z oceną): ${m.window.prs.length} PR, zgodność ${percent(m.window.agreement)}${m.window.evaluated ? ` (${m.window.agreed} z ${m.window.evaluated})` : ''}, fałszywe Low: ${m.window.falseLow.length}, trafne Low: ${m.window.low}${m.window.prs.length ? `, od #${Math.min(...m.window.prs)}` : ''}`,
     `- Średnio rund poprawek: ${m.avgRounds === undefined ? 'brak danych' : decimal(m.avgRounds)}`,
     `- Mediana czasu od \`ready\` do merge'u: ${m.medianHoursToMerge === undefined ? 'brak danych' : `${decimal(m.medianHoursToMerge)} h`}`,
     '',
@@ -124,7 +124,7 @@ export function renderJournal(records: readonly PrRecord[], config: FactoryConfi
     ...(extras.filesUrl
       ? [`Wszystkie zadania z kosztem na etap i recenzenta oraz Twoimi ocenami: [journal.csv](${extras.filesUrl}/journal.csv) (tabela) i [journal.json](${extras.filesUrl}/journal.json); problemy taśmy: [problemy.csv](${extras.filesUrl}/problemy.csv).`, '']
       : []),
-    `Progi Bramki 1: ${config.shadow.gate_prs} ostatnich ocenionych PR (starsze wypadają z okna), w nich zgodność co najmniej ${percent(config.shadow.min_agreement)} i fałszywych Low najwyżej ${config.shadow.max_false_low}. Fałszywe Low to werdykt „scaliłaby”, który oceniłeś 👎, PR zamknięty bez merge'u albo merge cofnięty w ciągu ${config.shadow.revert_days} dni. Przyjęty PR to scalony i niecofnięty.`,
+    `Progi Bramki 1: ${config.shadow.gate_prs} ostatnich ocenionych PR (starsze wypadają z okna), w nich zgodność co najmniej ${percent(config.shadow.min_agreement)}, fałszywych Low najwyżej ${config.shadow.max_false_low} i trafnych Low co najmniej ${config.shadow.min_low}. Fałszywe Low to werdykt „scaliłaby”, który oceniłeś 👎, PR zamknięty bez merge'u albo merge cofnięty w ciągu ${config.shadow.revert_days} dni. Trafne Low to „scaliłaby” z Twoim 👍. Przyjęty PR to scalony i niecofnięty.`,
     '',
     `_Aktualizacja: ${updated}. Dziennik prowadzi workflow fabryki; nie edytuj go ręcznie._`,
   ];

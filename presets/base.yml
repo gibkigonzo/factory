@@ -33,6 +33,7 @@ shadow:
   gate_prs: 20          # PR-y z Twoją oceną werdyktu fabryki
   min_agreement: 0.9    # zgodność werdyktów fabryki z Twoimi ocenami
   max_false_low: 0      # Low, które odrzuciłeś albo cofnąłeś
+  min_low: 8            # trafne Low: „scaliłaby” z Twoim 👍, bo właśnie Low fabryka scali sama
   revert_days: 7        # revert w tylu dniach po merge'u zamienia Low w fałszywe Low
 
 # Model na każdym etapie taśmy. Projekt może nadpisać każdy wpis.

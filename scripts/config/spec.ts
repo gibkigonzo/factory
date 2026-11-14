@@ -106,6 +106,7 @@ export const SCHEMA: Extract<Spec, { kind: 'object' }> = {
         gate_prs: positive,
         min_agreement: { kind: 'number', min: 0, max: 1 },
         max_false_low: { kind: 'integer', min: 0 },
+        min_low: { kind: 'integer', min: 0 },
         revert_days: positive,
       },
     },
@@ -164,6 +165,7 @@ export const REQUIRED: Record<LayerKind, readonly string[]> = {
     'shadow.gate_prs',
     'shadow.min_agreement',
     'shadow.max_false_low',
+    'shadow.min_low',
     'shadow.revert_days',
     'wip_limit',
     'daily_runs',
@@ -222,7 +224,7 @@ export interface FactoryConfig {
     reviewers: Record<string, string> & { default: string };
   };
   /** Progi Bramki 1 trybu cienia. */
-  shadow: { gate_prs: number; min_agreement: number; max_false_low: number; revert_days: number };
+  shadow: { gate_prs: number; min_agreement: number; max_false_low: number; min_low: number; revert_days: number };
   exceptions: GateException[];
   wip_limit: number;
   daily_runs: number;

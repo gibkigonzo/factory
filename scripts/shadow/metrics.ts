@@ -35,8 +35,11 @@ export interface Metrics {
     /** Udział rodzajów wyjścia w znakach: rozumowanie, tekst i wywołania narzędzi. */
     output?: { thinking: number; text: number; tools: number };
   };
-  /** Okno Bramki 1: ostatnie PR-y z werdyktem i znanym wynikiem (ocena albo fałszywe Low), najwyżej `gate_prs`. */
-  window: { prs: number[]; evaluated: number; agreed: number; agreement?: number; falseLow: number[] };
+  /**
+   * Okno Bramki 1: ostatnie PR-y z werdyktem i znanym wynikiem (ocena albo fałszywe Low), najwyżej `gate_prs`.
+   * `low` to trafne Low w oknie: werdykt „scaliłaby” z 👍, bez zamknięcia i cofnięcia.
+   */
+  window: { prs: number[]; evaluated: number; agreed: number; agreement?: number; falseLow: number[]; low: number };
   gate: { passed: boolean; missing: string[] };
 }
 
@@ -89,14 +92,24 @@ function windowOf(records: readonly PrRecord[], size: number): Metrics['window']
     .slice(0, size);
   const evaluated = known.filter((r) => r.shadow!.reaction);
   const agreed = evaluated.filter((r) => r.shadow!.reaction === 'up').length;
-  const window: Metrics['window'] = { prs: known.map((r) => r.number), evaluated: evaluated.length, agreed, falseLow: known.filter(isFalseLow).map((r) => r.number) };
+  const window: Metrics['window'] = {
+    prs: known.map((r) => r.number),
+    evaluated: evaluated.length,
+    agreed,
+    falseLow: known.filter(isFalseLow).map((r) => r.number),
+    low: evaluated.filter((r) => r.shadow!.record.action === 'merge' && r.shadow!.reaction === 'up' && !isFalseLow(r)).length,
+  };
   const agreement = ratio(agreed, evaluated.length);
   if (agreement !== undefined) window.agreement = agreement;
   return window;
 }
 
+/**
+ * Bramka 1 wymaga też trafnych Low, bo po trybie cienia fabryka scali sama właśnie Low. Zgodność z samymi eskalacjami
+ * nie mówi, czy jej Low są bezpieczne (ustalenie z 14 listopada 2026).
+ */
 function gate(w: Metrics['window'], config: FactoryConfig): Metrics['gate'] {
-  const { gate_prs, min_agreement, max_false_low } = config.shadow;
+  const { gate_prs, min_agreement, max_false_low, min_low } = config.shadow;
   const missing: string[] = [];
   if (w.prs.length < gate_prs) missing.push(`brakuje ${gate_prs - w.prs.length} ocenionych PR (${w.prs.length} z ${gate_prs})`);
   // Bez ocen zgodności nie ma; tę lukę opisuje już brak ocenionych PR (gate_prs jest dodatnie).
@@ -104,6 +117,7 @@ function gate(w: Metrics['window'], config: FactoryConfig): Metrics['gate'] {
     missing.push(`zgodność ${percent(w.agreement)}, potrzeba co najmniej ${percent(min_agreement)}`);
   }
   if (w.falseLow.length > max_false_low) missing.push(`fałszywe Low: ${w.falseLow.length} (dozwolone ${max_false_low})`);
+  if (w.low < min_low) missing.push(`trafne Low: ${w.low}, potrzeba co najmniej ${min_low}`);
   return { passed: missing.length === 0, missing };
 }
 

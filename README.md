@@ -158,7 +158,7 @@ Metryki liczy skrypt:
 - **rundy poprawek**, **czas od `ready` do merge'u** i **koszt** (równowartość cen API na PR, etap i recenzenta);
 - **próg pewności recenzentów**: odsetek przyjętych PR przy pewności ≥ 0,8 i poniżej. Podobne liczby znaczą, że pewność nie przewiduje Twoich decyzji.
 
-**Bramka 1** przechodzi, gdy w ostatnich 20 ocenionych PR (`gate_prs`) zgodność wynosi co najmniej 90% i nie ma fałszywych Low. Dziennik pokaże, że można wyjść z trybu cienia; decyzja należy do Ciebie.
+**Bramka 1** przechodzi, gdy w ostatnich 20 ocenionych PR (`gate_prs`) zgodność wynosi co najmniej 90%, nie ma fałszywych Low i jest co najmniej 8 trafnych Low (`min_low`: „scaliłaby” z Twoim 👍). Dziennik pokaże, że można wyjść z trybu cienia; decyzja należy do Ciebie.
 
 ## Szczegóły
 
