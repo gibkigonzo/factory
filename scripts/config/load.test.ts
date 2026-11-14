@@ -47,19 +47,16 @@ describe('poprawny kontrakt', () => {
     assert.deepEqual(config.files.tests, []);
     assert.deepEqual(config.exceptions, []);
     assert.deepEqual(config.reviewers.extra, []);
-    assert.equal(config.evidence.preview_deploy, false);
+    assert.deepEqual(config.evidence, {});
   });
 
-  it('dopuszcza własne komendy, ludzkie bramki i harmonogramy', () => {
-    const text = `${MINIMAL}  scene_check: ./tools/check.sh
-human_gates:
-  playtest: [feel]
-schedules: { po: weekly, qa: nightly }
-`;
-    const result = loadConfig(text, 'factory.yml');
+  it('dopuszcza własne komendy; pola, których taśma nie używa, odrzuca', () => {
+    const result = loadConfig(`${MINIMAL}  scene_check: ./tools/check.sh\n`, 'factory.yml');
     assert.ok(result.ok, result.ok ? '' : result.errors.join('\n'));
     assert.equal(result.config.commands.scene_check, './tools/check.sh');
-    assert.deepEqual(result.config.human_gates, { playtest: ['feel'] });
+    for (const field of ['schedules: { po: weekly }', 'human_gates: { playtest: [feel] }']) {
+      assert.ok(!loadConfig(`${MINIMAL}${field}\n`, 'factory.yml').ok, field);
+    }
   });
 
   it('każdy preset z presets/ daje się dołączyć', () => {

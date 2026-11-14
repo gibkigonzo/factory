@@ -1,6 +1,6 @@
 # Factory
 
-Fabryka oprogramowania oparta na Claude Code i GitHub Actions. Zamienia rozmowę o pomyśle w zweryfikowany pull request z oceną ryzyka. Ty decydujesz, co się scala, i robisz to z telefonu. Pierwszy projekt to strona WWW. Gry w Godot są w planach.
+Fabryka do wytwarzania oprogramowania, oparta na Claude Code i GitHub Actions. Zamienia rozmowę o pomyśle w zweryfikowany pull request z oceną ryzyka. Ty decydujesz, co się scala, i robisz to z telefonu.
 
 > **Status: Etap 0, tryb cienia.** Taśma prowadzi zadanie od pomysłu do werdyktu w PR, ale niczego nie scala. Przy każdym PR zapisuje, co by zrobiła, a Ty oceniasz ten werdykt. Automatyczny merge Low włączy się po Bramce 1 (stan w dzienniku).
 
@@ -15,7 +15,7 @@ Fabryka oprogramowania oparta na Claude Code i GitHub Actions. Zamienia rozmowę
 - **Kolejka i limity.** Zadania na tych samych plikach idą po kolei, reszta równolegle w granicach `wip_limit`. Dzienny limit przebiegów pilnuje kosztu.
 - **Bezpieczeństwo.** Claude działa tylko z prawem odczytu i zwraca JSON albo patch; zapisy robią skrypty. Nowe pakiety instaluje workflow po Twoim `/approve`.
 
-**Jeszcze nie:** automatyczny merge (wymaga rulesetu na `main` i aplikacji GitHub fabryki, a w repo prywatnym GitHub Pro); pola `evidence.preview_deploy`, `human_gates` i `schedules` (są w kontrakcie, taśma ich nie używa); presety i CI dla Godota; sesja `factory-init`, która ustala konwencje projektu. Do tego czasu konwencje zapisujesz sam w `CLAUDE.md` projektu.
+**Jeszcze nie:** automatyczny merge (wymaga rulesetu na `main` i aplikacji GitHub fabryki, a w repo prywatnym GitHub Pro) i sesja `factory-init`, która ustala konwencje projektu. Do tego czasu konwencje zapisujesz sam w `CLAUDE.md` projektu.
 
 ## Szybki start
 

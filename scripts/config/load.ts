@@ -227,7 +227,7 @@ function unique(items: unknown[]): unknown[] {
 
 function withDefaults(merged: Obj): FactoryConfig {
   const defaults = {
-    evidence: { preview_deploy: false },
+    evidence: {},
     dependencies: {},
     zones: {},
     zone_tests: {},
@@ -236,9 +236,7 @@ function withDefaults(merged: Obj): FactoryConfig {
     assertion_markers: [],
     protected_files: [],
     reviewers: { extra: [] },
-    human_gates: {},
     exceptions: [],
-    schedules: {},
   };
   const complete = mergeObjects(defaults, merged);
   // Kolejność pól jak w schemacie, żeby wynik --json był zawsze taki sam i czytelny.

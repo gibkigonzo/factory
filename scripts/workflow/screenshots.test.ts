@@ -264,7 +264,7 @@ describe('zrzuty ekranu', () => {
   it('CLI: bez evidence.screenshots nic nie robi, galeria sprawdza pliki od nowa, werdykt bez modelu tylko bez zmian', () => {
     const dir = temp();
     try {
-      writeFileSync(join(dir, 'none.json'), JSON.stringify({ commands: {}, evidence: { preview_deploy: false } }));
+      writeFileSync(join(dir, 'none.json'), JSON.stringify({ commands: {}, evidence: {} }));
       assert.deepEqual(JSON.parse(cli('screenshots', '--config', join(dir, 'none.json'), '--out', join(dir, 'shots')).stdout), { configured: false });
       assert.ok(!existsSync(join(dir, 'shots')));
 
