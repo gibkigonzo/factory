@@ -168,6 +168,23 @@ jobs:
           path: ${{ runner.temp }}/screenshots-base
           if-no-files-found: ignore
 
+      - name: Porównanie zrzutów dla recenzentów
+        if: steps.shots.outputs.configured == 'true'
+        continue-on-error: true   # bez niego recenzenci nie mają streszczenia, a recenzent wyglądu i tak porówna zrzuty
+        run: |
+          # Wszyscy recenzenci dostają streszczenie: które zrzuty różnią się od gałęzi bazowej. To dowód dla kryterium
+          # „wygląd bez zmian”, więc nikt nie żąda na nie stałego testu ze wzorcami zrzutów w repo.
+          node "$F/scripts/workflow/cli.ts" screenshots-summary --dir "$RUNNER_TEMP/screenshots" \
+            --before "$RUNNER_TEMP/screenshots-base" --out "$W/visual.md"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.shots.outputs.configured == 'true'
+        with:
+          name: factory-visual
+          path: .factory/work/visual.md
+          include-hidden-files: true
+          if-no-files-found: ignore
+
   panel:
     needs: guard
     if: needs.guard.outputs.ok == 'true'
@@ -288,6 +305,12 @@ jobs:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: factory-ci
+          merge-multiple: true
+          path: .factory/work
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.ci.outputs.screenshots == 'true'
+        with:
+          pattern: factory-visual
           merge-multiple: true
           path: .factory/work
       # Zrzuty tylko dla perspektywy, która je ocenia (screenshots: true), i tylko gdy projekt ma evidence.screenshots.

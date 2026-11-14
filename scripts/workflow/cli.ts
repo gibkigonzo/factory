@@ -30,7 +30,7 @@ import { nextRound, noChangeComment, roundComment } from './loop.ts';
 import { admit, queueState, release } from './queue.ts';
 import { renderReport } from './report.ts';
 import type { PanelSummary } from './report.ts';
-import { compareScreenshots, galleryComment, runScreenshots, unchangedVerdict, writeGallery } from './screenshots.ts';
+import { compareScreenshots, galleryComment, runScreenshots, unchangedVerdict, visualSummary, writeGallery } from './screenshots.ts';
 import { parseSpec } from './spec.ts';
 import { isStage, parseUsageBlocks, parseUsageList, readUsage, sessionError, sessionStarted, sumUsage } from './usage.ts';
 import type { Usage } from './usage.ts';
@@ -321,6 +321,11 @@ function run(command: string | undefined, rest: string[]): string {
       });
       writeFileSync(required(v.out, '--out'), comment);
       return `Galeria: ${comment.length} znaków`;
+    }
+    case 'screenshots-summary': {
+      // Dla wszystkich recenzentów: które zrzuty zmieniły się względem gałęzi bazowej (bez usuwania plików).
+      writeFileSync(required(v.out, '--out'), `${visualSummary(required(v.dir, '--dir'), v.before)}\n`);
+      return 'Porównanie zrzutów zapisane.';
     }
     case 'screenshots-unchanged': {
       const work = v.work!;

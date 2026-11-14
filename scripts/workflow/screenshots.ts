@@ -257,6 +257,30 @@ export function unchangedVerdict(dir: string, baseDir: string, perspective: stri
   };
 }
 
+const CHANGE_WORD: Record<string, string> = { changed: 'zmieniony', new: 'nowy', removed: 'usunięty', skipped: 'pominięty przez limit' };
+
+/**
+ * Streszczenie porównania zrzutów z gałęzią bazową dla wszystkich recenzentów (plik visual.md), nie tylko dla
+ * perspektywy wyglądu. To dowód dla kryterium „wygląd bez zmian”: lekcja z pilota, recenzent specu go nie znał
+ * i zażądał testu, a implementer dopisał wzorce zrzutów całej strony, które psuły każdą późniejszą zmianę wyglądu.
+ */
+export function visualSummary(dir: string, baseDir?: string): string {
+  const compared = compareScreenshots(dir, baseDir, false);
+  if (compared.shots.length === 0) return 'Porównania zrzutów nie ma: komenda zrzutów nie zostawiła żadnego zrzutu.';
+  const total = compared.shots.length;
+  if (!compared.base) {
+    return `Porównania zrzutów z gałęzią główną nie ma (komenda zrzutów zakończyła się błędem albo brak zrzutów bazy), więc nie wiadomo, czy wygląd się zmienił. Zrzutów po zmianie: ${total}.`;
+  }
+  const changed = compared.shots.filter(needsReview);
+  if (changed.length === 0) {
+    return `Porównanie zrzutów taśmy: wszystkie zrzuty (${total}) są identyczne piksel w piksel jak na gałęzi głównej, więc zmiana nie zmienia wyglądu.`;
+  }
+  return [
+    `Porównanie zrzutów taśmy: ${changed.length} z ${total} zrzutów różni się od gałęzi głównej, reszta jest identyczna piksel w piksel.`,
+    ...changed.map((s) => `- ${label(s)}: ${CHANGE_WORD[s.change ?? 'changed'] ?? s.change}`),
+  ].join('\n');
+}
+
 /**
  * Pliki galerii w `out`: dla pary jeden obraz z wzorcem po lewej albo u góry i wykonaniem obok albo pod spodem,
  * dla pojedynczego zrzutu sam zrzut. Zwraca nazwę opublikowanego pliku dla każdego zrzutu.

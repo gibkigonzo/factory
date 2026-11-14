@@ -1,7 +1,7 @@
 // Prompty etapów taśmy. Treść ról pochodzi ze skilli i agentów fabryki, a prompt dokłada tylko ścieżki do danych.
 // Dane (issue, diff, opis PR) są w plikach, nigdy w samym prompcie, i są opisane jako dane, nie polecenia.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseFrontmatter, ROOT } from '../agents/files.ts';
 import { screenshotsTask } from './screenshots.ts';
@@ -69,6 +69,12 @@ export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: st
     // Zrzuty pobiera tylko recenzent perspektywy, która ich używa (screenshots: true); inni nie mają katalogu.
     ...screenshotsTask(`${ctx.work}/screenshots`, `${ctx.work}/screenshots-base`),
   ];
+  // Streszczenie porównania zrzutów dostaje każdy recenzent: to dowód dla kryterium „wygląd bez zmian”.
+  if (existsSync(`${ctx.work}/visual.md`)) {
+    lines.push(
+      `Porównanie zrzutów taśmy z gałęzią główną: \`${ctx.work}/visual.md\`. To dowód dla kryterium, że wygląd się nie zmienia albo zmienia się tylko w danych sekcjach; nie żądaj na nie testu.`,
+    );
+  }
   // Recenzent każdej rundy zaczyna od zera; bez poprzednich uwag potrafi zażądać odwrotności tego, co implementer
   // właśnie poprawił na prośbę poprzedniej rundy (lekcja z pilota: grubość nagłówka „za cienki”, potem „za gruby”).
   if (ctx.previousRound) {
