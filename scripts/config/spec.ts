@@ -6,8 +6,6 @@ export type Level = (typeof LEVELS)[number];
 export const GATES = ['file_lines', 'function_lines', 'complexity', 'nesting'] as const;
 export type Gate = (typeof GATES)[number];
 
-export const SCHEDULES = ['nightly', 'weekly', 'off'] as const;
-export type Schedule = (typeof SCHEDULES)[number];
 
 export const FILE_CLASSES = ['source', 'tests', 'lockfiles', 'generated', 'translations'] as const;
 export type FileClass = (typeof FILE_CLASSES)[number];
@@ -87,7 +85,7 @@ export const SCHEMA: Extract<Spec, { kind: 'object' }> = {
     project: { kind: 'string', pattern: /^[A-Za-z0-9][A-Za-z0-9._-]*$/, hint: 'litery, cyfry, „.”, „-” i „_”' },
     extends: names,
     commands: { kind: 'map', key: /^[a-z][a-z0-9_]*$/, keyHint: 'małe litery, cyfry i „_”', value: text },
-    evidence: { kind: 'object', fields: { screenshots: text, preview_deploy: { kind: 'boolean' } } },
+    evidence: { kind: 'object', fields: { screenshots: text } },
     dependencies: { kind: 'object', fields: { add: text, add_dev: text } },
     zones: namedMap(globs),
     zone_tests: namedMap(globs),
@@ -111,11 +109,9 @@ export const SCHEMA: Extract<Spec, { kind: 'object' }> = {
         revert_days: positive,
       },
     },
-    human_gates: namedMap({ kind: 'list', item: text }),
     exceptions: { kind: 'list', item: exception },
     wip_limit: positive,
     daily_runs: positive,
-    schedules: namedMap({ kind: 'enum', values: SCHEDULES }),
   },
 };
 
@@ -128,9 +124,7 @@ export const PROJECT_ONLY = [
   'commands',
   'evidence',
   'dependencies',
-  'human_gates',
   'exceptions',
-  'schedules',
   'reviewers.extra',
 ] as const;
 
@@ -195,7 +189,7 @@ export interface FactoryConfig {
   project: string;
   extends: string[];
   commands: Record<string, string>;
-  evidence: { screenshots?: string; preview_deploy: boolean };
+  evidence: { screenshots?: string };
   /** Komendy instalacji nowych zależności z planu; workflow dokleja do nich `nazwa@wersja`. Implementer ich nie dostaje. */
   dependencies: { add?: string; add_dev?: string };
   zones: Record<string, string[]>;
@@ -229,9 +223,7 @@ export interface FactoryConfig {
   };
   /** Progi Bramki 1 trybu cienia. */
   shadow: { gate_prs: number; min_agreement: number; max_false_low: number; revert_days: number };
-  human_gates: Record<string, string[]>;
   exceptions: GateException[];
   wip_limit: number;
   daily_runs: number;
-  schedules: Record<string, Schedule>;
 }
