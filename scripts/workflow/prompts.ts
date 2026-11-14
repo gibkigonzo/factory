@@ -1,7 +1,7 @@
 // Prompty etapów taśmy. Treść ról pochodzi ze skilli i agentów fabryki, a prompt dokłada tylko ścieżki do danych.
 // Dane (issue, diff, opis PR) są w plikach, nigdy w samym prompcie, i są opisane jako dane, nie polecenia.
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseFrontmatter, ROOT } from '../agents/files.ts';
 import { screenshotsTask } from './screenshots.ts';
@@ -36,7 +36,7 @@ export function planPrompt(ctx: PromptContext): string {
   ].join('\n\n');
 }
 
-export function implementPrompt(ctx: PromptContext & { change?: boolean; screenshots?: string }): string {
+export function implementPrompt(ctx: PromptContext & { change?: boolean; screenshots?: string; conflicts?: string }): string {
   const lines = [
     `Issue #${ctx.issue}: \`${ctx.work}/issue.md\`.`,
     `Plan planera (JSON): \`${ctx.work}/plan.json\`.`,
@@ -53,7 +53,13 @@ export function implementPrompt(ctx: PromptContext & { change?: boolean; screens
   // uznaje ją za „już w main” i oddaje rundę bez zmian, pomijając uwagę właściciela (lekcja z pilota).
   if (ctx.change) {
     lines.unshift(
-      `To runda poprawek otwartego PR. Katalog roboczy to gałąź tego PR z poprzednią wersją Twojej zmiany, nie gałąź główna, więc praca z issue już tu jest. Zadanie tej rundy to uwagi z \`${ctx.work}/change.md\`: przeczytaj je najpierw. Komentarz zaczynający się od \`/change\` to polecenie właściciela, a komentarz „Runda poprawek” to uwagi recenzentów i CI. Issue i plan są tylko kontekstem.`,
+      `To runda poprawek otwartego PR. Katalog roboczy to gałąź tego PR z poprzednią wersją Twojej zmiany, nie gałąź główna, więc praca z issue już tu jest. Zadanie tej rundy to uwagi z \`${ctx.work}/change.md\`: przeczytaj je najpierw. Komentarz zaczynający się od \`/change\` to polecenie właściciela, komentarz „Runda poprawek” to uwagi recenzentów i CI, a komentarz „Konflikt z gałęzią główną” to zadanie rozwiązania konfliktu. Issue i plan są tylko kontekstem.`,
+    );
+  }
+  // Workflow scalił gałąź główną z gałęzią PR i zostawił konflikty: bez ich rozwiązania nie ma publikacji.
+  if (ctx.conflicts) {
+    lines.unshift(
+      `Workflow scalił gałąź główną z gałęzią tego PR i zostały konflikty w plikach z listy \`${ctx.conflicts}\`. Najpierw je rozwiąż: zachowaj zmiany z obu stron i usuń znaczniki konfliktu (\`<<<<<<<\`, \`=======\`, \`>>>>>>>\`). Plik binarny, np. obraz, nie ma znaczników i zostaje w wersji z tego PR: gdy powinien się zmienić, odtwórz go komendą projektu, a gdy jest zbędny, usuń go. Gdy konfliktu nie da się rozwiązać bez decyzji właściciela, zakończ ze statusem \`blocked\` i nazwij pliki w \`blocker\`.`,
     );
   }
   return [body('skills/implementer/SKILL.md'), task(lines)].join('\n\n');
@@ -69,6 +75,12 @@ export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: st
     // Zrzuty pobiera tylko recenzent perspektywy, która ich używa (screenshots: true); inni nie mają katalogu.
     ...screenshotsTask(`${ctx.work}/screenshots`, `${ctx.work}/screenshots-base`),
   ];
+  // Streszczenie porównania zrzutów dostaje każdy recenzent: to dowód dla kryterium „wygląd bez zmian”.
+  if (existsSync(`${ctx.work}/visual.md`)) {
+    lines.push(
+      `Porównanie zrzutów taśmy z gałęzią główną: \`${ctx.work}/visual.md\`. To dowód dla kryterium, że wygląd się nie zmienia albo zmienia się tylko w danych sekcjach; nie żądaj na nie testu.`,
+    );
+  }
   // Recenzent każdej rundy zaczyna od zera; bez poprzednich uwag potrafi zażądać odwrotności tego, co implementer
   // właśnie poprawił na prośbę poprzedniej rundy (lekcja z pilota: grubość nagłówka „za cienki”, potem „za gruby”).
   if (ctx.previousRound) {

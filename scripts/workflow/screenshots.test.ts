@@ -18,6 +18,7 @@ import {
   screenshotsTask,
   SCREENSHOTS_MARKER,
   unchangedVerdict,
+  visualSummary,
   writeGallery,
 } from './screenshots.ts';
 
@@ -186,6 +187,34 @@ describe('zrzuty ekranu', () => {
       const verdict = unchangedVerdict(head, base, 'ux-visual')!;
       assert.equal(verdict.verdict, 'approve');
       assert.ok(parseOutput('verdict', JSON.stringify(verdict), 'v').ok, 'werdykt zgodny ze schematem');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('streszczenie porównania dla wszystkich recenzentów: bez zmian, lista zmienionych albo brak porównania', () => {
+    const dir = temp();
+    try {
+      const head = join(dir, 'screenshots');
+      const base = join(dir, 'screenshots-base');
+      shots(head, { 'hero@375.png': image(1), 'hero@375.ref.png': image(9), 'footer@1440.png': image(2) });
+      assert.match(visualSummary(head, base), /Porównania zrzutów z gałęzią główną nie ma/);
+      shots(base, { 'hero@375.png': image(1), 'footer@1440.png': image(2) });
+      assert.match(visualSummary(head, base), /wszystkie zrzuty \(2\) są identyczne piksel w piksel/);
+      shots(base, { 'footer@1440.png': image(5), 'old@375.png': image(3) });
+      assert.equal(
+        visualSummary(head, base),
+        'Porównanie zrzutów taśmy: 2 z 3 zrzutów różni się od gałęzi głównej, reszta jest identyczna piksel w piksel.\n- footer, 1440 px: zmieniony\n- old, 375 px: usunięty',
+      );
+      assert.ok(existsSync(join(base, 'old@375.png')), 'streszczenie nie usuwa plików');
+
+      const work = join(dir, 'work');
+      mkdirSync(work);
+      assert.ok(!reviewPrompt({ work, agent: 'review-spec' }).includes('Porównanie zrzutów taśmy z gałęzią główną:'), 'bez pliku nie ma linii');
+      const out = join(work, 'visual.md');
+      assert.equal(cli('screenshots-summary', '--dir', head, '--before', base, '--out', out).status, 0);
+      assert.match(readFileSync(out, 'utf8'), /^Porównanie zrzutów taśmy: 2 z 3/);
+      assert.match(reviewPrompt({ work, agent: 'review-spec' }), /Porównanie zrzutów taśmy z gałęzią główną: `.*visual\.md`.*nie żądaj na nie testu/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

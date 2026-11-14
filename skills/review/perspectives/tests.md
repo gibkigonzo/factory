@@ -13,5 +13,6 @@ Sprawdzasz, czy testy naprawdę chronią zmianę, a nie tylko przechodzą.
 - **Poprawka błędu:** jest test, który nie przechodził przed zmianą i przechodzi po niej.
 - **Osłabianie testów:** usunięte testy lub asercje, nowe `.skip`, `.only`, poluzowane oczekiwania, nadmiarowe snapshoty zamiast asercji.
 - **Stabilność:** zależność od czasu, kolejności, losowości albo sieci bez kontroli.
+- **Testy, które zamrażają wygląd:** wzorce zrzutów całej strony zapisane w repo albo bezwzględne położenia elementów na stronie padają przy każdej późniejszej zmianie wyglądu, także w innej sekcji. To uwaga `medium`; brak zmian wyglądu w tym PR sprawdza porównanie zrzutów taśmy.
 
 Czego nie oceniasz: samej logiki kodu produkcyjnego. Oceniasz tylko, czy testy ją pilnują.

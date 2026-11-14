@@ -62,6 +62,7 @@ jobs:
       kind: ${{ steps.data.outputs.kind }}
       limited: ${{ steps.limit.outputs.limited }}
       until: ${{ steps.limit.outputs.until }}
+      merge_sha: ${{ steps.sync.outputs.sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -87,6 +88,19 @@ jobs:
           # Katalog dla komendy evidence.screenshots, którą implementer może uruchomić; poza patchem (.git/info/exclude).
           echo "FACTORY_SCREENSHOTS=$GITHUB_WORKSPACE/.factory/work/screenshots" >> "$GITHUB_ENV"
           corepack enable || true
+
+      - name: Gałąź główna w PR
+        id: sync
+        if: inputs.pr != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ inputs.pr }}
+        run: |
+          # Runda poprawek zaczyna od scalenia gałęzi głównej: bez konfliktu robi to skrypt, a pliki z konfliktem
+          # rozwiązuje implementer. Patch liczy się od wyniku scalenia, więc zmiany z gałęzi głównej nie trafiają
+          # do sprawdzenia ścieżek. Commit scalenia robi job publish tym samym SHA.
+          BASE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)
+          bash "$F/scripts/workflow/sync-base.sh" "origin/$BASE" "$W" >> "$GITHUB_OUTPUT"
 
       - name: Dane dla implementera
         id: data
@@ -114,11 +128,19 @@ jobs:
           if [ -n "$NOTE" ]; then
             gh api "repos/$GITHUB_REPOSITORY/issues/comments/$NOTE" --jq .body > "$W/change.md"
             CHANGE="--change"
-            # Runda z pętli (komentarz taśmy) albo z /change właściciela; ta druga nie liczy się do limitu rund.
-            if head -n 1 "$W/change.md" | grep -qF '<!-- factory:round -->'; then KIND=loop; else KIND=change; fi
+            # Runda z pętli (komentarz taśmy), konfliktu z gałęzią główną albo z /change właściciela.
+            # Rundy konfliktu i /change nie liczą się do limitu automatycznych rund recenzji.
+            FIRST=$(head -n 1 "$W/change.md")
+            case "$FIRST" in
+              '<!-- factory:round -->'*) KIND=loop ;;
+              '<!-- factory:conflict -->'*) KIND=conflict ;;
+              *) KIND=change ;;
+            esac
           fi
           echo "kind=$KIND" >> "$GITHUB_OUTPUT"
-          node "$F/scripts/workflow/cli.ts" prompt implement --work "$W" --issue "$ISSUE" $CHANGE > "$W/prompt.md"
+          CONFLICTS=""
+          if [ -s "$W/conflicts.txt" ]; then CONFLICTS="--conflicts $W/conflicts.txt"; fi
+          node "$F/scripts/workflow/cli.ts" prompt implement --work "$W" --issue "$ISSUE" $CHANGE $CONFLICTS > "$W/prompt.md"
           {
             echo "title=$(gh issue view "$ISSUE" --json title --jq .title)"
             echo "model=$(node "$F/scripts/workflow/cli.ts" model implementer --config "$W/config.json")"
@@ -285,14 +307,27 @@ jobs:
           ISSUE: ${{ inputs.issue }}
           PR: ${{ inputs.pr }}
           TITLE: ${{ steps.data.outputs.title }}
+          BASELINE: ${{ steps.sync.outputs.baseline }}
         run: |
           git add -A
+          # Punkt odniesienia patcha: wynik scalenia gałęzi głównej w rundzie poprawek, a bez niego HEAD.
+          FROM=${BASELINE:-HEAD}
           # --no-renames: przy zmianie nazwy lista ma starą i nową ścieżkę, więc przeniesienie pliku chronionego też odpada.
-          git diff --cached --name-only --no-renames > "$W/paths.txt"
+          git diff --cached --name-only --no-renames "$FROM" > "$W/paths.txt"
           node "$F/scripts/workflow/cli.ts" check-paths --config "$W/config.json" < "$W/paths.txt"
-          git diff --cached --binary > "$W/change.patch"
+          git diff --cached --binary "$FROM" > "$W/change.patch"
           printf '%s' "$OUTPUT" > "$W/implementation.raw.json"
           node "$F/scripts/workflow/cli.ts" extract implementation "$W/implementation.raw.json" > "$W/implementation.json"
+          # Znaczniki konfliktu zostały w pliku: nie publikujemy, zadanie wraca do właściciela z listą plików.
+          if [ -s "$W/conflicts.txt" ]; then
+            LEFT=$(while IFS= read -r FILE; do
+              [ -f "$FILE" ] && grep -IlE '^(<<<<<<<|>>>>>>>)( |$)' "$FILE" || true
+            done < "$W/conflicts.txt" | tr '\n' ' ')
+            if [ -n "$LEFT" ]; then
+              jq --arg b "Nierozwiązany konflikt z gałęzią główną w plikach: $LEFT" '.status = "blocked" | .blocker = $b' \
+                "$W/implementation.json" > "$W/implementation.tmp" && mv "$W/implementation.tmp" "$W/implementation.json"
+            fi
+          fi
           if [ -n "$PR" ]; then
             BRANCH=$(gh pr view "$PR" --json headRefName --jq .headRefName)
           else
@@ -332,6 +367,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.pr != '' && needs.implement.outputs.branch || '' }}
+          fetch-depth: 0   # scalenie gałęzi głównej z rundy poprawek potrzebuje historii
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: gibkigonzo/factory
@@ -362,14 +398,18 @@ jobs:
           USAGE: ${{ needs.implement.outputs.usage }}
           EMPTY: ${{ needs.implement.outputs.empty }}
           KIND: ${{ needs.implement.outputs.kind }}
+          MERGE_SHA: ${{ needs.implement.outputs.merge_sha }}
           WORKFLOW: ${{ inputs.workflow }}
         run: |
           F="$RUNNER_TEMP/factory"
           DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
-          if [ "$EMPTY" != true ]; then
+          if [ "$EMPTY" != true ] || [ -n "$MERGE_SHA" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git apply --index "$RUNNER_TEMP/change/change.patch"
+            # Scalenie gałęzi głównej z rundy poprawek (ten sam SHA) i patch implementera w jednym commicie.
+            PATCH=""
+            if [ "$EMPTY" != true ]; then PATCH="$RUNNER_TEMP/change/change.patch"; fi
+            bash "$F/scripts/workflow/apply-change.sh" "$PATCH" "$MERGE_SHA"
             git commit -m "factory: $TITLE (#$ISSUE)"
             if [ -z "$PR" ]; then
               # Nowa gałąź factory/* należy do taśmy; po nieudanej próbie nadpisujemy ją bez otwartego PR.
@@ -399,6 +439,10 @@ jobs:
               # Runda na polecenie właściciela: numeruje się jak inne, ale nie zmniejsza limitu automatycznych rund.
               gh label create "factory:change-$NEXT" --force --description 'Runda poprawek po /change właściciela' >/dev/null
               gh pr edit "$PR" --add-label "factory:change-$NEXT"
+            elif [ "$KIND" = conflict ]; then
+              # Runda rozwiązania konfliktu z gałęzią główną: też poza limitem automatycznych rund (ma własny).
+              gh label create "factory:conflict-$NEXT" --force --description 'Runda rozwiązania konfliktu z gałęzią główną' >/dev/null
+              gh pr edit "$PR" --add-label "factory:conflict-$NEXT"
             fi
             if [ "$EMPTY" = true ]; then
               node "$F/scripts/workflow/cli.ts" no-change-comment --implementation "$RUNNER_TEMP/implementation.json" --round "$NEXT" > "$RUNNER_TEMP/no-change.md"
