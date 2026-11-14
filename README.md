@@ -120,7 +120,7 @@ Po wyjściu z trybu cienia merger scali Low od razu, a High zostawi Tobie. Scala
 
 ### Pętla poprawek i blokady
 
-- **Runda poprawek.** Czerwone CI albo `request_changes` odsyła PR do implementera z komentarzem „Runda poprawek N z M”: uwagi od najpoważniejszej, a przy czerwonym CI końcówka wyjścia padających komend. Przy czerwonym CI recenzenci nie ruszają, chyba że to ostatnia runda. Uwagi nierozstrzygnięte po `risk.max_review_rounds` rundach dają High.
+- **Runda poprawek.** Czerwone CI albo `request_changes` odsyła PR do implementera z komentarzem „Runda poprawek N z M”: uwagi od najpoważniejszej, a przy czerwonym CI końcówka wyjścia padających komend. Przy czerwonym CI recenzenci nie ruszają, chyba że to ostatnia runda; po poprawce cały panel ocenia PR od nowa. Uwagi nierozstrzygnięte po `risk.max_review_rounds` rundach dają High.
 - **Zadanie rundy** to uwagi z komentarza, nie issue od nowa. Twoje `/change` implementer wykonuje albo kończy blokadą z powodem; takie rundy nie zmniejszają limitu. Gdy żadna uwaga nie wymaga zmiany kodu, implementer oddaje rundę bez zmian z wyjaśnieniem, a recenzja rusza jeszcze raz.
 - **Co widzą recenzenci.** Każdy dostaje Twoje polecenia `/change` jako decyzje ważniejsze od specu, wynik CI z końcówką wyjścia każdej komendy (`ci.json`) i porównanie zrzutów z gałęzią główną. Recenzent wyglądu dostaje też uwagi, na które odpowiadała runda, żeby nie żądał ich odwrotności.
 - **Konflikty z gałęzią główną.** Każda runda zaczyna od scalenia gałęzi głównej: bez konfliktu robi to skrypt, a konflikty rozwiązuje implementer. Po zamknięciu PR fabryki kolejka sprawdza pozostałe otwarte PR i uruchamia rundę rozwiązania konfliktu (najwyżej 2 na PR, poza limitem rund).
