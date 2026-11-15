@@ -114,7 +114,7 @@ Jak taśma działa, opisuje README. Tu są decyzje i ich powody.
 - Cytat w uwadze recenzenta liczy się także ze znakiem diffu (`+`, `-`) na początku linii; lekcja z pilota: pięć prawdziwych cytatów ze znakiem `+` skrypt uznał za zmyślone (14 listopada).
 - Każdy recenzent dostaje polecenia `/change` właściciela jako decyzje ważniejsze od specu, `ci.json` z końcówką wyjścia komend i wynik porównania zrzutów (`visual.md`). Lekcje z pilota: recenzent specu zgłosił prośbę właściciela jako „spoza specu”, a inny prosił o log, którego implementer nie mógł pokazać. Ręczną zmianę gałęzi PR właściciel też zapisuje jako `/change`.
 - Każda runda zaczyna od scalenia gałęzi głównej; konflikty rozwiązuje implementer, a commit scalenia robi job zapisu tym samym SHA. Lekcja z pilota: dwa równoległe PR zmieniły plik dodany w rundzie poprawek, którego strażnik kolizji nie widział.
-- Nowe zależności planer wpisuje do planu, właściciel zatwierdza `/approve`, a instaluje je workflow. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji.
+- Nowe zależności planer wpisuje do planu, właściciel zatwierdza `/approve`, a instaluje je workflow. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji. Projekt może mieć kilka menedżerów pakietów (`dependencies.ecosystems`, np. `cargo` z flagą `features`); komendy Rusta działają wtedy z `--locked`, bo `cargo build` sam pobrałby skrzynię dopisaną ręcznie do `Cargo.toml` z pominięciem `/approve` (15 listopada).
 
 ### Jakość całego projektu (15 listopada 2026)
 

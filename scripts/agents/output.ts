@@ -24,6 +24,10 @@ const CRITERION: Spec = {
 /** Nowa zależność z planu. Nazwa i wersja bez znaków powłoki, bo workflow dokleja je do komendy instalacji. */
 export const DEPENDENCY_NAME = /^(@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
 export const DEPENDENCY_VERSION = /^\d+(\.\d+){0,2}$/;
+/** Menedżer pakietów spoza domyślnego, np. cargo; nazwa z dependencies.ecosystems w factory.yml. */
+export const DEPENDENCY_ECOSYSTEM = /^[a-z][a-z0-9_-]*$/;
+/** Funkcja pakietu (np. feature skrzyni Rusta): bez znaków powłoki. */
+export const DEPENDENCY_FEATURE = /^[A-Za-z0-9_][A-Za-z0-9_-]*(\/[A-Za-z0-9_][A-Za-z0-9_-]*)?$/;
 
 const DEPENDENCY: Spec = {
   kind: 'object',
@@ -31,6 +35,11 @@ const DEPENDENCY: Spec = {
     name: { kind: 'string', pattern: DEPENDENCY_NAME, hint: 'nazwa pakietu, np. tailwindcss albo @scope/pakiet' },
     version: { kind: 'string', pattern: DEPENDENCY_VERSION, hint: 'wersja albo jej początek, np. 4, 4.1 albo 4.1.3' },
     dev: { kind: 'boolean' },
+    ecosystem: { kind: 'string', pattern: DEPENDENCY_ECOSYSTEM, hint: 'menedżer z dependencies.ecosystems, np. cargo' },
+    features: {
+      kind: 'list',
+      item: { kind: 'string', pattern: DEPENDENCY_FEATURE, hint: 'nazwa funkcji pakietu, np. derive albo serde/std' },
+    },
   },
   required: ['name', 'version'],
 };

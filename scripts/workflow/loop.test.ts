@@ -138,4 +138,47 @@ describe('nowe zależności z planu', () => {
     assert.equal(installCommands([{ name: 'a && curl x', version: '1' }], config).ok, false);
     assert.equal(installCommands([{ name: 'a', version: '1; rm -rf /' }], config).ok, false);
   });
+
+  it('kolejny menedżer pakietów z ecosystems: komenda, wersja i funkcje pakietu przez jego flagę', () => {
+    const cargo = {
+      dependencies: {
+        ...config.dependencies,
+        ecosystems: {
+          cargo: { add: 'cargo add --manifest-path src-tauri/Cargo.toml', add_dev: 'cargo add --manifest-path src-tauri/Cargo.toml --dev', features: '--features' },
+        },
+      },
+    };
+    assert.deepEqual(
+      installCommands(
+        [
+          { name: 'serde', version: '1', ecosystem: 'cargo', features: ['derive', 'serde/std'] },
+          { name: 'wiremock', version: '0.6', ecosystem: 'cargo', dev: true },
+          { name: 'zod', version: '4' },
+        ],
+        cargo,
+      ),
+      {
+        ok: true,
+        commands: [
+          'cargo add --manifest-path src-tauri/Cargo.toml serde@1 --features derive,serde/std',
+          'cargo add --manifest-path src-tauri/Cargo.toml --dev wiremock@0.6',
+          'npm install --save-exact --ignore-scripts zod@4',
+        ],
+      },
+    );
+  });
+
+  it('nieznany menedżer, funkcje bez flagi albo podejrzana funkcja: blokada zamiast instalacji', () => {
+    assert.deepEqual(installCommands([{ name: 'serde', version: '1', ecosystem: 'cargo' }], config), {
+      ok: false,
+      reason: 'plan dodaje zależność serde z menedżera „cargo”, a factory.yml nie ma dependencies.ecosystems.cargo',
+    });
+    assert.deepEqual(installCommands([{ name: 'zod', version: '4', features: ['x'] }], config), {
+      ok: false,
+      reason: 'plan podaje funkcje pakietu zod, a factory.yml nie ma flagi dependencies.features',
+    });
+    const cargo = { dependencies: { ecosystems: { cargo: { add: 'cargo add', features: '--features' } } } };
+    assert.equal(installCommands([{ name: 'serde', version: '1', ecosystem: 'cargo', features: ['derive; curl x'] }], cargo).ok, false);
+    assert.equal(installCommands([{ name: 'serde', version: '1', ecosystem: 'cargo && x' }], cargo).ok, false);
+  });
 });

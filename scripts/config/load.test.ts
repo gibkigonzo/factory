@@ -131,6 +131,16 @@ describe('błędny kontrakt: komunikat wskazuje pole', () => {
   });
 });
 
+describe('kilka menedżerów pakietów', () => {
+  it('projekt dopisuje kolejny menedżer w dependencies.ecosystems z flagą funkcji pakietu', () => {
+    const text = `${MINIMAL}dependencies:\n  add: npm install --save-exact --ignore-scripts\n  ecosystems:\n    cargo:\n      add: cargo add --manifest-path src-tauri/Cargo.toml\n      features: --features\n`;
+    const result = loadConfig(text, 'factory.yml');
+    assert.ok(result.ok, result.ok ? '' : result.errors.join('\n'));
+    assert.deepEqual(result.config.dependencies.ecosystems, { cargo: { add: 'cargo add --manifest-path src-tauri/Cargo.toml', features: '--features' } });
+    assertError(`${MINIMAL}dependencies:\n  ecosystems:\n    Cargo: { add: x }\n`, 'factory.yml: dependencies.ecosystems.Cargo');
+  });
+});
+
 describe('powtórzenia w kodzie', () => {
   it('base ustawia progi i przegląd architektury, a projekt dopisuje tylko wyjątki z powodem', () => {
     const base = loadConfig(MINIMAL, 'factory.yml');

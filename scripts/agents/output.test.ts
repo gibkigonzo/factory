@@ -84,6 +84,11 @@ describe('sprawdzanie wyjścia', () => {
     assert.equal(bad.length, 2);
     assert.match(bad[0]!, /dependencies\[0\]\.name/);
     assert.match(bad[1]!, /dependencies\[1\]\.version/);
+    const crate = { name: 'serde', version: '1', ecosystem: 'cargo', features: ['derive', 'serde/std'] };
+    assert.deepEqual(errors('plan', { ...PLAN, dependencies: [crate] }), [], 'skrzynia Rusta z funkcjami');
+    const badCrate = errors('plan', { ...PLAN, dependencies: [{ ...crate, ecosystem: 'Cargo X', features: ['a b'] }] });
+    assert.ok(badCrate.some((e) => /dependencies\[0\]\.ecosystem/.test(e)), badCrate.join('\n'));
+    assert.ok(badCrate.some((e) => /dependencies\[0\]\.features\[0\]/.test(e)), badCrate.join('\n'));
   });
 
   it('werdykt bez podsumowania jest odrzucany', () => {

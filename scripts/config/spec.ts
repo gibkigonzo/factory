@@ -92,7 +92,14 @@ export const SCHEMA: Extract<Spec, { kind: 'object' }> = {
     extends: names,
     commands: { kind: 'map', key: /^[a-z][a-z0-9_]*$/, keyHint: 'małe litery, cyfry i „_”', value: text },
     evidence: { kind: 'object', fields: { screenshots: text } },
-    dependencies: { kind: 'object', fields: { add: text, add_dev: text } },
+    dependencies: {
+      kind: 'object',
+      fields: {
+        add: text,
+        add_dev: text,
+        ecosystems: namedMap({ kind: 'object', fields: { add: text, add_dev: text, features: text } }),
+      },
+    },
     zones: namedMap(globs),
     zone_tests: namedMap(globs),
     files,
@@ -205,6 +212,12 @@ export interface SizeLimit {
   files: number;
 }
 
+export interface EcosystemCommands {
+  add?: string;
+  add_dev?: string;
+  features?: string;
+}
+
 export interface GateException {
   path: string;
   gate: Gate;
@@ -218,8 +231,9 @@ export interface FactoryConfig {
   extends: string[];
   commands: Record<string, string>;
   evidence: { screenshots?: string };
-  /** Komendy instalacji nowych zależności z planu; workflow dokleja do nich `nazwa@wersja`. Implementer ich nie dostaje. */
-  dependencies: { add?: string; add_dev?: string };
+  /** Komendy instalacji nowych zależności z planu; workflow dokleja do nich `nazwa@wersja`. Implementer ich nie dostaje.
+   * `ecosystems` to kolejne menedżery pakietów (np. cargo), a `features` to ich flaga funkcji pakietu (np. --features). */
+  dependencies: { add?: string; add_dev?: string; ecosystems?: Record<string, EcosystemCommands> };
   zones: Record<string, string[]>;
   /** Testy spoza ścieżek strefy, które ją sprawdzają, np. e2e dla stron i układu (reguła 3). */
   zone_tests: Record<string, string[]>;
