@@ -203,7 +203,7 @@ Warstwy składają się w kolejności `base` → presety z `extends` → `factor
 | --- | --- | --- |
 | `project`, `extends` | projekt | nazwa projektu; presety, `base` zawsze pierwszy |
 | `commands` | projekt | komendy CI; wymagane `test` i `build`; implementer uruchamia tylko te |
-| `dependencies` | projekt | `add` i `add_dev`: instalacja zatwierdzonych pakietów, workflow dokleja `nazwa@wersja` |
+| `dependencies` | projekt | `add` i `add_dev`: instalacja zatwierdzonych pakietów, workflow dokleja `nazwa@wersja`; `ecosystems`: kolejne menedżery, np. `cargo` z flagą `features` |
 | `zones`, `zone_tests` | wszystkie warstwy | ścieżki stref (`data`, `security`, `release`, `dependencies`, `factory`, `shared`, `code`) i testy spoza ścieżek strefy, które ją sprawdzają |
 | `files`, `disable_markers`, `assertion_markers` | wszystkie warstwy | klasy plików (kod, testy, lockfile'y, generowane, tłumaczenia), znaczniki wyłączeń i asercji |
 | `protected_files` | wszystkie warstwy | pliki, których agenci nie zapisują |

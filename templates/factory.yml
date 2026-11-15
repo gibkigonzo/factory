@@ -20,6 +20,12 @@ commands:                          # wymagane: test i build; CI uruchamia wszyst
 dependencies:
   add: npm install --save-exact --ignore-scripts
   add_dev: npm install --save-dev --save-exact --ignore-scripts
+  # Kolejny menedżer pakietów, np. skrzynie Rusta; planer podaje go w polu ecosystem zależności.
+  # ecosystems:
+  #   cargo:
+  #     add: cargo add --manifest-path src-tauri/Cargo.toml
+  #     add_dev: cargo add --manifest-path src-tauri/Cargo.toml --dev
+  #     features: --features    # flaga funkcji pakietu; planer podaje je w polu features
 
 zones:                             # dopisuje ścieżki do stref z base i presetów
   data: ["migrations/**", "src/db/schema/**"]

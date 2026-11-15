@@ -315,7 +315,9 @@ jobs:
           NOTE=""
           WAITING=""
           if [ "$DECISION" = planned ]; then
-            DEPS=$(jq -r '[.dependencies // [] | .[] | "`\(.name)@\(.version)`" + (if .dev then " (dev)" else "" end)] | join(", ")' plan.json)
+            DEPS=$(jq -r '[.dependencies // [] | .[] | "`\(.name)@\(.version)`" + (if .ecosystem then " (\(.ecosystem))" else "" end)
+              + (if (.features // []) != [] then " z funkcjami \((.features // []) | join(", "))" else "" end)
+              + (if .dev then " (dev)" else "" end)] | join(", ")' plan.json)
             if [ -n "$DEPS" ]; then
               WAITING=approval
               NOTE="Plan dodaje nowe zależności: $DEPS. Napisz /approve w tym issue, żeby workflow je zainstalował i uruchomił implementera."
