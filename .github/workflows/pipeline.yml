@@ -16,7 +16,8 @@ on:
       pr: { type: string, default: '' }
       note: { type: string, default: '' }
       factory_ref: { type: string, default: main, description: 'Wersja skryptów fabryki; ta sama co w uses projektu' }
-      runs_on: { type: string, default: ubuntu-latest, description: 'Runner dla jobów z Claude i CI' }
+      runs_on: { type: string, default: ubuntu-latest, description: 'Runner dla kodu projektu: implementer i CI (komendy z factory.yml, zrzuty)' }
+      agents_runs_on: { type: string, default: '', description: 'Runner dla agentów, którzy nie budują projektu: planer, recenzenci, oceniacz ryzyka; pusty to runs_on' }
       trusted: { type: string, default: '', description: 'Dodatkowe zaufane konta, po przecinku' }
       max_parallel: { type: string, default: '3', description: 'Ilu recenzentów naraz' }
       workflow: { type: string, default: factory.yml, description: 'Plik workflowu projektu, który wywołuje fabrykę' }
@@ -138,7 +139,7 @@ jobs:
       issue: ${{ github.event.issue.number || inputs.issue }}
       note: ${{ inputs.note }}
       factory_ref: ${{ inputs.factory_ref }}
-      runs_on: ${{ inputs.runs_on }}
+      runs_on: ${{ inputs.agents_runs_on || inputs.runs_on }}
       trusted: ${{ inputs.trusted }}
       workflow: ${{ inputs.workflow }}
     secrets:
@@ -177,6 +178,7 @@ jobs:
       pr: ${{ inputs.pr }}
       factory_ref: ${{ inputs.factory_ref }}
       runs_on: ${{ inputs.runs_on }}
+      agents_runs_on: ${{ inputs.agents_runs_on }}
       trusted: ${{ inputs.trusted }}
       max_parallel: ${{ inputs.max_parallel }}
       workflow: ${{ inputs.workflow }}
@@ -195,7 +197,7 @@ jobs:
     with:
       pr: ${{ inputs.pr }}
       factory_ref: ${{ inputs.factory_ref }}
-      runs_on: ${{ inputs.runs_on }}
+      runs_on: ${{ inputs.agents_runs_on || inputs.runs_on }}
     secrets:
       CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     permissions:

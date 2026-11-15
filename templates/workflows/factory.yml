@@ -54,7 +54,8 @@ jobs:
       pr: ${{ inputs.pr }}
       note: ${{ inputs.note }}
       factory_ref: main          # ta sama wersja fabryki co w uses
-      runs_on: ubuntu-latest     # albo np. '["self-hosted", "vps"]'
+      runs_on: ubuntu-latest     # implementer i CI projektu, np. macos-latest albo '["self-hosted", "vps"]'
+      # agents_runs_on: ubuntu-latest  # planer, recenzenci i oceniacz ryzyka; domyślnie ten sam co runs_on
       # trusted: konto-a,konto-b  # dodatkowe zaufane konta obok właściciela
       # max_parallel: '3'         # recenzenci naraz
     secrets:

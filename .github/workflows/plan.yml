@@ -141,8 +141,13 @@ jobs:
         run: |
           # Bun z rejestru npm zamiast z GitHub Releases, które bywają niedostępne (HTTP 504).
           # Wersja jak w przypiętym claude-code-action. Gdy się nie uda, akcja pobierze Buna sama.
-          [ "$(uname -s)" = Linux ] || exit 0
-          case "$(uname -m)" in x86_64) PKG=@oven/bun-linux-x64 ;; aarch64|arm64) PKG=@oven/bun-linux-aarch64 ;; *) exit 0 ;; esac
+          case "$(uname -s)-$(uname -m)" in
+            Linux-x86_64) PKG=@oven/bun-linux-x64 ;;
+            Linux-aarch64|Linux-arm64) PKG=@oven/bun-linux-aarch64 ;;
+            Darwin-arm64) PKG=@oven/bun-darwin-aarch64 ;;
+            Darwin-x86_64) PKG=@oven/bun-darwin-x64 ;;
+            *) exit 0 ;;
+          esac
           npm install --prefix "$RUNNER_TEMP/bun" "$PKG@1.4.4" --no-audit --no-fund --ignore-scripts >/dev/null
           BUN="$RUNNER_TEMP/bun/node_modules/$PKG/bin/bun"
           chmod +x "$BUN" && "$BUN" --version && echo "path=$BUN" >> "$GITHUB_OUTPUT"

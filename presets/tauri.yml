@@ -1,0 +1,32 @@
+# Preset Tauri 2: front w src/, Rust w src-tauri/, projekty mobilne w src-tauri/gen/.
+# Dołączaj po presetach frontu i Rusta: extends: [base, typescript, web, rust, tauri].
+# Moduły Rusta z tokenami albo zapytaniami do usług projekt dopisuje do strefy security w factory.yml.
+
+zones:
+  security:
+    - "src-tauri/capabilities/**"                    # co front może wywołać w Ruście i w systemie
+    - "src-tauri/tauri.conf.json"                    # m.in. CSP i uprawnienia wtyczek
+    - "src-tauri/tauri.*.conf.json"
+    - "src-tauri/Info.plist"
+    - "src-tauri/*.entitlements"
+    - "src-tauri/gen/android/**/AndroidManifest.xml"
+  release:
+    - "src-tauri/gen/android/**/*.gradle.kts"        # wersja i podpis APK
+    - "src-tauri/gen/android/**/*.gradle"
+    - "src-tauri/gen/android/**/gradle.properties"
+  shared:
+    - "src-tauri/src/lib.rs"                         # start aplikacji: wtyczki, komendy, stan
+    - "src-tauri/src/main.rs"
+    - "src-tauri/gen/**"                             # projekty Androida i iOS
+  code:
+    - "src-tauri/src/**"
+    - "src-tauri/icons/**"
+
+files:
+  generated:
+    - "src-tauri/gen/schemas/**"                     # schematy uprawnień tworzone przy budowaniu
+
+protected_files:
+  - "**/keystore.properties"
+  - "**/*.mobileprovision"
+  - "**/*.provisionprofile"

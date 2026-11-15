@@ -70,6 +70,7 @@ Jak taśma działa, opisuje README. Tu są decyzje i ich powody.
 - Claude działa w jobach tylko z prawem odczytu i zwraca JSON albo patch. Zapisy robią osobne joby bez Claude.
 - Etapy łączy `workflow_dispatch`. W Etapie 0 zmiany podpisuje `github-actions[bot]`, a własna aplikacja GitHub fabryki przychodzi w Etapie 1.
 - `runs-on` jest ustawieniem: VPS właściciela podłączymy później jako self-hosted runner, tylko dla repo prywatnych.
+- Kod projektu buduje `runs_on` (implementer i CI), a planer, recenzenci i oceniacz ryzyka mogą działać na `agents_runs_on`. Aplikacja na macOS buduje się na runnerze macOS, który ma też Android SDK, a agenci zostają na Linuksie (15 listopada).
 - Ruleset na `main` w repo prywatnym wymaga GitHub Pro; decyzja przed Etapem 1.
 
 ### Tryb cienia (7 listopada 2026)
