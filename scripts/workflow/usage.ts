@@ -5,6 +5,15 @@
 export const STAGES = ['plan', 'implement', 'review', 'assess', 'architecture'] as const;
 export type Stage = (typeof STAGES)[number];
 
+/** Nazwy etapów dla właściciela: w dzienniku i w aplikacji. */
+export const STAGE_LABELS: Record<Stage, string> = {
+  plan: 'plan',
+  implement: 'implementacja',
+  review: 'recenzja',
+  assess: 'ocena ryzyka',
+  architecture: 'przegląd architektury',
+};
+
 export interface Usage {
   stage: Stage;
   /** Ile sesji Claude złożyło się na ten rekord (np. 5 recenzentów). */

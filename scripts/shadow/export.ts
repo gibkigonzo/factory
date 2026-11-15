@@ -3,7 +3,7 @@
 // Pliki leżą na gałęzi factory-journal i odświeżają się razem z dziennikiem.
 
 import type { Usage } from '../workflow/usage.ts';
-import type { IssueRecord, LineProblemRecord, PrRecord, StopState } from './collect.ts';
+import type { IssueRecord, LineProblemRecord, PrRecord, StopState } from './records.ts';
 import { ACTION_SHORT } from './decision.ts';
 
 export interface TaskRow {

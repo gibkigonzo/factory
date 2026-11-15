@@ -5,20 +5,13 @@ import { extractJson } from '../agents/output.ts';
 import type { Implementation } from './evidence.ts';
 import { usageBlock } from './usage.ts';
 import type { Usage } from './usage.ts';
+import type { LineProblem } from './line-problem.ts';
+
+export type { LineProblem } from './line-problem.ts';
 
 export const PLAN_MARKER = '<!-- factory:plan -->';
 export const PR_MARKER = '<!-- factory:implementation -->';
 
-/**
- * Problem taśmy: kłopot z narzędziami albo komendami projektu, a nie z samym zadaniem (np. komenda wypisuje
- * błąd, którego zadanie nie usunie). Agent go zgłasza, taśma się nie zatrzymuje, a dziennik zbiera zgłoszenia.
- */
-export interface LineProblem {
-  stage: string;
-  problem: string;
-  /** Kiedy zgłoszono (ISO); razem z treścią odróżnia zgłoszenia, gdy opis PR przenosi je między rundami. */
-  at: string;
-}
 
 const LINE_BLOCK = /<!-- factory:line-problem (\{.*?\}) -->/gs;
 

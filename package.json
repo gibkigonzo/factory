@@ -4,12 +4,15 @@
   "private": true,
   "description": "Generyczna fabryka oprogramowania oparta na Claude Code",
   "type": "module",
+  "exports": {
+    "./app": "./scripts/app/index.ts"
+  },
   "engines": {
     "node": ">=22.18"
   },
   "scripts": {
     "test": "node --test \"scripts/**/*.test.ts\"",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.app.json",
     "validate": "node scripts/config/cli.ts",
     "agents": "node scripts/agents/build.ts",
     "skill:zip": "mkdir -p dist && rm -f dist/spec-writer.zip && cd skills && zip -qr ../dist/spec-writer.zip spec-writer"

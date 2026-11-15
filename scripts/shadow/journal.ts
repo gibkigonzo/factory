@@ -5,17 +5,11 @@ import type { IssueRecord, LineProblemRecord, PrRecord, StopState } from './coll
 import { ACTION_SHORT } from './decision.ts';
 import { computeMetrics, isFalseLow, MIN_GROUP, percent } from './metrics.ts';
 import type { Group } from './metrics.ts';
+import { STAGE_LABELS } from '../workflow/usage.ts';
 
 const decimal = (value: number) => value.toFixed(1).replace('.', ',');
 const usd = (value: number) => `${value.toFixed(2).replace('.', ',')} USD`;
 const tokens = (value: number) => Math.round(value).toLocaleString('pl-PL');
-const STAGE_NAMES: Record<string, string> = {
-  plan: 'plan',
-  implement: 'implementacja',
-  review: 'recenzja',
-  assess: 'ocena ryzyka',
-  architecture: 'przegląd architektury',
-};
 const STATE = { open: 'otwarty', merged: 'scalony', closed: "zamknięty bez merge'u" } as const;
 
 function groupLine(label: string, group: Group): string {
@@ -100,7 +94,7 @@ export function renderJournal(records: readonly PrRecord[], config: FactoryConfi
     ...(m.cost
       ? [
           `- PR z pomiarem: ${m.cost.prs}, średnio ${usd(m.cost.perPr)} i ${tokens(m.cost.outputPerPr)} tokenów wyjścia na PR`,
-          `- Etapy, średnio na PR: ${m.cost.stages.map((s) => `${STAGE_NAMES[s.stage]} ${usd(s.perPr)}`).join(' · ')}`,
+          `- Etapy, średnio na PR: ${m.cost.stages.map((s) => `${STAGE_LABELS[s.stage]} ${usd(s.perPr)}`).join(' · ')}`,
           ...(m.cost.reviewers.length
             ? [`- Recenzenci, średnio na PR: ${m.cost.reviewers.map((r) => `${r.name} ${usd(r.perPr)}`).join(' · ')}`]
             : []),

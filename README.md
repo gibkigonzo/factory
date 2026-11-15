@@ -296,6 +296,17 @@ Wejścia szablonu:
 - Galeria zrzutów, dziennik i kolejka nie pobierają kodu PR ani nie uruchamiają Claude. Prawo zapisu treści mają tylko do gałęzi `factory-*`.
 - Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML.
 
+### Moduł dla aplikacji
+
+Aplikacja do prowadzenia projektów korzysta z logiki taśmy, a nie liczy jej po swojemu: `import { taskColumn } from 'factory/app'`, z zależnością npm przypiętą do commita fabryki (`github:gibkigonzo/factory#<sha>`). Moduł `scripts/app` daje:
+
+- kolumny tablicy zadań z etykiet issue i PR fabryki (`taskColumn`, `COLUMNS`);
+- komendy jako przyciski: które mają sens w danym miejscu i treść komentarza (`availableCommands`, `commandComment`), według tych samych zasad co `commands.yml`;
+- werdykt trybu cienia z komentarza (`parseShadow`), koszty (`parseUsageBlocks`, `STAGE_LABELS`) i plik `journal.json` (`parseJournal`);
+- rozpoznanie projektu fabryki i jej wersji z workflowu projektu (`factoryVersion`).
+
+To czysty TypeScript bez Node, działa w przeglądarce i w Tauri. Pilnują tego test grafu importów i `tsconfig.app.json` bez typów Node.
+
 ### Plugin w Claude Code
 
 To repo jest też marketplace'em pluginu ze skillami fabryki do pracy lokalnej: `/plugin marketplace add gibkigonzo/factory`, potem `/plugin install factory@factory`. Taśma pluginu nie potrzebuje.
@@ -307,6 +318,7 @@ To repo jest też marketplace'em pluginu ze skillami fabryki do pracy lokalnej: 
 skills/               skille: spec-writer, planner, implementer, review (protokół i perspektywy), risk-assessor, architect
 agents/               recenzenci review-<perspektywa>, generowani z skills/review
 scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, panel, wyjście agentów, kolejka,
+                      moduł dla aplikacji (scripts/app),
                       pętla poprawek, budżet, zrzuty, powtórzenia, merger i dziennik trybu cienia
 presets/              warstwy reguł: base, typescript, web, nuxt, rust, tauri
 templates/            szablony dla projektów: workflow taśmy, reguła dla CLAUDE.md, factory.yml

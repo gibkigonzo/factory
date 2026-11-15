@@ -2,7 +2,7 @@
 
 import { LEVELS } from '../config/spec.ts';
 import type { Gate, Level } from '../config/spec.ts';
-import type { PerspectiveDef } from '../review/perspectives.ts';
+import type { PerspectiveDef } from '../review/types.ts';
 
 export interface ChangedFile {
   path: string;

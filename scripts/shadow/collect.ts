@@ -20,24 +20,10 @@ import { parseUsageBlocks, sumUsage } from '../workflow/usage.ts';
 import type { Usage } from '../workflow/usage.ts';
 import { parseShadow } from './comment.ts';
 import type { ShadowRecord } from './comment.ts';
+import type { IssueRecord, LineProblemRecord, PrRecord, StopState } from './records.ts';
 
-export interface PrRecord {
-  number: number;
-  /** Issue zadania, z nazwy gałęzi factory/<numer>-…. */
-  issue?: number;
-  title: string;
-  state: 'open' | 'merged' | 'closed';
-  createdAt: string;
-  mergedAt?: string;
-  closedAt?: string;
-  readyAt?: string;
-  rounds: number;
-  reverted: boolean;
-  /** `implied`: ocena wynika z `/change` właściciela po werdykcie (po „scal” to 👎, po eskalacji 👍), a nie z reakcji na komentarz. */
-  shadow?: { record: ShadowRecord; at: string; reaction?: 'up' | 'down'; implied?: 'change' };
-  /** Zużycie wszystkich etapów i rund dla tego PR, zsumowane na etap. */
-  usage?: Usage[];
-}
+export type { IssueRecord, LineProblemRecord, PrRecord, StopState } from './records.ts';
+
 
 interface RawPr {
   number: number;
@@ -205,17 +191,6 @@ function taskIssues(dir: string): RawIssue[] {
   return read<RawIssue[]>(join(dir, 'issue-list.json'), []).filter((i) => i.labels?.some((l) => labels.includes(l.name)));
 }
 
-/** Zadanie fabryki, które nie dało PR: plan zablokowany, podzielony albo odrzucony, czekające albo z blokadą implementacji. */
-export interface IssueRecord {
-  issue: number;
-  title: string;
-  state: 'open' | 'closed';
-  labels: string[];
-  createdAt: string;
-  closedAt?: string;
-  readyAt?: string;
-  usage?: Usage[];
-}
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -230,11 +205,6 @@ export function factoryIssues(dir: string): number[] {
   return [...new Set([...fromPrs, ...taskIssues(dir).map((i) => i.number)])].sort((a, b) => a - b);
 }
 
-/** Zgłoszony problem taśmy z zadaniem, w którym go zgłoszono. */
-export interface LineProblemRecord extends LineProblem {
-  issue?: number;
-  pr?: number;
-}
 
 /**
  * Problemy taśmy z komentarzy planu i blokady w issue oraz z opisów PR fabryki, od najnowszego.
@@ -260,12 +230,6 @@ export function collectLineProblems(dir: string): LineProblemRecord[] {
   return [...found.values()].sort((a, b) => b.at.localeCompare(a.at));
 }
 
-/** Zatrzymana taśma: otwarte issue z etykietą factory:stopped (komenda /stop). */
-export interface StopState {
-  issue: number;
-  since: string;
-  reason?: string;
-}
 
 const STOP_BLOCK = /<!-- factory:stop (\{.*?\}) -->/s;
 
