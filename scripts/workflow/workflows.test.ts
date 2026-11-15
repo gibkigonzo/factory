@@ -14,7 +14,7 @@ type Job = { permissions?: Record<string, string>; steps?: Step[]; uses?: string
 type Workflow = { permissions?: unknown; on: unknown; jobs: Record<string, Job> };
 
 const DIR = join(ROOT, '.github/workflows');
-const STAGES = ['plan', 'implement', 'review', 'risk', 'merge', 'journal', 'queue', 'commands'];
+const STAGES = ['plan', 'implement', 'review', 'risk', 'merge', 'journal', 'queue', 'commands', 'architecture'];
 const REUSABLE = ['pipeline', ...STAGES];
 const read = (path: string) => readFileSync(path, 'utf8');
 const workflows = Object.fromEntries(
@@ -347,6 +347,35 @@ describe('workflowy fabryki', () => {
   it('recenzenci dostają diff bez lockfile i plików generowanych, a ich streszczenie obok', () => {
     assert.match(workflows.review!.text, /cli\.ts" review-diff --base/);
     assert.doesNotMatch(workflows.review!.text, /git diff --no-color -M[^\n]*> "\$W\/diff\.patch"/);
+  });
+
+  it('powtórzenia: skrypt z progami z gałęzi bazowej, bez Claude i bez zatrzymania recenzji; raport dostaje tylko utrzymywalność', () => {
+    const ci = workflows.review!.data.jobs.ci!;
+    const step = ci.steps!.find((s) => s.name === 'Powtórzenia w kodzie') as Step & { 'continue-on-error'?: boolean };
+    assert.ok(step, 'krok powtórzeń w CI recenzji');
+    assert.equal(step['continue-on-error'], true);
+    assert.match(step.run!, /cli\.ts" duplicates --config "\$W\/config\.json" --base "\$FORK"/);
+    assert.ok(!usesClaude(ci));
+    const download = workflows.review!.data.jobs.reviewer!.steps!.find((s) => s.with?.pattern === 'factory-duplicates') as Step & { if?: string };
+    assert.match(download.if!, /matrix\.member\.name == 'maintainability'/);
+  });
+
+  it('przegląd architektury: rusza po scalonych PR fabryki albo ręcznie, Claude tylko czyta, a issue zakłada skrypt z limitem', () => {
+    const job = workflows.pipeline!.data.jobs.architecture as Job & { if?: string };
+    assert.match(String(job.if), /needs\.line\.outputs\.stopped == 'false'/);
+    assert.match(String(job.if), /github\.event\.pull_request\.merged/);
+    assert.match(String(job.if), /startsWith\(github\.event\.pull_request\.head\.ref, 'factory\/'\)/);
+    assert.match(String(job.if), /inputs\.stage == 'architecture'/);
+    assert.equal(job.with?.runs_on, '${{ inputs.agents_runs_on || inputs.runs_on }}');
+    const jobs = workflows.architecture!.data.jobs;
+    assert.ok(!usesClaude(jobs.due!) && !usesClaude(jobs.publish!), 'licznik i zapis bez Claude');
+    assert.ok(usesClaude(jobs.review!));
+    const publish = jobs.publish!.steps!.map((s) => s.run ?? '').join('\n');
+    assert.match(publish, /architecture-issues --file/);
+    assert.match(publish, /gh issue create --title "\$TITLE" --body-file "\$RUNNER_TEMP\/body\.md" --label idea --label refactor/);
+    assert.doesNotMatch(publish, /--label ready/, 'propozycja to notatka, nie zadanie dla taśmy');
+    const review = jobs.review!.steps!.map((s) => s.run ?? '').join('\n');
+    assert.match(review, /--stage architecture/);
   });
 
   it('zrzuty ekranu: komenda projektu nie zatrzymuje recenzji, recenzent wyglądu dostaje zmienione sekcje, a galeria działa bez Claude i bez kodu PR', () => {

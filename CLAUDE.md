@@ -116,6 +116,13 @@ Jak taśma działa, opisuje README. Tu są decyzje i ich powody.
 - Każda runda zaczyna od scalenia gałęzi głównej; konflikty rozwiązuje implementer, a commit scalenia robi job zapisu tym samym SHA. Lekcja z pilota: dwa równoległe PR zmieniły plik dodany w rundzie poprawek, którego strażnik kolizji nie widział.
 - Nowe zależności planer wpisuje do planu, właściciel zatwierdza `/approve`, a instaluje je workflow. Implementer nie dostaje komendy instalacji, bo w jego jobie działa token subskrypcji.
 
+### Jakość całego projektu (15 listopada 2026)
+
+- Recenzent widzi jeden diff, więc powtórzenia narastające przez kilka PR przechodzą. Lekcja z pilota: strzałki karuzeli zbudowane od nowa w dwóch ekranach, po 14 klas, przeszły recenzje i dopiero osobne zadanie wyciągnęło wspólny komponent.
+- W każdym PR skrypt (bez Claude) liczy powtórzenia w całym repo: bloki znaczących linii i zestawy klas, także różniące się jedną klasą. `maintainability` dostaje te, które wprowadza PR, i zgłasza je jako uwagę z cytatem.
+- Co `quality.architecture_every_prs` scalonych PR fabryki agent `architect` (tylko odczyt) proponuje najwyżej `quality.architecture_max_issues` refaktorów jako notatki `idea` + `refactor`. Propozycje nie blokują PR; issue zakłada skrypt bez powtórek, a koszt trafia do dziennika przez issue „Przegląd architektury”.
+- Mechanizm i progi są w fabryce (`base`); projekt daje konwencje w `CLAUDE.md` i wyłącza ścieżki w `quality.ignore`, zawsze z powodem.
+
 ### Zatrzymanie taśmy (11 i 13 listopada 2026)
 
 - `/stop <powód>` zatrzymuje taśmę jak linka bezpieczeństwa: plan, implementacja, recenzja i kolejka czekają (`factory:paused`), a `/start` je wznawia. Dziennik i komendy działają zawsze.

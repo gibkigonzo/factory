@@ -237,6 +237,7 @@ function withDefaults(merged: Obj): FactoryConfig {
     protected_files: [],
     reviewers: { extra: [] },
     exceptions: [],
+    quality: { ignore: [] },
   };
   const complete = mergeObjects(defaults, merged);
   // Kolejność pól jak w schemacie, żeby wynik --json był zawsze taki sam i czytelny.

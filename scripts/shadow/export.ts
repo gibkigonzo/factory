@@ -91,6 +91,7 @@ const STAGE_COLUMNS: [string, string][] = [
   ['implement', 'implementacja_usd'],
   ['review', 'recenzja_usd'],
   ['assess', 'ocena_ryzyka_usd'],
+  ['architecture', 'przeglad_architektury_usd'],
 ];
 
 /**

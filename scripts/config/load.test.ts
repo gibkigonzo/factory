@@ -131,6 +131,25 @@ describe('błędny kontrakt: komunikat wskazuje pole', () => {
   });
 });
 
+describe('powtórzenia w kodzie', () => {
+  it('base ustawia progi i przegląd architektury, a projekt dopisuje tylko wyjątki z powodem', () => {
+    const base = loadConfig(MINIMAL, 'factory.yml');
+    assert.ok(base.ok);
+    assert.deepEqual(base.config.quality, {
+      duplicate_lines: 6,
+      repeated_classes: 6,
+      architecture_every_prs: 5,
+      architecture_max_issues: 3,
+      ignore: [],
+    });
+    const ignored = loadConfig(`${MINIMAL}quality:\n  ignore:\n    - path: src/components/ui/**\n      reason: komponenty biblioteki\n`, 'factory.yml');
+    assert.ok(ignored.ok, ignored.ok ? '' : ignored.errors.join('\n'));
+    assert.deepEqual(ignored.config.quality.ignore, [{ path: 'src/components/ui/**', reason: 'komponenty biblioteki' }]);
+    assertError(`${MINIMAL}quality:\n  ignore:\n    - path: src/**\n`, 'factory.yml: quality.ignore[0].reason: brak wymaganego pola');
+    assertError(`${MINIMAL}quality:\n  duplicate_lines: 50\n`, 'factory.yml: quality.duplicate_lines: progi powtórzeń ustala warstwa base');
+  });
+});
+
 describe('modele na etapach', () => {
   it('base ustawia modele startowe, a projekt może je nadpisać', () => {
     const base = loadConfig(MINIMAL, 'factory.yml');
@@ -139,6 +158,7 @@ describe('modele na etapach', () => {
       planner: 'opus',
       implementer: 'sonnet',
       risk_assessor: 'sonnet',
+      architect: 'opus',
       reviewers: { default: 'sonnet', security: 'opus' },
     });
     const custom = loadConfig(`${MINIMAL}models:\n  implementer: opus\n  reviewers:\n    tests: haiku\n`, 'factory.yml');

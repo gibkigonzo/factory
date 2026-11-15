@@ -11,7 +11,7 @@ name: factory-pipeline
 on:
   workflow_call:
     inputs:
-      stage: { type: string, default: '', description: 'Etap z workflow_dispatch: plan, implement, review, journal, queue' }
+      stage: { type: string, default: '', description: 'Etap z workflow_dispatch: plan, implement, review, journal, queue, architecture' }
       issue: { type: string, default: '' }
       pr: { type: string, default: '' }
       note: { type: string, default: '' }
@@ -30,7 +30,7 @@ jobs:
   line:
     if: >-
       (github.event_name == 'issues' && github.event.label.name == 'ready') ||
-      (github.event_name == 'workflow_dispatch' && contains(fromJSON('["plan", "implement", "review", "queue"]'), inputs.stage)) ||
+      (github.event_name == 'workflow_dispatch' && contains(fromJSON('["plan", "implement", "review", "queue", "architecture"]'), inputs.stage)) ||
       github.event_name == 'schedule' ||
       (github.event_name == 'pull_request_target' &&
         github.event.pull_request.head.repo.full_name == github.repository &&
@@ -252,6 +252,28 @@ jobs:
       issues: write
       pull-requests: read
       actions: write
+
+  # Przegląd architektury po co quality.architecture_every_prs scalonych PR fabryki albo ręcznie (etap architecture).
+  # Zatrzymana taśma go pomija: to propozycje do backlogu, nie etap zadania.
+  architecture:
+    needs: line
+    if: >-
+      needs.line.outputs.stopped == 'false' && (
+        (github.event_name == 'workflow_dispatch' && inputs.stage == 'architecture') ||
+        (github.event_name == 'pull_request_target' && github.event.pull_request.merged &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          startsWith(github.event.pull_request.head.ref, 'factory/')))
+    uses: $/.github/workflows/architecture.yml
+    with:
+      factory_ref: ${{ inputs.factory_ref }}
+      runs_on: ${{ inputs.agents_runs_on || inputs.runs_on }}
+      force: ${{ github.event_name == 'workflow_dispatch' }}
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
 
   commands:
     if: github.event_name == 'issue_comment' && startsWith(github.event.comment.body, '/')

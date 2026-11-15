@@ -76,11 +76,36 @@ export const IMPLEMENTATION_SPEC: Spec = {
   required: ['issue', 'status', 'bugfix', 'acceptance', 'assumptions'],
 };
 
+/** Przegląd architektury: propozycje refaktoru jako notatki do backlogu. Limit i powtórzenia sprawdza skrypt. */
+export const ARCHITECTURE_SPEC: Spec = {
+  kind: 'object',
+  fields: {
+    summary: text,
+    proposals: {
+      kind: 'list',
+      item: {
+        kind: 'object',
+        fields: {
+          title: text,
+          problem: text,
+          proposal: text,
+          places: texts,
+          size: { kind: 'object', fields: { lines: count, files: count }, required: ['lines', 'files'] },
+        },
+        required: ['title', 'problem', 'proposal', 'places', 'size'],
+      },
+    },
+    line_problem: text,
+  },
+  required: ['summary', 'proposals'],
+};
+
 export const OUTPUTS = {
   plan: PLAN_SPEC,
   implementation: IMPLEMENTATION_SPEC,
   verdict: REVIEW_SPEC,
   behavior: BEHAVIOR_SPEC,
+  architecture: ARCHITECTURE_SPEC,
 } as const;
 
 export type OutputKind = keyof typeof OUTPUTS;

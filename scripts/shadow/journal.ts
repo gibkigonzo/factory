@@ -9,7 +9,13 @@ import type { Group } from './metrics.ts';
 const decimal = (value: number) => value.toFixed(1).replace('.', ',');
 const usd = (value: number) => `${value.toFixed(2).replace('.', ',')} USD`;
 const tokens = (value: number) => Math.round(value).toLocaleString('pl-PL');
-const STAGE_NAMES: Record<string, string> = { plan: 'plan', implement: 'implementacja', review: 'recenzja', assess: 'ocena ryzyka' };
+const STAGE_NAMES: Record<string, string> = {
+  plan: 'plan',
+  implement: 'implementacja',
+  review: 'recenzja',
+  assess: 'ocena ryzyka',
+  architecture: 'przegląd architektury',
+};
 const STATE = { open: 'otwarty', merged: 'scalony', closed: "zamknięty bez merge'u" } as const;
 
 function groupLine(label: string, group: Group): string {

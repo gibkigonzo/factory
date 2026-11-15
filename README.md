@@ -9,6 +9,7 @@ Fabryka do wytwarzania oprogramowania, oparta na Claude Code i GitHub Actions. Z
 - **Spec z rozmowy, także z telefonu.** Skill `spec-writer` zapisuje pomysł jako notatkę albo dopytuje w krótkich rundach i zakłada issue z kryteriami akceptacji, które da się sprawdzić maszynowo. Taśmę uruchamiasz Ty, etykietą `ready`.
 - **Plan i implementacja.** Planer rozpisuje pliki, testy i dowody, a za duże zadanie dzieli. Implementer pisze kod i testy w PR z gałęzi `factory/<numer>-<nazwa>` albo zgłasza blokadę zamiast połowicznego PR.
 - **Recenzja.** CI uruchamia komendy projektu, a pięć perspektyw (poprawność, testy, bezpieczeństwo, utrzymanie, zgodność ze specem) ocenia PR, każda w świeżym kontekście. Projekt może dodać kolejne, np. recenzenta wyglądu na zrzutach ekranu.
+- **Jakość całego projektu.** Skrypt pokazuje recenzentom powtórzenia kodu i elementów widoku, które wprowadza PR, a co 5 scalonych PR przegląd architektury proponuje refaktor jako notatki do backlogu.
 - **Pętla poprawek.** Czerwone CI albo prośba recenzenta odsyła PR do implementera, do 3 rund. Konflikty z gałęzią główną taśma rozwiązuje sama.
 - **Ocena ryzyka.** Deterministyczne reguły i ocena modelu, która może poziom tylko podnieść. Wynik: **Low** (fabryka scala sama) albo **High** (decydujesz Ty), z raportem czytelnym na telefonie.
 - **Tryb cienia i dziennik.** Werdykt fabryki oceniasz 👍 albo 👎. Przypięte issue „Tryb cienia” pokazuje zgodność, rundy, czas i koszt.
@@ -37,6 +38,7 @@ Potrzebujesz repo projektu na GitHubie (w prywatnym taśma zużywa minuty Action
 | Etykieta w issue | Znaczy |
 | --- | --- |
 | `idea` | notatka bez specu; spec zrobisz z niej później |
+| `refactor` | propozycja refaktoru z przeglądu architektury (razem z `idea`) |
 | `ready` | spec gotowy; nadajesz ją Ty, uruchamia planera |
 | `planned` | plan jest; implementacja trwa albo PR jest otwarty |
 | `queued` | czeka w kolejce (wspólne pliki, `wip_limit` albo dzienny limit); ruszy samo |
@@ -147,6 +149,14 @@ evidence:
 - Komentarz „Zrzuty ekranu” w PR ma linki do par wzorzec–wykonanie, bo GitHub nie pokazuje w komentarzach obrazów z repo prywatnego. Obrazy leżą na gałęzi `factory-screenshots`, którą możesz usunąć w każdej chwili.
 - Brak zmian wyglądu dowodzi samo porównanie zrzutów, więc w repo nie trzeba trzymać wzorców zrzutów całej strony.
 
+### Powtórzenia i przegląd architektury
+
+Recenzent widzi jeden PR, więc element zbudowany od nowa w kolejnych PR łatwo przechodzi. Dlatego taśma patrzy na całe repo:
+
+- **W każdym PR** skrypt (bez Claude) szuka w całym repo bloków co najmniej 6 znaczących linii i atrybutów `class`/`className` z co najmniej 6 klasami, które się powtarzają; zestawy różniące się jedną klasą też. Recenzent utrzymywalności dostaje te, które wprowadza PR, w `duplicates.md` i zgłasza je jako uwagę z cytatem: użyj istniejącego elementu albo wyciągnij wspólny.
+- **Co 5 scalonych PR fabryki** (albo ręcznie: etap `architecture`) agent przeglądu architektury czyta całe repo, raport powtórzeń i konwencje z `CLAUDE.md` i zakłada najwyżej 3 propozycje refaktoru jako issue z etykietami `idea` i `refactor`. Nie blokują PR: wybierasz, którą zamienić w spec. Zapis przeglądów i ich koszt jest w issue „Przegląd architektury”.
+- Ścieżki, które powtarzają się z założenia (np. komponenty biblioteki UI), projekt wyłącza w `quality.ignore`, zawsze z powodem.
+
 ### Tryb cienia
 
 Po ocenie ryzyka taśma dodaje w PR komentarz z werdyktem: Low „scaliłaby”, High „przekazałaby Tobie”, a za duża zmiana albo blokada bramek jakości wraca do podziału albo poprawek. Reagujesz 👍 albo 👎; każda kolejna ocena dostaje nowy komentarz. Dziennik w przypiętym issue „Tryb cienia” odświeża się po werdykcie, po zamknięciu PR fabryki i raz dziennie, a statystyki zapisuje w `journal.csv` i `journal.json` na gałęzi `factory-journal`.
@@ -198,6 +208,7 @@ Warstwy składają się w kolejności `base` → presety z `extends` → `factor
 | `files`, `disable_markers`, `assertion_markers` | wszystkie warstwy | klasy plików (kod, testy, lockfile'y, generowane, tłumaczenia), znaczniki wyłączeń i asercji |
 | `protected_files` | wszystkie warstwy | pliki, których agenci nie zapisują |
 | `risk`, `gates`, `shadow` | tylko `base` | poziomy stref, progi reguł ryzyka, bramek jakości i Bramki 1 |
+| `quality` | `base`, projekt (`ignore`) | progi powtórzeń i przeglądu architektury; projekt dopisuje wyłączone ścieżki z powodem |
 | `exceptions` | projekt | wyjątek od bramki jakości dla ścieżki, zawsze z powodem |
 | `reviewers` | `base`, projekt (`extra`) | perspektywy recenzji |
 | `models` | `base`, projekt | model na etapie i dla wybranych perspektyw |
@@ -215,6 +226,7 @@ Wzorce ścieżek są względne od korzenia repo i znają `*`, `**` i `?`; wzorze
 | `implementer` | plan, `/change`, runda poprawek albo konflikt | zmiany w plikach i JSON: `done` albo `blocked`, dowód dla każdego kryterium |
 | `review-<perspektywa>` | po CI, równolegle | werdykt w JSON; tylko `Read`, `Grep` i `Glob` |
 | `risk-assessor` | po recenzji | reguła 2: Low albo High z uzasadnieniem |
+| `architect` | co 5 scalonych PR fabryki | najwyżej 3 propozycje refaktoru w JSON; issue zakłada skrypt |
 
 Agenci nie ustawiają etykiet ani checków: workflowy działają na ich JSON-ie po sprawdzeniu schematu (`scripts/agents/output.ts`). Recenzenci mają wspólny protokół `skills/review/protocol.md` i kryteria w `skills/review/perspectives/`; pliki `agents/review-*.md` generuje `npm run agents`. Implementer nie zmieni plików chronionych ani `.github/`: taki patch odrzuca skrypt.
 
@@ -270,6 +282,7 @@ Projekt wywołuje tylko dyrygenta `pipeline.yml`, a ten etapy z tego repo w tej 
 | `journal.yml` | werdykt, zamknięcie PR fabryki, raz dziennie | dziennik i statystyki; po scaleniu zamyka issue |
 | `queue.yml` | zamknięcie PR fabryki, komendy, raz dziennie | wypuszcza czekające zadania, wykrywa konflikty otwartych PR |
 | `commands.yml` | komentarz właściciela | komendy z tabeli wyżej |
+| `architecture.yml` | scalenie PR fabryki (co 5), etap `architecture` | przegląd architektury i propozycje refaktoru jako notatki |
 
 Wejścia szablonu:
 - `factory_ref`: wersja skryptów, ta sama co w `uses`;
@@ -291,10 +304,10 @@ To repo jest też marketplace'em pluginu ze skillami fabryki do pracy lokalnej: 
 
 ```
 .claude-plugin/       plugin.json i marketplace.json (plugin = całe repo)
-skills/               skille: spec-writer, planner, implementer, review (protokół i perspektywy), risk-assessor
+skills/               skille: spec-writer, planner, implementer, review (protokół i perspektywy), risk-assessor, architect
 agents/               recenzenci review-<perspektywa>, generowani z skills/review
 scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, panel, wyjście agentów, kolejka,
-                      pętla poprawek, budżet, zrzuty, merger i dziennik trybu cienia
+                      pętla poprawek, budżet, zrzuty, powtórzenia, merger i dziennik trybu cienia
 presets/              warstwy reguł: base, typescript, web, nuxt, rust, tauri
 templates/            szablony dla projektów: workflow taśmy, reguła dla CLAUDE.md, factory.yml
 .github/workflows/    wspólne workflowy typu workflow_call

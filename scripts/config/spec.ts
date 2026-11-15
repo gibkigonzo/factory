@@ -73,6 +73,12 @@ const exception: Spec = {
   required: ['path', 'gate', 'max', 'reason'],
 };
 
+const qualityIgnore: Spec = {
+  kind: 'object',
+  fields: { path: { kind: 'glob' }, reason: text },
+  required: ['path', 'reason'],
+};
+
 const files: Spec = {
   kind: 'object',
   fields: Object.fromEntries(FILE_CLASSES.map((c) => [c, globs])),
@@ -98,7 +104,7 @@ export const SCHEMA: Extract<Spec, { kind: 'object' }> = {
     reviewers: { kind: 'object', fields: { perspectives: names, extra: names } },
     models: {
       kind: 'object',
-      fields: { planner: model, implementer: model, risk_assessor: model, reviewers: namedMap(model) },
+      fields: { planner: model, implementer: model, risk_assessor: model, architect: model, reviewers: namedMap(model) },
     },
     shadow: {
       kind: 'object',
@@ -111,6 +117,16 @@ export const SCHEMA: Extract<Spec, { kind: 'object' }> = {
       },
     },
     exceptions: { kind: 'list', item: exception },
+    quality: {
+      kind: 'object',
+      fields: {
+        duplicate_lines: positive,
+        repeated_classes: positive,
+        architecture_every_prs: positive,
+        architecture_max_issues: positive,
+        ignore: { kind: 'list', item: qualityIgnore },
+      },
+    },
     wip_limit: positive,
     daily_runs: positive,
   },
@@ -127,6 +143,7 @@ export const PROJECT_ONLY = [
   'dependencies',
   'exceptions',
   'reviewers.extra',
+  'quality.ignore',
 ] as const;
 
 /** Progi i reguły wspólne dla wszystkich projektów; projekt ich nie zmienia. */
@@ -140,6 +157,10 @@ export const BASE_ONLY: Record<string, string> = {
   'risk.min_diff_coverage': 'próg pokrycia zmienionych linii ustala warstwa base',
   'reviewers.perspectives': 'podstawowe perspektywy ustala warstwa base; dodatkowe wpisz w reviewers.extra',
   shadow: 'progi Bramki 1 ustala warstwa base',
+  'quality.duplicate_lines': 'progi powtórzeń ustala warstwa base; ścieżkę wyłączysz w quality.ignore',
+  'quality.repeated_classes': 'progi powtórzeń ustala warstwa base; ścieżkę wyłączysz w quality.ignore',
+  'quality.architecture_every_prs': 'częstotliwość przeglądu architektury ustala warstwa base',
+  'quality.architecture_max_issues': 'limit propozycji przeglądu architektury ustala warstwa base',
 };
 
 /** Pola presetu języka lub frameworka. */
@@ -161,12 +182,17 @@ export const REQUIRED: Record<LayerKind, readonly string[]> = {
     'models.planner',
     'models.implementer',
     'models.risk_assessor',
+    'models.architect',
     'models.reviewers.default',
     'shadow.gate_prs',
     'shadow.min_agreement',
     'shadow.max_false_low',
     'shadow.min_low',
     'shadow.revert_days',
+    'quality.duplicate_lines',
+    'quality.repeated_classes',
+    'quality.architecture_every_prs',
+    'quality.architecture_max_issues',
     'wip_limit',
     'daily_runs',
   ],
@@ -221,11 +247,20 @@ export interface FactoryConfig {
     planner: string;
     implementer: string;
     risk_assessor: string;
+    architect: string;
     reviewers: Record<string, string> & { default: string };
   };
   /** Progi Bramki 1 trybu cienia. */
   shadow: { gate_prs: number; min_agreement: number; max_false_low: number; min_low: number; revert_days: number };
   exceptions: GateException[];
+  /** Powtórzenia w kodzie i przegląd architektury. `ignore` to ścieżki wyłączone z wykrywania powtórzeń, z powodem. */
+  quality: {
+    duplicate_lines: number;
+    repeated_classes: number;
+    architecture_every_prs: number;
+    architecture_max_issues: number;
+    ignore: { path: string; reason: string }[];
+  };
   wip_limit: number;
   daily_runs: number;
 }

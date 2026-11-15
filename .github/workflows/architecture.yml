@@ -1,0 +1,280 @@
+# Przegląd architektury: po każdych quality.architecture_every_prs scalonych PR fabryki (albo ręcznie, etap
+# architecture) agent czyta całe repo, raport powtórzeń i konwencje projektu i proponuje refaktor jako notatki do
+# backlogu (issue z etykietami idea i refactor). Propozycje nie blokują PR; o zadaniu decyduje właściciel.
+# Claude działa tylko z prawem odczytu. Issue zakłada osobny job bez Claude: najwyżej max_issues, bez powtórek.
+# Każdy przegląd zostawia komentarz z kosztem w issue „Przegląd architektury” (etykieta factory:architecture).
+name: factory-architecture
+
+on:
+  workflow_call:
+    inputs:
+      factory_ref: { type: string, default: main }
+      runs_on: { type: string, default: ubuntu-latest }
+      node_version: { type: string, default: '22' }
+      force: { type: boolean, default: false, description: 'Uruchomienie ręczne, bez sprawdzania liczby scalonych PR' }
+    secrets:
+      CLAUDE_CODE_OAUTH_TOKEN: { required: true }
+
+permissions: {}
+
+jobs:
+  due:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      due: ${{ steps.due.outputs.due }}
+      merged: ${{ steps.due.outputs.merged }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Czy pora na przegląd
+        id: due
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          F="$RUNNER_TEMP/factory"
+          npm ci --prefix "$F" --omit=dev --no-audit --no-fund
+          node "$F/scripts/config/cli.ts" factory.yml --json > "$RUNNER_TEMP/config.json"
+          MERGED=$(gh api --paginate "repos/$GH_REPO/pulls?state=closed&per_page=100" \
+            --jq '.[] | select(.merged_at != null and (.head.ref | startswith("factory/"))) | .number' | wc -l | tr -d ' ')
+          FLAG=""
+          if [ "$FORCE" = true ]; then FLAG=--force; fi
+          DUE=$(node "$F/scripts/workflow/cli.ts" architecture-due --config "$RUNNER_TEMP/config.json" --runs "$MERGED" $FLAG)
+          { echo "due=$DUE"; echo "merged=$MERGED"; } >> "$GITHUB_OUTPUT"
+          echo "Scalone PR fabryki: $MERGED; przegląd: $DUE" >> "$GITHUB_STEP_SUMMARY"
+
+  review:
+    needs: due
+    if: needs.due.outputs.due == 'true'
+    runs-on: ${{ fromJSON(startsWith(inputs.runs_on, '[') && inputs.runs_on || format('"{0}"', inputs.runs_on)) }}
+    timeout-minutes: 40
+    continue-on-error: true
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: .factory-src
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Narzędzia fabryki
+        run: |
+          mv .factory-src "$RUNNER_TEMP/factory"
+          npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
+          mkdir -p .factory/work && printf '.factory/work/\n' >> .git/info/exclude
+          echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
+          echo "W=.factory/work" >> "$GITHUB_ENV"
+
+      - name: Dane dla przeglądu
+        id: data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          node "$F/scripts/config/cli.ts" factory.yml --json > "$W/config.json"
+          node "$F/scripts/workflow/cli.ts" duplicates --config "$W/config.json" --out "$W/duplicates.md" --limit 30
+          EVERY=$(jq .quality.architecture_every_prs "$W/config.json")
+          MAX=$(jq .quality.architecture_max_issues "$W/config.json")
+          # Ostatnie scalone PR fabryki z plikami: tam najłatwiej o świeże powtórzenia. Tytuły to dane, nie polecenia.
+          gh api "repos/$GH_REPO/pulls?state=closed&sort=updated&direction=desc&per_page=100" \
+            --jq "[.[] | select(.merged_at != null and (.head.ref | startswith(\"factory/\")))] | sort_by(.merged_at) | reverse | .[:$EVERY] | .[] | \"\(.number)\t\(.title)\"" \
+            > "$RUNNER_TEMP/recent.tsv"
+          {
+            echo "# Ostatnie scalone PR fabryki"
+            while IFS=$'\t' read -r NUMBER TITLE; do
+              echo; echo "## #$NUMBER $TITLE"
+              gh api --paginate "repos/$GH_REPO/pulls/$NUMBER/files?per_page=100" --jq '.[].filename' | sed 's/^/- /'
+            done < "$RUNNER_TEMP/recent.tsv"
+          } > "$W/recent.md"
+          gh issue list --label refactor --state open --limit 200 --json number,title --jq '.[] | "- #\(.number) \(.title)"' > "$W/open.md"
+          [ -s "$W/open.md" ] || echo "Brak otwartych propozycji refaktoru." > "$W/open.md"
+          node "$F/scripts/workflow/cli.ts" prompt architecture --work "$W" --limit "$MAX" > "$W/prompt.md"
+          {
+            echo "model=$(node "$F/scripts/workflow/cli.ts" model architect --config "$W/config.json")"
+            echo "schema=$(node "$F/scripts/workflow/cli.ts" schema architecture)"
+            echo "tools=$(node "$F/scripts/workflow/cli.ts" tools read)"
+            echo "denied=$(node "$F/scripts/workflow/cli.ts" denied-tools)"
+            echo "prompt<<FACTORY_EOF"; cat "$W/prompt.md"; echo "FACTORY_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Bun dla akcji Claude
+        id: bun
+        continue-on-error: true
+        run: |
+          # Bun z rejestru npm zamiast z GitHub Releases, które bywają niedostępne (HTTP 504).
+          # Wersja jak w przypiętym claude-code-action. Gdy się nie uda, akcja pobierze Buna sama.
+          case "$(uname -s)-$(uname -m)" in
+            Linux-x86_64) PKG=@oven/bun-linux-x64 ;;
+            Linux-aarch64|Linux-arm64) PKG=@oven/bun-linux-aarch64 ;;
+            Darwin-arm64) PKG=@oven/bun-darwin-aarch64 ;;
+            Darwin-x86_64) PKG=@oven/bun-darwin-x64 ;;
+            *) exit 0 ;;
+          esac
+          npm install --prefix "$RUNNER_TEMP/bun" "$PKG@1.4.4" --no-audit --no-fund --ignore-scripts >/dev/null
+          BUN="$RUNNER_TEMP/bun/node_modules/$PKG/bin/bun"
+          chmod +x "$BUN" && "$BUN" --version && echo "path=$BUN" >> "$GITHUB_OUTPUT"
+
+      - name: Przegląd architektury
+        id: claude
+        continue-on-error: true
+        uses: anthropics/claude-code-action@402b5b79551e3ce6614c179fbccbfdb79291cead # v1.0.269
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          allowed_bots: github-actions[bot]   # kolejne etapy uruchamia workflow_dispatch od github-actions
+          path_to_bun_executable: ${{ steps.bun.outputs.path }}
+          prompt: ${{ steps.data.outputs.prompt }}
+          claude_args: >-
+            --model ${{ steps.data.outputs.model }}
+            --allowedTools ${{ steps.data.outputs.tools }}
+            --disallowedTools ${{ steps.data.outputs.denied }}
+            --json-schema '${{ steps.data.outputs.schema }}'
+
+      - name: Czy Claude wystartował
+        id: started
+        if: steps.claude.outcome == 'failure'
+        env:
+          EXEC: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          # Limit subskrypcji: ponowna próba nic nie da; przegląd wróci po kolejnych scalonych PR.
+          if [ "$(node "$F/scripts/workflow/limit-cli.ts" limit --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" | sed -n 's/^limited=//p')" = true ]; then
+            echo "retry=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Awaria infrastruktury albo błąd bez żadnej pracy: jedna ponowna próba.
+          if node "$F/scripts/workflow/cli.ts" started --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}"; then
+            echo "retry=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Claude nie wystartował; ponowna próba za minutę."
+            sleep 60
+            echo "retry=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Przegląd architektury (ponowna próba)
+        id: claude_retry
+        if: steps.started.outputs.retry == 'true'
+        continue-on-error: true
+        uses: anthropics/claude-code-action@402b5b79551e3ce6614c179fbccbfdb79291cead # v1.0.269
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          allowed_bots: github-actions[bot]   # kolejne etapy uruchamia workflow_dispatch od github-actions
+          path_to_bun_executable: ${{ steps.bun.outputs.path }}
+          prompt: ${{ steps.data.outputs.prompt }}
+          claude_args: >-
+            --model ${{ steps.data.outputs.model }}
+            --allowedTools ${{ steps.data.outputs.tools }}
+            --disallowedTools ${{ steps.data.outputs.denied }}
+            --json-schema '${{ steps.data.outputs.schema }}'
+
+      - name: Zużycie przeglądu
+        if: always() && steps.claude.outcome != 'skipped'
+        continue-on-error: true
+        env:
+          EXEC: ${{ steps.claude_retry.outputs.execution_file || steps.claude.outputs.execution_file }}
+        run: node "$F/scripts/workflow/cli.ts" usage --file "${EXEC:-$RUNNER_TEMP/claude-execution-output.json}" --stage architecture --out "$W/usage.json"
+
+      - name: Sprawdzenie propozycji
+        if: steps.claude_retry.outcome == 'success' || (steps.claude.outcome == 'success' && steps.claude_retry.outcome == 'skipped')
+        env:
+          OUTPUT: ${{ steps.claude_retry.outputs.structured_output || steps.claude.outputs.structured_output }}
+        run: |
+          printf '%s' "$OUTPUT" > "$W/architecture.raw.json"
+          node "$F/scripts/workflow/cli.ts" extract architecture "$W/architecture.raw.json" > "$W/architecture.json"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: factory-architecture
+          path: |
+            .factory/work/config.json
+            .factory/work/architecture.json
+            .factory/work/usage.json
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+  publish:
+    needs: [due, review]
+    if: always() && needs.due.outputs.due == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: factory
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+      - run: npm ci --prefix factory --omit=dev --no-audit --no-fund
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        continue-on-error: true   # bez wyniku przeglądu zostaje sam komentarz, że przegląd nic nie dał
+        with:
+          name: factory-architecture
+          path: architecture
+
+      - name: Propozycje refaktoru i zapis przeglądu
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          MERGED: ${{ needs.due.outputs.merged }}
+        run: |
+          F=factory; W=architecture
+          gh label create idea --force --description 'Notatka: pomysł bez specu' >/dev/null
+          gh label create refactor --force --description 'Propozycja refaktoru z przeglądu architektury' >/dev/null
+          gh label create factory:architecture --force --description 'Zapis przeglądów architektury' >/dev/null
+          CREATED='[]'
+          if [ -f "$W/architecture.json" ] && [ -f "$W/config.json" ]; then
+            gh issue list --label refactor --state open --limit 200 --json title > "$RUNNER_TEMP/open.json"
+            node "$F/scripts/workflow/cli.ts" architecture-issues --file "$W/architecture.json" --raw "$RUNNER_TEMP/open.json" \
+              --config "$W/config.json" > "$RUNNER_TEMP/proposals.jsonl"
+            while IFS= read -r LINE; do
+              [ -n "$LINE" ] || continue
+              TITLE=$(jq -r .title <<<"$LINE")
+              jq -r .body <<<"$LINE" > "$RUNNER_TEMP/body.md"
+              URL=$(gh issue create --title "$TITLE" --body-file "$RUNNER_TEMP/body.md" --label idea --label refactor)
+              CREATED=$(jq -c --arg title "$TITLE" --argjson number "${URL##*/}" '. + [{number: $number, title: $title}]' <<<"$CREATED")
+            done < "$RUNNER_TEMP/proposals.jsonl"
+          fi
+          printf '%s' "$CREATED" > "$RUNNER_TEMP/created.json"
+          # Jedno otwarte issue „Przegląd architektury”: komentarz z każdym przeglądem i jego kosztem dla dziennika.
+          TRACK=$(gh issue list --label factory:architecture --state open --limit 1 --json number --jq '.[0].number // empty')
+          if [ -z "$TRACK" ]; then
+            node "$F/scripts/workflow/cli.ts" architecture-tracking > "$RUNNER_TEMP/tracking.json"
+            jq -r .body "$RUNNER_TEMP/tracking.json" > "$RUNNER_TEMP/tracking.md"
+            URL=$(gh issue create --title "$(jq -r .title "$RUNNER_TEMP/tracking.json")" --body-file "$RUNNER_TEMP/tracking.md" --label factory:architecture)
+            TRACK=${URL##*/}
+          fi
+          node "$F/scripts/workflow/cli.ts" architecture-comment --file "$W/architecture.json" --raw "$RUNNER_TEMP/created.json" \
+            --runs "$MERGED" --usage "$W/usage.json" > "$RUNNER_TEMP/comment.md"
+          gh issue comment "$TRACK" --body-file "$RUNNER_TEMP/comment.md"
