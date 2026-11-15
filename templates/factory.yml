@@ -48,6 +48,12 @@ zone_tests:
 #   reviewers:
 #     accessibility-web: haiku
 
+# Ścieżki wyłączone z wykrywania powtórzeń, zawsze z powodem (progi są w base):
+# quality:
+#   ignore:
+#     - path: src/components/ui/**
+#       reason: komponenty biblioteki UI są do siebie podobne z założenia
+
 protected_files: ["backup/**"]     # dopisuje do listy z base; agenci tych plików nie zmienią
 
 wip_limit: 2                       # zadania w toku naraz; zadania na tych samych plikach i tak idą po kolei

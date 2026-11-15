@@ -314,12 +314,12 @@ describe('dane z GitHuba', () => {
     assert.deepEqual(rows.map((r) => [r.issue, r.pr]), [[undefined, 30], [21, undefined], [20, undefined], [7, 14], [2, 11], [1, 10]], 'od najnowszego numeru');
     const csv = journalCsv(rows).split('\n');
     const line = (start: string) => csv.find((l) => l.startsWith(start))!;
-    assert.equal(csv[0], 'zadanie,pr,tytul,stan,poziom,werdykt,ocena,rundy,cofniety,gotowe,scalone,koszt_usd,plan_usd,implementacja_usd,recenzja_usd,ocena_ryzyka_usd,tokeny_wyjscia,recenzent_security_usd');
-    assert.equal(line('20,'), '20,,Zablokowane,bez PR (blocked),,,,0,nie,,,0.7,0.4,0.3,,,2000,');
-    assert.equal(line('21,'), '21,,Odrzucone,"bez PR (rejected), zamknięte",,,,0,nie,,,0,,,,,0,');
+    assert.equal(csv[0], 'zadanie,pr,tytul,stan,poziom,werdykt,ocena,rundy,cofniety,gotowe,scalone,koszt_usd,plan_usd,implementacja_usd,recenzja_usd,ocena_ryzyka_usd,przeglad_architektury_usd,tokeny_wyjscia,recenzent_security_usd');
+    assert.equal(line('20,'), '20,,Zablokowane,bez PR (blocked),,,,0,nie,,,0.7,0.4,0.3,,,,2000,');
+    assert.equal(line('21,'), '21,,Odrzucone,"bez PR (rejected), zamknięte",,,,0,nie,,,0,,,,,,0,');
     assert.ok(line('1,10,').startsWith('1,10,Low cofnięty,scalony,Low,scaliłaby,👍,2,tak,2026-10-31T08:00:00Z,2026-11-02T12:00:00Z,2.35,0.3,0.8,1.15,0.1,'), line('1,10,'));
     assert.ok(line('1,10,').endsWith(',0.25'));
-    assert.equal(line(',30,'), `,30,"'=HYPERLINK(""x"")",otwarty,,,,0,nie,,,0,,,,,0,`, 'tytuł nie uruchomi formuły w arkuszu');
+    assert.equal(line(',30,'), `,30,"'=HYPERLINK(""x"")",otwarty,,,,0,nie,,,0,,,,,,0,`, 'tytuł nie uruchomi formuły w arkuszu');
     const json = JSON.parse(journalJson(rows, '2026-11-11T08:00:00Z'));
     assert.equal(json.tasks, 6);
     assert.equal(json.cost, 3.05);

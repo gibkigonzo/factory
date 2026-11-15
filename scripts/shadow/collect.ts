@@ -165,7 +165,7 @@ function rounds(labels: readonly { name: string }[] = []): number {
 /** Zużycie z komentarzy bota w issue: plan i implementacje zakończone blokadą (te nie trafiają do opisu PR). */
 function issueUsage(dir: string, issue: number | undefined): Usage[] {
   const comments = issue ? read<{ body?: string }[]>(join(dir, 'plans', `${issue}.json`), []) : [];
-  return comments.flatMap((c) => parseUsageBlocks(c.body ?? '').filter((u) => u.stage === 'plan' || u.stage === 'implement'));
+  return comments.flatMap((c) => parseUsageBlocks(c.body ?? '').filter((u) => u.stage === 'plan' || u.stage === 'implement' || u.stage === 'architecture'));
 }
 
 /**
@@ -198,7 +198,7 @@ interface RawIssue {
 }
 
 /** Etykiety, które nadaje taśma: issue z którąś z nich jest zadaniem fabryki, także gdy nie powstał PR. */
-export const TASK_LABELS = ['ready', 'planned', 'queued', 'needs-approval', 'blocked', 'split', 'rejected'] as const;
+export const TASK_LABELS = ['ready', 'planned', 'queued', 'needs-approval', 'blocked', 'split', 'rejected', 'factory:architecture'] as const;
 
 function taskIssues(dir: string): RawIssue[] {
   const labels: readonly string[] = TASK_LABELS;

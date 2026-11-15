@@ -36,11 +36,20 @@ shadow:
   min_low: 8            # trafne Low: „scaliłaby” z Twoim 👍, bo właśnie Low fabryka scali sama
   revert_days: 7        # revert w tylu dniach po merge'u zamienia Low w fałszywe Low
 
+# Powtórzenia w kodzie: skrypt pokazuje recenzentom te, które wprowadza PR, a przegląd architektury co kilka
+# scalonych PR proponuje refaktor jako notatki do backlogu (issue z etykietami idea i refactor).
+quality:
+  duplicate_lines: 6             # tyle znaczących linii z rzędu w dwóch miejscach to powtórzenie
+  repeated_classes: 6            # atrybut class z tyloma klasami powtórzony w kilku miejscach to element do wyciągnięcia
+  architecture_every_prs: 5      # przegląd architektury po co tylu scalonych PR fabryki
+  architecture_max_issues: 3     # najwyżej tyle propozycji refaktoru z jednego przeglądu
+
 # Model na każdym etapie taśmy. Projekt może nadpisać każdy wpis.
 models:
   planner: opus          # mało wywołań, a od planu zależy reszta
   implementer: sonnet    # najwięcej tokenów
   risk_assessor: sonnet
+  architect: opus        # rzadki przegląd całego repo, od którego zależą propozycje refaktoru
   reviewers:
     default: sonnet      # kilka wywołań na każdy PR
     security: opus       # najwyższa stawka

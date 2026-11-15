@@ -2,7 +2,7 @@
 // Koszt to równowartość cen API (total_cost_usd); przy subskrypcji pokazuje, ile etap waży w limitach.
 // Workflowy zapisują zużycie w ukrytym bloku komentarza planu, opisu PR i werdyktu, a dziennik je sumuje.
 
-export const STAGES = ['plan', 'implement', 'review', 'assess'] as const;
+export const STAGES = ['plan', 'implement', 'review', 'assess', 'architecture'] as const;
 export type Stage = (typeof STAGES)[number];
 
 export interface Usage {

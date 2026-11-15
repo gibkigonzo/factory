@@ -36,6 +36,19 @@ export function planPrompt(ctx: PromptContext): string {
   ].join('\n\n');
 }
 
+export function architecturePrompt(ctx: PromptContext & { max: number }): string {
+  return [
+    body('skills/architect/SKILL.md'),
+    task([
+      `Raport powtórzeń z całego repo (skrypt fabryki): \`${ctx.work}/duplicates.md\`.`,
+      `Ostatnie scalone PR fabryki z listą zmienionych plików: \`${ctx.work}/recent.md\`.`,
+      `Otwarte propozycje refaktoru, których nie powtarzasz: \`${ctx.work}/open.md\`.`,
+      `\`factory.yml\` złożony z warstw (JSON): \`${ctx.work}/config.json\`. Konwencje projektu są w \`CLAUDE.md\` w katalogu roboczym.`,
+      `Najwyżej ${ctx.max} propozycji.`,
+    ]),
+  ].join('\n\n');
+}
+
 export function implementPrompt(ctx: PromptContext & { change?: boolean; screenshots?: string; conflicts?: string }): string {
   const lines = [
     `Issue #${ctx.issue}: \`${ctx.work}/issue.md\`.`,
@@ -86,6 +99,12 @@ export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: st
   if (existsSync(`${ctx.work}/visual.md`)) {
     lines.push(
       `Porównanie zrzutów taśmy z gałęzią główną: \`${ctx.work}/visual.md\`. To dowód dla kryterium, że wygląd się nie zmienia albo zmienia się tylko w danych sekcjach; nie żądaj na nie testu.`,
+    );
+  }
+  // Powtórzenia wprowadzone przez PR (skrypt fabryki) pobiera tylko recenzent utrzymywalności.
+  if (existsSync(`${ctx.work}/duplicates.md`)) {
+    lines.push(
+      `Powtórzenia w kodzie, które wprowadza ten PR, policzone skryptem fabryki: \`${ctx.work}/duplicates.md\`. Miejsca oznaczone „nowe w PR” są w tej zmianie.`,
     );
   }
   // Recenzent każdej rundy zaczyna od zera; bez poprzednich uwag potrafi zażądać odwrotności tego, co implementer

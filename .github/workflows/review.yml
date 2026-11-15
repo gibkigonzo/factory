@@ -64,6 +64,7 @@ jobs:
       final: ${{ steps.round.outputs.final }}
       screenshots: ${{ steps.shots.outputs.configured }}
       sha: ${{ steps.shots.outputs.sha }}
+      duplicates: ${{ steps.duplicates.outcome == 'success' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -184,6 +185,24 @@ jobs:
         with:
           name: factory-visual
           path: .factory/work/visual.md
+          include-hidden-files: true
+          if-no-files-found: ignore
+
+      - name: Powtórzenia w kodzie
+        id: duplicates
+        continue-on-error: true   # bez raportu recenzent utrzymywalności ocenia jak dotąd
+        env:
+          FORK: ${{ steps.base.outputs.fork }}
+        run: |
+          # Skrypt, nie model: bloki linii i zestawy klas, które powtarzają się w repo, tylko te wprowadzone przez PR.
+          # Progi i wyjątki (quality.ignore) pochodzą z factory.yml gałęzi bazowej, więc PR ich nie zmieni.
+          node "$F/scripts/workflow/cli.ts" duplicates --config "$W/config.json" --base "$FORK" --out "$W/duplicates.md"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.duplicates.outcome == 'success'
+        with:
+          name: factory-duplicates
+          path: .factory/work/duplicates.md
           include-hidden-files: true
           if-no-files-found: ignore
 
@@ -321,6 +340,13 @@ jobs:
         if: needs.ci.outputs.screenshots == 'true'
         with:
           pattern: factory-visual
+          merge-multiple: true
+          path: .factory/work
+      # Powtórzenia wprowadzone przez PR ocenia perspektywa utrzymywalności.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.ci.outputs.duplicates == 'true' && matrix.member.name == 'maintainability'
+        with:
+          pattern: factory-duplicates
           merge-multiple: true
           path: .factory/work
       # Zrzuty tylko dla perspektywy, która je ocenia (screenshots: true), i tylko gdy projekt ma evidence.screenshots.

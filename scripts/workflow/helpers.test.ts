@@ -212,6 +212,20 @@ describe('polecenia właściciela dla recenzentów', () => {
   });
 });
 
+describe('powtórzenia w kodzie dla recenzenta', () => {
+  it('raport skryptu trafia do promptu, gdy workflow go pobrał (tylko dla perspektywy utrzymywalności)', () => {
+    const work = mkdtempSync(join(tmpdir(), 'factory-duplicates-prompt-'));
+    try {
+      const line = /Powtórzenia w kodzie, które wprowadza ten PR, .*`.*duplicates\.md`/;
+      assert.doesNotMatch(reviewPrompt({ work, agent: 'review-maintainability' }), line);
+      writeFileSync(join(work, 'duplicates.md'), '# Powtórzenia w kodzie\n\nPR nie wprowadza powtórzeń.\n');
+      assert.match(reviewPrompt({ work, agent: 'review-maintainability' }), line);
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('problem taśmy', () => {
   it('plan i opis PR pokazują zgłoszenie i niosą znacznik; opis PR przenosi zgłoszenia z poprzednich rund', () => {
     const at = '2026-11-11T08:00:00Z';

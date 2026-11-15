@@ -1,7 +1,7 @@
 // Jedno wejście dla kroków workflowów fabryki. Każda podkomenda robi jedną deterministyczną rzecz.
 // Użycie: node scripts/workflow/cli.ts <podkomenda> [opcje]
 
-import { closeSync, existsSync, openSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -17,7 +17,7 @@ import { buildEvidence } from './evidence.ts';
 import type { CiResult, Implementation } from './evidence.ts';
 import { toJsonSchema } from './jsonschema.ts';
 import { branchName, DENIED_FOR_READERS, implementerTools, pathProblems, READ_ONLY_TOOLS } from './patch.ts';
-import { assessPrompt, implementPrompt, planPrompt, reviewPrompt } from './prompts.ts';
+import { architecturePrompt, assessPrompt, implementPrompt, planPrompt, reviewPrompt } from './prompts.ts';
 import { latestMarked, lineProblemBlock, parseLineProblems, planComment, PLAN_MARKER, prBody, PR_MARKER } from './render.ts';
 import { claudeRuns } from './budget.ts';
 import type { Run } from './budget.ts';
@@ -25,6 +25,10 @@ import { installCommands } from './dependencies.ts';
 import { packageLockChanges, skippedSummary } from './lockfiles.ts';
 import type { SkippedFile } from './lockfiles.ts';
 import { matchesAny } from '../risk/glob.ts';
+import { addedLines, duplicateBlocks, duplicatesReport, introducedBy, repeatedClasses } from '../quality/duplicates.ts';
+import { isDue, newProposals, proposalBody, runComment, TRACKING_BODY, TRACKING_TITLE } from '../quality/architecture.ts';
+import type { ArchitectureOutput } from '../quality/architecture.ts';
+import type { SourceFile } from '../quality/duplicates.ts';
 import type { Dependency } from './dependencies.ts';
 import { nextRound, noChangeComment, roundComment } from './loop.ts';
 import { admit, queueState, release } from './queue.ts';
@@ -32,7 +36,7 @@ import { renderReport } from './report.ts';
 import type { PanelSummary } from './report.ts';
 import { compareScreenshots, galleryComment, runScreenshots, unchangedVerdict, visualSummary, writeGallery } from './screenshots.ts';
 import { parseSpec } from './spec.ts';
-import { isStage, parseUsageBlocks, parseUsageList, readUsage, sessionError, sessionStarted, sumUsage } from './usage.ts';
+import { isStage, parseUsageBlocks, parseUsageList, readUsage, sessionError, sessionStarted, STAGES, sumUsage } from './usage.ts';
 import type { Usage } from './usage.ts';
 
 class UsageError extends Error {}
@@ -90,6 +94,7 @@ function options(args: string[]) {
       before: { type: 'string' },
       publish: { type: 'string' },
       setup: { type: 'boolean', default: false },
+      force: { type: 'boolean', default: false },
     },
   });
 }
@@ -107,7 +112,8 @@ function prompt(stage: string | undefined, v: Values): string {
     return reviewPrompt({ ...ctx, agent: required(v.agent, '--agent'), criteria: v.criteria, previousRound: v.previous });
   }
   if (stage === 'assess') return assessPrompt(ctx);
-  throw new UsageError('prompt: etap plan, implement, review albo assess');
+  if (stage === 'architecture') return architecturePrompt({ ...ctx, max: Number(required(v.limit, '--limit')) });
+  throw new UsageError('prompt: etap plan, implement, review, assess albo architecture');
 }
 
 function verdicts(work: string): Review[] {
@@ -161,7 +167,7 @@ function usageDir(dir: string): Usage[] {
 /** Zużycie jednej sesji z pliku przebiegu claude-code-action. Zapisuje plik tylko, gdy przebieg ma wynik. */
 function usage(v: Values): string {
   const stage = required(v.stage, '--stage');
-  if (!isStage(stage)) throw new UsageError(`usage: etap ${['plan', 'implement', 'review', 'assess'].join('|')}`);
+  if (!isStage(stage)) throw new UsageError(`usage: etap ${STAGES.join('|')}`);
   const file = required(v.file, '--file');
   const raw = existsSync(file) ? json(file) : undefined;
   const record = raw === undefined ? undefined : readUsage(raw, stage, v.name);
@@ -333,6 +339,37 @@ function run(command: string | undefined, rest: string[]): string {
       if (!verdict) throw new UsageError('wygląd się zmienił albo porównania z gałęzią główną nie ma: ocenia recenzent');
       return JSON.stringify(verdict);
     }
+    case 'architecture-due':
+      // Przegląd po każdych quality.architecture_every_prs scalonych PR fabryki; --force: uruchomienie ręczne.
+      return String(v.force || isDue(Number(required(v.runs, '--runs')), config(v.config).quality.architecture_every_prs));
+    case 'architecture-issues': {
+      // Wyjście agenta → propozycje do założenia (JSON Lines: title, body), bez otwartych i najwyżej max_issues.
+      const output = json(required(v.file, '--file')) as ArchitectureOutput;
+      const open = (optionalJson(required(v.raw, '--raw')) as { title: string }[] | undefined) ?? [];
+      const proposals = newProposals(output, open.map((i) => i.title), config(v.config).quality.architecture_max_issues);
+      return proposals.map((p) => JSON.stringify({ title: p.title, body: proposalBody(p) })).join('\n');
+    }
+    case 'architecture-comment': {
+      // Komentarz przeglądu w issue „Przegląd architektury”, z kosztem dla dziennika.
+      const output = optionalJson(required(v.file, '--file')) as ArchitectureOutput | undefined;
+      const created = ((optionalJson(required(v.raw, '--raw')) as { number: number; title: string }[] | undefined) ?? []);
+      const summary = output?.summary ?? 'Przegląd nie dał wyniku: agent nie zwrócił poprawnego JSON albo nie wystartował.';
+      return runComment({ merged: Number(required(v.runs, '--runs')), summary, created, usage: usageFile(v.usage) });
+    }
+    case 'architecture-tracking':
+      return JSON.stringify({ title: TRACKING_TITLE, body: TRACKING_BODY });
+    case 'duplicates': {
+      // Z --base: tylko powtórzenia wprowadzone przez PR (dla recenzentów). Bez: całe repo (dla przeglądu architektury).
+      const cfg = config(v.config);
+      const q = cfg.quality;
+      const files = sourceFiles(cfg);
+      let groups = [...duplicateBlocks(files, q.duplicate_lines), ...repeatedClasses(files, q.repeated_classes)];
+      if (v.base) groups = introducedBy(groups, addedLines(git(['diff', '--unified=0', '--no-color', '--no-renames', v.base, 'HEAD'])));
+      const scope = v.base ? 'pr' : 'repo';
+      const limit = v.limit ? Number(v.limit) : undefined;
+      writeFileSync(required(v.out, '--out'), duplicatesReport(groups, { minLines: q.duplicate_lines, minClasses: q.repeated_classes, scope, limit }));
+      return `Powtórzenia (${scope}): ${groups.length}`;
+    }
     case 'ci': {
       const result = runCommands(config(v.config).commands, process.cwd(), v.skip!.split(',').filter(Boolean));
       writeFileSync(required(v.out, '--out'), JSON.stringify(result, null, 2));
@@ -341,6 +378,18 @@ function run(command: string | undefined, rest: string[]): string {
     default:
       throw new UsageError(`nieznana podkomenda: ${command ?? '(brak)'}`);
   }
+}
+
+/** Pliki kodu projektu do wykrywania powtórzeń: bez testów, plików generowanych, lockfile'ów i wyjątków z quality.ignore. */
+function sourceFiles(cfg: FactoryConfig): SourceFile[] {
+  const skip = [...cfg.files.tests, ...cfg.files.generated, ...cfg.files.lockfiles, ...cfg.quality.ignore.map((i) => i.path)];
+  return git(['ls-files', '-z'])
+    .split('\0')
+    .filter((path) => path && matchesAny(path, cfg.files.source) && !matchesAny(path, skip))
+    .flatMap((path) => {
+      const stat = statSync(path, { throwIfNoEntry: false });
+      return stat?.isFile() && stat.size <= 512 * 1024 ? [{ path, text: readFileSync(path, 'utf8') }] : [];
+    });
 }
 
 function git(args: string[]): string {
@@ -392,8 +441,8 @@ function limit(v: Values): number {
 }
 
 function modelFor(stage: string | undefined, cfg: FactoryConfig): string {
-  if (stage === 'planner' || stage === 'implementer' || stage === 'risk_assessor') return cfg.models[stage];
-  throw new UsageError('model: planner, implementer albo risk_assessor');
+  if (stage === 'planner' || stage === 'implementer' || stage === 'risk_assessor' || stage === 'architect') return cfg.models[stage];
+  throw new UsageError('model: planner, implementer, risk_assessor albo architect');
 }
 
 function checkPaths(cfg: FactoryConfig): string {
