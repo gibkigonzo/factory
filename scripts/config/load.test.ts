@@ -104,7 +104,7 @@ describe('błędny kontrakt: komunikat wskazuje pole', () => {
   });
 
   it('nieznany preset wymienia dostępne', () => {
-    assertError(MINIMAL.replace('[base]', '[base, rails]'), 'factory.yml: extends[1]: nieznany preset „rails”; dostępne: base, nuxt, typescript, web');
+    assertError(MINIMAL.replace('[base]', '[base, rails]'), 'factory.yml: extends[1]: nieznany preset „rails”; dostępne: base, nuxt, rust, tauri, typescript, web');
   });
 
   it('projekt nie zmienia progów z base', () => {

@@ -187,7 +187,7 @@ Bramki jakości nie są ryzykiem: blokują merge, ale fabryka poprawia je sama. 
 
 ### Kontrakt projektu (`factory.yml`)
 
-Warstwy składają się w kolejności `base` → presety z `extends` → `factory.yml`. Listy się sumują, więc projekt nie usunie ochrony z `base`; pojedyncze wartości nadpisuje późniejsza warstwa. Presety: `base`, `typescript`, `web`, `nuxt`.
+Warstwy składają się w kolejności `base` → presety z `extends` → `factory.yml`. Listy się sumują, więc projekt nie usunie ochrony z `base`; pojedyncze wartości nadpisuje późniejsza warstwa. Presety: `base`, `typescript`, `web`, `nuxt`, `rust` i `tauri` (aplikacja desktopowa i mobilna: `extends: [base, typescript, web, rust, tauri]`). Preset `rust` liczy testy z osobnych plików, np. `src/foo/tests.rs`; test w pliku kodu liczy się jak kod.
 
 | Pole | Kto ustawia | Co znaczy |
 | --- | --- | --- |
@@ -271,7 +271,12 @@ Projekt wywołuje tylko dyrygenta `pipeline.yml`, a ten etapy z tego repo w tej 
 | `queue.yml` | zamknięcie PR fabryki, komendy, raz dziennie | wypuszcza czekające zadania, wykrywa konflikty otwartych PR |
 | `commands.yml` | komentarz właściciela | komendy z tabeli wyżej |
 
-Wejścia szablonu: `factory_ref` (wersja skryptów, ta sama co w `uses`), `runs_on` (np. własny runner dla repo prywatnego), `trusted` (dodatkowe zaufane konta), `max_parallel` (recenzenci naraz).
+Wejścia szablonu:
+- `factory_ref`: wersja skryptów, ta sama co w `uses`;
+- `runs_on`: runner implementera i CI projektu, czyli tam, gdzie działają komendy z `factory.yml` i zrzuty. Aplikację na macOS buduje `macos-latest`; ma też Android SDK i NDK, więc komenda budowania na Androida działa w tym samym CI;
+- `agents_runs_on`: runner planera, recenzentów i oceniacza ryzyka, którzy kodu nie budują. Domyślnie ten sam co `runs_on`; przy macOS warto zostawić agentów na `ubuntu-latest`, bo szybciej startują;
+- `trusted`: dodatkowe zaufane konta;
+- `max_parallel`: recenzenci naraz.
 
 - Joby z Claude mają tylko prawo odczytu i repo bez poświadczeń git. Komentarze, etykiety, commit, PR i check robią osobne joby bez Claude, na sprawdzonym wyjściu.
 - Na taśmę wchodzą tylko zdarzenia od właściciela, kont `trusted` i workflowów fabryki. Etapy łączy `workflow_dispatch`, bo zdarzenia z `GITHUB_TOKEN` nie uruchamiają workflowów.
@@ -290,7 +295,7 @@ skills/               skille: spec-writer, planner, implementer, review (protok�
 agents/               recenzenci review-<perspektywa>, generowani z skills/review
 scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, panel, wyjście agentów, kolejka,
                       pętla poprawek, budżet, zrzuty, merger i dziennik trybu cienia
-presets/              warstwy reguł: base, typescript, web, nuxt
+presets/              warstwy reguł: base, typescript, web, nuxt, rust, tauri
 templates/            szablony dla projektów: workflow taśmy, reguła dla CLAUDE.md, factory.yml
 .github/workflows/    wspólne workflowy typu workflow_call
 ```

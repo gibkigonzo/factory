@@ -14,7 +14,8 @@ on:
     inputs:
       pr: { type: string, required: true }
       factory_ref: { type: string, default: main }
-      runs_on: { type: string, default: ubuntu-latest }
+      runs_on: { type: string, default: ubuntu-latest, description: 'Runner dla CI projektu i zrzutów' }
+      agents_runs_on: { type: string, default: '', description: 'Runner dla recenzentów; pusty to runs_on' }
       node_version: { type: string, default: '22' }
       trusted: { type: string, default: '' }
       max_parallel: { type: string, default: '3', description: 'Ilu recenzentów naraz' }
@@ -281,7 +282,8 @@ jobs:
       matrix:
         member: ${{ fromJSON(needs.panel.outputs.matrix) }}
     name: reviewer (${{ matrix.member.name }})
-    runs-on: ${{ fromJSON(startsWith(inputs.runs_on, '[') && inputs.runs_on || format('"{0}"', inputs.runs_on)) }}
+    # Recenzent czyta kod i niczego nie buduje, więc może działać na innym runnerze niż CI projektu (np. Linux obok macOS).
+    runs-on: ${{ fromJSON(startsWith(inputs.agents_runs_on || inputs.runs_on, '[') && (inputs.agents_runs_on || inputs.runs_on) || format('"{0}"', inputs.agents_runs_on || inputs.runs_on)) }}
     timeout-minutes: 30
     permissions:
       contents: read
@@ -371,8 +373,13 @@ jobs:
         run: |
           # Bun z rejestru npm zamiast z GitHub Releases, które bywają niedostępne (HTTP 504).
           # Wersja jak w przypiętym claude-code-action. Gdy się nie uda, akcja pobierze Buna sama.
-          [ "$(uname -s)" = Linux ] || exit 0
-          case "$(uname -m)" in x86_64) PKG=@oven/bun-linux-x64 ;; aarch64|arm64) PKG=@oven/bun-linux-aarch64 ;; *) exit 0 ;; esac
+          case "$(uname -s)-$(uname -m)" in
+            Linux-x86_64) PKG=@oven/bun-linux-x64 ;;
+            Linux-aarch64|Linux-arm64) PKG=@oven/bun-linux-aarch64 ;;
+            Darwin-arm64) PKG=@oven/bun-darwin-aarch64 ;;
+            Darwin-x86_64) PKG=@oven/bun-darwin-x64 ;;
+            *) exit 0 ;;
+          esac
           npm install --prefix "$RUNNER_TEMP/bun" "$PKG@1.4.4" --no-audit --no-fund --ignore-scripts >/dev/null
           BUN="$RUNNER_TEMP/bun/node_modules/$PKG/bin/bun"
           chmod +x "$BUN" && "$BUN" --version && echo "path=$BUN" >> "$GITHUB_OUTPUT"

@@ -113,6 +113,36 @@ describe('reguła 3: brak testów', () => {
   });
 });
 
+describe('aplikacja Tauri: presety rust i tauri', () => {
+  const tauri = (() => {
+    const result = loadConfig('project: app\nextends: [base, typescript, web, rust, tauri]\ncommands: { test: npm test, build: npm run build }\n', 'factory.yml');
+    if (!result.ok) throw new Error(result.errors.join('\n'));
+    return result.config;
+  })();
+
+  it('uprawnienia, konfiguracja i manifest to security, start aplikacji shared, zwykłe komendy Rusta code', () => {
+    const zone = (path: string) => zoneOf(path, tauri).zone;
+    assert.equal(zone('src-tauri/capabilities/default.json'), 'security');
+    assert.equal(zone('src-tauri/tauri.conf.json'), 'security');
+    assert.equal(zone('src-tauri/gen/android/app/src/main/AndroidManifest.xml'), 'security');
+    assert.equal(zone('src-tauri/gen/android/app/build.gradle.kts'), 'release');
+    assert.equal(zone('src-tauri/src/lib.rs'), 'shared');
+    assert.equal(zone('src-tauri/Cargo.toml'), 'dependencies');
+    assert.equal(zone('src-tauri/Cargo.lock'), 'shared');
+    assert.equal(zone('src-tauri/src/board/status.rs'), 'code');
+    assert.equal(zone('src/components/TaskCard.vue'), 'code');
+  });
+
+  it('testy Rusta w osobnym pliku tests.rs dają strefie testy, a test w pliku kodu nie', () => {
+    const files = [changed('src-tauri/src/board/status.rs')];
+    assert.equal(testsRule(files, ['src-tauri/src/board/status.rs'], tauri).level, 'High');
+    assert.equal(testsRule(files, ['src-tauri/src/board/status.rs', 'src-tauri/src/board/tests.rs'], tauri).level, 'Low');
+    assert.ok(tauri.files.lockfiles.includes('**/Cargo.lock'));
+    assert.ok(tauri.protected_files.includes('**/keystore.properties'));
+    assert.ok(tauri.disable_markers.includes('#[allow('));
+  });
+});
+
 describe('reguła 4: rozmiar', () => {
   const lines = (count: number, files = 1) =>
     Array.from({ length: files }, (_, i) => changed(`src/components/F${i}.vue`, { additions: i === 0 ? count - (files - 1) : 1 }));

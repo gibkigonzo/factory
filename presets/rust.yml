@@ -1,0 +1,48 @@
+# Preset Rust (Cargo).
+# Testy jednostkowe trzymaj w osobnym pliku, np. src/foo/tests.rs dołączonym przez `#[cfg(test)] mod tests;`.
+# Test w tym samym pliku co kod fabryka liczy jak kod: do rozmiaru zmiany i do reguły „brak testów”.
+
+zones:
+  factory:
+    - "**/clippy.toml"
+    - "**/.clippy.toml"
+    - "**/rustfmt.toml"
+    - "**/.rustfmt.toml"
+    - "**/rust-toolchain"
+    - "**/rust-toolchain.toml"
+    - "**/.cargo/config"
+    - "**/.cargo/config.toml"
+    - "**/deny.toml"
+  dependencies:
+    - "**/Cargo.toml"
+  shared:
+    - "**/Cargo.lock"
+    - "**/build.rs"          # skrypt budowania działa przy każdej kompilacji
+
+files:
+  source:
+    - "**/*.rs"
+  tests:
+    - "**/tests/**/*.rs"
+    - "**/tests.rs"
+    - "**/*_test.rs"
+    - "**/*_tests.rs"
+    - "**/benches/**"
+  lockfiles:
+    - "**/Cargo.lock"
+  generated:
+    - "target/**"
+    - "**/target/**"
+
+# Nowe wyłączenia lintów i testów odbierają zmianie poziom Low.
+disable_markers:
+  - "#[allow("
+  - "#![allow("
+  - "#[ignore"
+
+# Usunięcie asercji z testów daje High.
+assertion_markers:
+  - "assert!("
+  - "assert_eq!("
+  - "assert_ne!("
+  - "#[should_panic"

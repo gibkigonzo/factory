@@ -463,6 +463,20 @@ describe('wzorzec workflowu projektu', () => {
     assert.deepEqual([...called].sort(), [...STAGES].sort());
   });
 
+  it('runnery: kod projektu buduje runs_on, a agenci bez budowania mogą działać na agents_runs_on', () => {
+    type RunJob = Job & { 'runs-on'?: string };
+    const jobs = workflows.pipeline!.data.jobs;
+    const agents = '${{ inputs.agents_runs_on || inputs.runs_on }}';
+    assert.equal(jobs.plan!.with?.runs_on, agents, 'planer');
+    assert.equal(jobs.risk!.with?.runs_on, agents, 'oceniacz ryzyka');
+    assert.equal(jobs.implement!.with?.runs_on, '${{ inputs.runs_on }}', 'implementer buduje projekt');
+    assert.equal(jobs.review!.with?.runs_on, '${{ inputs.runs_on }}', 'CI projektu i zrzuty');
+    assert.equal(jobs.review!.with?.agents_runs_on, '${{ inputs.agents_runs_on }}', 'recenzenci');
+    const review = workflows.review!.data.jobs as Record<string, RunJob>;
+    assert.match(review.ci!['runs-on']!, /^\$\{\{ fromJSON\(startsWith\(inputs\.runs_on,/, 'CI na runnerze projektu');
+    assert.match(review.reviewer!['runs-on']!, /inputs\.agents_runs_on \|\| inputs\.runs_on/, 'recenzent na runnerze agentów');
+  });
+
   it('zatrzymana taśma: etapy z Claude i kolejka czekają, a wstrzymane wywołanie trafia do zapisu dla /start', () => {
     type Gated = Job & { needs?: string | string[]; if?: string };
     const jobs = workflows.pipeline!.data.jobs as Record<string, Gated>;
