@@ -200,6 +200,15 @@ describe('workflowy fabryki', () => {
     assert.match(text, /\/stop\[\[:space:\]:,\.!\]\*##I/, 'powód /stop także przy „/Stop”');
   });
 
+  it('/release: tylko patch, minor albo major i tylko workflow wydania projektu z gałęzi głównej', () => {
+    const { text } = workflows.commands!;
+    assert.match(text, /\(approve\|veto\|reject\|change\|split\|stop\|start\|release\)/);
+    assert.match(text, /BUMP=\$\{BUMP:-patch\}/);
+    assert.match(text, /patch\|minor\|major\) ;;/);
+    assert.match(text, /gh workflow run release\.yml --ref "\$DEFAULT" -f bump="\$BUMP"/);
+    assert.match(text, /actions\/workflows\/release\.yml" >\/dev\/null/, 'bez workflowu wydania odpowiedź zamiast błędu');
+  });
+
   it('runda bez zmian cytuje wyjaśnienie implementera, a dziennik zbiera /change właściciela', () => {
     assert.match(workflows.implement!.text, /cli\.ts" no-change-comment --implementation "\$RUNNER_TEMP\/implementation\.json" --round "\$NEXT"/);
     assert.doesNotMatch(workflows.implement!.text, /porannym/);
@@ -523,7 +532,7 @@ describe('wzorzec workflowu projektu', () => {
     assert.match(run, /<!-- factory:paused %s -->/);
     assert.match(run, /--add-label factory:paused/);
     const commands = workflows.commands!.text;
-    assert.match(commands, /\/\(approve\|veto\|reject\|change\|split\|stop\|start\)/);
+    assert.match(commands, /\/\(approve\|veto\|reject\|change\|split\|stop\|start\|release\)/);
     assert.match(commands, /gh issue create --title 'Taśma zatrzymana' --label factory:stopped/);
     assert.match(commands, /bash \.factory-src\/scripts\/workflow\/resume\.sh \$STOPS/, '/start wznawia przez wspólny skrypt');
     const resume = readFileSync(new URL('./resume.sh', import.meta.url), 'utf8');

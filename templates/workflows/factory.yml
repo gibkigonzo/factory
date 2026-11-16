@@ -6,7 +6,8 @@
 # Przebieg: etykieta `ready` na issue → plan → implementacja (PR z gałęzi factory/*) → recenzja → ocena ryzyka
 # → werdykt mergera. Kolejne etapy uruchamiają się przez workflow_dispatch. Czerwone CI albo prośba recenzenta
 # o zmiany odsyła PR do implementera (do risk.max_review_rounds rund); werdykt powstaje po tej pętli.
-# Komendy w komentarzach: /approve, /reject, /change, /split, /stop <powód> i /start (zatrzymanie taśmy).
+# Komendy w komentarzach: /approve, /reject, /change, /split, /stop <powód>, /start (zatrzymanie taśmy) i /release
+# (uruchamia .github/workflows/release.yml projektu z wejściem bump: patch, minor albo major).
 # W Etapie 0 (tryb cienia) fabryka niczego nie scala: o każdym PR decydujesz Ty, a werdykt fabryki oceniasz 👍 albo 👎.
 # Dziennik z metrykami prowadzi przypięte issue „Tryb cienia”. Co kilka scalonych PR przegląd architektury proponuje
 # refaktor jako notatki do backlogu (etykiety idea i refactor); zapis przeglądów jest w issue „Przegląd architektury”.

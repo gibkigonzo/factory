@@ -123,6 +123,11 @@ Jak taśma działa, opisuje README. Tu są decyzje i ich powody.
 - Co `quality.architecture_every_prs` scalonych PR fabryki agent `architect` (tylko odczyt) proponuje najwyżej `quality.architecture_max_issues` refaktorów jako notatki `idea` + `refactor`. Propozycje nie blokują PR; issue zakłada skrypt bez powtórek, a koszt trafia do dziennika przez issue „Przegląd architektury”.
 - Mechanizm i progi są w fabryce (`base`); projekt daje konwencje w `CLAUDE.md` i wyłącza ścieżki w `quality.ignore`, zawsze z powodem.
 
+### Wydania (15 listopada 2026)
+
+- Merge to nie wydanie: wydanie zaczyna właściciel komendą `/release` (`patch` domyślnie, `minor` albo `major`), także z telefonu. Fabryka sprawdza konto i uruchamia `.github/workflows/release.yml` projektu z wejściem `bump`; wersję, tag i paczki robi workflow projektu.
+- Projekty są trunk-based: `main` to jedyna stała gałąź, a niegotowa funkcja jest ukryta, zamiast czekać na długiej gałęzi.
+
 ### Zatrzymanie taśmy (11 i 13 listopada 2026)
 
 - `/stop <powód>` zatrzymuje taśmę jak linka bezpieczeństwa: plan, implementacja, recenzja i kolejka czekają (`factory:paused`), a `/start` je wznawia. Dziennik i komendy działają zawsze.

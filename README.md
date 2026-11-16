@@ -59,6 +59,7 @@ W PR: `risk:low` albo `risk:high`, `factory:round-N` (runda poprawek), `factory:
 | `/split` | issue | planer dzieli zadanie na mniejsze issue |
 | `/stop <powód>` | issue albo PR | zatrzymuje taśmę; dziennik i komendy działają dalej |
 | `/start` | issue albo PR | wznawia taśmę i wstrzymane etapy, sprawdza kolejkę |
+| `/release [minor\|major]` | issue albo PR | uruchamia workflow wydania projektu (`.github/workflows/release.yml`) z rodzajem wydania `patch`, `minor` albo `major` |
 
 Komendy działają tylko od właściciela repo i kont z wejścia `trusted`, bez względu na wielkość liter. Na nieznaną komendę taśma odpowiada listą komend.
 
