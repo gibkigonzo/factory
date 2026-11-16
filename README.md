@@ -16,7 +16,9 @@ Fabryka do wytwarzania oprogramowania, oparta na Claude Code i GitHub Actions. Z
 - **Kolejka i limity.** Zadania na tych samych plikach idą po kolei, reszta równolegle w granicach `wip_limit`. Dzienny limit przebiegów pilnuje kosztu.
 - **Bezpieczeństwo.** Claude działa tylko z prawem odczytu i zwraca JSON albo patch; zapisy robią skrypty. Nowe pakiety instaluje workflow po Twoim `/approve`.
 
-**Jeszcze nie:** automatyczny merge (wymaga rulesetu na `main` i aplikacji GitHub fabryki, a w repo prywatnym GitHub Pro) i sesja `factory-init`, która ustala konwencje projektu. Do tego czasu konwencje zapisujesz sam w `CLAUDE.md` projektu.
+**Jeszcze nie:** automatyczny merge (wymaga rulesetu na `main` i aplikacji GitHub fabryki, a w repo prywatnym GitHub Pro).
+
+**Nowy projekt** zaczynasz sesją ze skillem `factory-init`: pięć rund pytań z rekomendacjami ustala konwencje w `CLAUDE.md` i `factory.yml`, a przy pustym repo sesja buduje szkielet z oficjalnych generatorów.
 
 ## Szybki start
 
@@ -316,7 +318,8 @@ To repo jest też marketplace'em pluginu ze skillami fabryki do pracy lokalnej: 
 
 ```
 .claude-plugin/       plugin.json i marketplace.json (plugin = całe repo)
-skills/               skille: spec-writer, planner, implementer, review (protokół i perspektywy), risk-assessor, architect
+skills/               skille: factory-init, spec-writer, planner, implementer, review (protokół i perspektywy),
+                      risk-assessor, architect
 agents/               recenzenci review-<perspektywa>, generowani z skills/review
 scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, panel, wyjście agentów, kolejka,
                       moduł dla aplikacji (scripts/app),

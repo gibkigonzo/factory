@@ -23,7 +23,7 @@ Factory to generyczna fabryka oprogramowania oparta na Claude Code, dla stron WW
 - Nie scalaj PR-ów, także przez `merge_pull_request` z konektora GitHub, nawet jeśli masz do tego uprawnienia.
 - Wszystkie progi to wartości startowe do kalibracji w trybie cienia.
 - Prywatne projekty właściciela wymienione w `CLAUDE.local.md` służą tylko jako materiał do analizy. Niczego w nich nie zmieniaj. Zakaz nie dotyczy repo testowego fabryki (piaskownicy) ani projektów, które właściciel podłączył do taśmy, np. pilota: w nich fabryka i Claude zakładają i zmieniają issue oraz PR-y.
-- `factory-init`: kierunek jest w Ustaleniach niżej. Szczegóły przebiegu sesji ustalamy razem z użytkownikiem. Nie projektuj ich sam.
+- `factory-init`: przebieg jest w `skills/factory-init`. Zmiany przebiegu ustalamy razem z użytkownikiem; nie projektuj ich sam.
 
 
 ## Ustalenia
@@ -105,6 +105,7 @@ Jak taśma działa, opisuje README. Tu są decyzje i ich powody.
 
 - Sesja z AI ustala konwencje projektu (w `CLAUDE.md` i `factory.yml`), zanim taśma dostanie pierwsze zadanie. Pytania agent dobiera do typu projektu: dla frontendu style, tokeny wyglądu, wspólne elementy i semantykę HTML (13 listopada), dla gry nazwy i strukturę scen.
 - Lekcja z pilota: bez spisanych konwencji agent sam wybrał styl kodu, a recenzent nie miał czego pilnować.
+- Pierwsza sesja (15 listopada, aplikacja desktopowa i mobilna) dała skill `skills/factory-init`: pięć rund po najwyżej 5 pytań z rekomendacją i realnymi alternatywami, szkic `CLAUDE.md` i `factory.yml` po każdej rundzie, szkielet pustego repo z oficjalnych generatorów i commit dopiero po zgodzie. Lekcja: framework frontu ustala się w rundzie 1 razem z narzędziem do makiet; zmiana po rundach kosztowała odbudowę szkieletu.
 
 ### Kolejka i pętla poprawek (8–14 listopada 2026)
 
