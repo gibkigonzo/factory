@@ -10,13 +10,23 @@ import { parseFrontmatter, ROOT } from '../agents/files.ts';
 import { matchesAny } from '../risk/glob.ts';
 import { zoneOf } from '../risk/rules.ts';
 import type { ChangedFile } from '../risk/types.ts';
-import type { PerspectiveDef } from './types.ts';
-
-export type { PerspectiveDef } from './types.ts';
 
 export const CATALOG_DIR = join(ROOT, 'skills/review/perspectives');
 export const PROJECT_DIR = '.factory/perspectives';
 
+export interface PerspectiveDef {
+  name: string;
+  title: string;
+  description: string;
+  paths?: string[];
+  zones?: string[];
+  /** Perspektywa ocenia zrzuty ekranu: jej recenzent dostaje zrzuty sekcji zmienionych przez PR. */
+  screenshots?: boolean;
+  source: 'catalog' | 'project';
+  file: string;
+  /** Pełna treść pliku: frontmatter i kryteria. */
+  text: string;
+}
 
 const NAME: Spec = { kind: 'string', pattern: /^[a-z][a-z0-9_-]*$/, hint: 'małe litery, cyfry, „-” i „_”, na początku litera' };
 const text: Spec = { kind: 'string' };

@@ -299,16 +299,17 @@ Wejścia szablonu:
 - Galeria zrzutów, dziennik i kolejka nie pobierają kodu PR ani nie uruchamiają Claude. Prawo zapisu treści mają tylko do gałęzi `factory-*`.
 - Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML.
 
-### Moduł dla aplikacji
+### Formaty dla narzędzi
 
-Aplikacja do prowadzenia projektów korzysta z logiki taśmy, a nie liczy jej po swojemu: `import { taskColumn } from 'factory/app'`, z zależnością npm przypiętą do commita fabryki (`github:gibkigonzo/factory#<sha>`). Moduł `scripts/app` daje:
+Narzędzia spoza taśmy, np. aplikacja do prowadzenia projektów, czytają stan fabryki z GitHuba. Te formaty są kontraktem: zmiana któregoś to zmiana niezgodna (nowa wersja fabryki).
 
-- kolumny tablicy zadań z etykiet issue i PR fabryki (`taskColumn`, `COLUMNS`);
-- komendy jako przyciski: które mają sens w danym miejscu i treść komentarza (`availableCommands`, `commandComment`), według tych samych zasad co `commands.yml`;
-- werdykt trybu cienia z komentarza (`parseShadow`), koszty (`parseUsageBlocks`, `STAGE_LABELS`) i plik `journal.json` (`parseJournal`);
-- rozpoznanie projektu fabryki i jej wersji z workflowu projektu (`factoryVersion`).
-
-To czysty TypeScript bez Node, działa w przeglądarce i w Tauri. Pilnują tego test grafu importów i `tsconfig.app.json` bez typów Node.
+- **Zadanie:** issue z etykietami z tabeli wyżej; PR fabryki ma gałąź `factory/<numer issue>-<nazwa>`.
+- **Projekt fabryki:** workflow projektu z `uses: gibkigonzo/factory/.github/workflows/pipeline.yml@<wersja>`.
+- **Werdykt trybu cienia:** komentarz w PR z `<!-- factory:shadow -->` i blokiem `<!-- factory:shadow-data {…} -->`. JSON ma `pr`, `round`, `level` (`Low` albo `High`), `action` (`merge`, `escalate`, `split`, `fix-gates`), `reviews` (perspektywa, werdykt, pewność) i opcjonalnie `usage`. Ocena to reakcja `+1` albo `-1` właściciela na ten komentarz.
+- **Koszt etapu:** blok `<!-- factory:usage [{…}] -->` w komentarzu planu, opisie PR, komentarzu rundy albo werdykcie. Rekord ma `stage` (`plan`, `implement`, `review`, `assess`, `architecture`), `count`, `cost` (USD, równowartość cen API), `turns`, `ms`, tokeny (`input`, `output`, `cacheRead`, `cacheWrite`) i opcjonalnie `name` recenzenta.
+- **Problem taśmy:** blok `<!-- factory:line-problem {"stage", "problem", "at"} -->`.
+- **Dziennik:** `journal.json` na gałęzi `factory-journal` z polami `updated`, `stopped` (issue zatrzymania albo `null`), `tasks`, `cost`, `rows` (wiersz na zadanie: numery issue i PR, tytuł, stan, poziom, werdykt, ocena, rundy, koszt na etap i recenzenta) i `lineProblems`.
+- **Zatrzymanie taśmy:** otwarte issue z etykietą `factory:stopped`.
 
 ### Plugin w Claude Code
 
@@ -322,7 +323,6 @@ skills/               skille: factory-init, spec-writer, planner, implementer, r
                       risk-assessor, architect
 agents/               recenzenci review-<perspektywa>, generowani z skills/review
 scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, panel, wyjście agentów, kolejka,
-                      moduł dla aplikacji (scripts/app),
                       pętla poprawek, budżet, zrzuty, powtórzenia, merger i dziennik trybu cienia
 presets/              warstwy reguł: base, typescript, web, nuxt, rust, tauri
 templates/            szablony dla projektów: workflow taśmy, reguła dla CLAUDE.md, factory.yml
