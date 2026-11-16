@@ -1,7 +1,9 @@
-# Komendy właściciela w komentarzu: /approve, /reject, /change, /split, /stop, /start. Na dawne /veto taśma
+# Komendy właściciela w komentarzu: /approve, /reject, /change, /split, /stop, /start, /release. Na dawne /veto taśma
 # odpowiada, że okna weta już nie ma (dwa poziomy ryzyka: Low scala fabryka, High czeka na właściciela).
 # /approve w issue z etykietą needs-approval to zgoda na nowe zależności z planu.
 # /stop <powód> zatrzymuje taśmę (issue „Taśma zatrzymana”), a /start ją wznawia razem z wstrzymanymi etapami.
+# /release [patch|minor|major] uruchamia workflow wydania projektu (.github/workflows/release.yml): merge to nie wydanie,
+# więc wydanie zawsze zaczyna właściciel.
 # Działają tylko od właściciela repo i kont z listy `trusted`; konto workflowów nie wydaje komend.
 # Treść komentarza trafia do skryptu wyłącznie przez zmienne środowiskowe.
 name: factory-commands
@@ -39,7 +41,7 @@ jobs:
           fi
           # Bez rozróżniania wielkości liter: autokorekta w telefonie zmienia „/change” na „/Change”.
           FIRST=$(printf '%s\n' "$BODY" | head -n 1 | tr -d '\r' | sed -E 's/^[[:space:]]+//')
-          COMMAND=$(sed -nE 's#^/(approve|veto|reject|change|split|stop|start)([[:space:]:,.!].*)?$#\1#Ip' <<<"$FIRST" | tr '[:upper:]' '[:lower:]')
+          COMMAND=$(sed -nE 's#^/(approve|veto|reject|change|split|stop|start|release)([[:space:]:,.!].*)?$#\1#Ip' <<<"$FIRST" | tr '[:upper:]' '[:lower:]')
           # Komentarz zaczyna się od „/”, ale komendy nie ma: taśma odpowiada, zamiast milczeć.
           UNKNOWN=""
           if [ -z "$COMMAND" ] && [[ "$FIRST" =~ ^/([A-Za-z]{1,20})([[:space:]:,.!]|$) ]]; then UNKNOWN="${BASH_REMATCH[1]}"; fi
@@ -53,7 +55,7 @@ jobs:
           NUMBER: ${{ github.event.issue.number }}
           UNKNOWN: ${{ steps.parse.outputs.unknown }}
         run: |
-          gh issue comment "$NUMBER" --body "Nie znam komendy \`/$UNKNOWN\`, więc nic nie zrobiłem. Komendy taśmy: \`/approve\`, \`/reject\`, \`/change <uwagi>\`, \`/split\`, \`/stop <powód>\`, \`/start\`."
+          gh issue comment "$NUMBER" --body "Nie znam komendy \`/$UNKNOWN\`, więc nic nie zrobiłem. Komendy taśmy: \`/approve\`, \`/reject\`, \`/change <uwagi>\`, \`/split\`, \`/stop <powód>\`, \`/start\`, \`/release [minor|major]\`."
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.parse.outputs.command == 'start'
@@ -139,6 +141,22 @@ jobs:
                 STOP=${URL##*/}
               fi
               gh issue comment "$NUMBER" --body "⏸️ Taśma zatrzymana (#$STOP). Wznowienie: \`/start\`."
+              ;;
+            release)
+              # Rodzaj wydania z reszty pierwszej linii: patch (domyślnie), minor albo major. Wersję, tag i paczki
+              # robi workflow wydania projektu; fabryka tylko sprawdza, kto pisze, i go uruchamia.
+              BUMP=$(printf '%s\n' "$BODY" | head -n 1 | tr -d '\r' | sed -nE 's#^[[:space:]]*/release[[:space:]:,.!]*([A-Za-z]*).*$#\1#Ip' | tr '[:upper:]' '[:lower:]')
+              BUMP=${BUMP:-patch}
+              case "$BUMP" in
+                patch|minor|major) ;;
+                *) gh issue comment "$NUMBER" --body "Nie znam rodzaju wydania \`$BUMP\`. Napisz \`/release\`, \`/release minor\` albo \`/release major\`."; exit 0 ;;
+              esac
+              if ! gh api "repos/$GH_REPO/actions/workflows/release.yml" >/dev/null 2>&1; then
+                gh issue comment "$NUMBER" --body "Projekt nie ma workflowu wydania \`.github/workflows/release.yml\`, więc nic nie uruchomiłem."
+                exit 0
+              fi
+              gh workflow run release.yml --ref "$DEFAULT" -f bump="$BUMP"
+              gh issue comment "$NUMBER" --body "🚀 Wydanie \`$BUMP\` ruszyło z \`$DEFAULT\`: workflow \`release.yml\`. Postęp jest w Actions, a gotowe wydanie pojawi się w Releases."
               ;;
             start)
               STOPS=$(gh issue list --label factory:stopped --state open --json number --jq '.[].number')

@@ -23,7 +23,7 @@ Factory to generyczna fabryka oprogramowania oparta na Claude Code, dla stron WW
 - Nie scalaj PR-ów, także przez `merge_pull_request` z konektora GitHub, nawet jeśli masz do tego uprawnienia.
 - Wszystkie progi to wartości startowe do kalibracji w trybie cienia.
 - Prywatne projekty właściciela wymienione w `CLAUDE.local.md` służą tylko jako materiał do analizy. Niczego w nich nie zmieniaj. Zakaz nie dotyczy repo testowego fabryki (piaskownicy) ani projektów, które właściciel podłączył do taśmy, np. pilota: w nich fabryka i Claude zakładają i zmieniają issue oraz PR-y.
-- `factory-init`: kierunek jest w Ustaleniach niżej. Szczegóły przebiegu sesji ustalamy razem z użytkownikiem. Nie projektuj ich sam.
+- `factory-init`: przebieg jest w `skills/factory-init`. Zmiany przebiegu ustalamy razem z użytkownikiem; nie projektuj ich sam.
 
 
 ## Ustalenia
@@ -105,6 +105,7 @@ Jak taśma działa, opisuje README. Tu są decyzje i ich powody.
 
 - Sesja z AI ustala konwencje projektu (w `CLAUDE.md` i `factory.yml`), zanim taśma dostanie pierwsze zadanie. Pytania agent dobiera do typu projektu: dla frontendu style, tokeny wyglądu, wspólne elementy i semantykę HTML (13 listopada), dla gry nazwy i strukturę scen.
 - Lekcja z pilota: bez spisanych konwencji agent sam wybrał styl kodu, a recenzent nie miał czego pilnować.
+- Pierwsza sesja (15 listopada, aplikacja desktopowa i mobilna) dała skill `skills/factory-init`: pięć rund po najwyżej 5 pytań z rekomendacją i realnymi alternatywami, szkic `CLAUDE.md` i `factory.yml` po każdej rundzie, szkielet pustego repo z oficjalnych generatorów i commit dopiero po zgodzie. Lekcja: framework frontu ustala się w rundzie 1 razem z narzędziem do makiet; zmiana po rundach kosztowała odbudowę szkieletu.
 
 ### Kolejka i pętla poprawek (8–14 listopada 2026)
 
@@ -122,6 +123,11 @@ Jak taśma działa, opisuje README. Tu są decyzje i ich powody.
 - W każdym PR skrypt (bez Claude) liczy powtórzenia w całym repo: bloki znaczących linii i zestawy klas, także różniące się jedną klasą. `maintainability` dostaje te, które wprowadza PR, i zgłasza je jako uwagę z cytatem.
 - Co `quality.architecture_every_prs` scalonych PR fabryki agent `architect` (tylko odczyt) proponuje najwyżej `quality.architecture_max_issues` refaktorów jako notatki `idea` + `refactor`. Propozycje nie blokują PR; issue zakłada skrypt bez powtórek, a koszt trafia do dziennika przez issue „Przegląd architektury”.
 - Mechanizm i progi są w fabryce (`base`); projekt daje konwencje w `CLAUDE.md` i wyłącza ścieżki w `quality.ignore`, zawsze z powodem.
+
+### Wydania (15 listopada 2026)
+
+- Merge to nie wydanie: wydanie zaczyna właściciel komendą `/release` (`patch` domyślnie, `minor` albo `major`), także z telefonu. Fabryka sprawdza konto i uruchamia `.github/workflows/release.yml` projektu z wejściem `bump`; wersję, tag i paczki robi workflow projektu.
+- Projekty są trunk-based: `main` to jedyna stała gałąź, a niegotowa funkcja jest ukryta, zamiast czekać na długiej gałęzi.
 
 ### Zatrzymanie taśmy (11 i 13 listopada 2026)
 

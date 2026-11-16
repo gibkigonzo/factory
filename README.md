@@ -16,7 +16,9 @@ Fabryka do wytwarzania oprogramowania, oparta na Claude Code i GitHub Actions. Z
 - **Kolejka i limity.** Zadania na tych samych plikach idą po kolei, reszta równolegle w granicach `wip_limit`. Dzienny limit przebiegów pilnuje kosztu.
 - **Bezpieczeństwo.** Claude działa tylko z prawem odczytu i zwraca JSON albo patch; zapisy robią skrypty. Nowe pakiety instaluje workflow po Twoim `/approve`.
 
-**Jeszcze nie:** automatyczny merge (wymaga rulesetu na `main` i aplikacji GitHub fabryki, a w repo prywatnym GitHub Pro) i sesja `factory-init`, która ustala konwencje projektu. Do tego czasu konwencje zapisujesz sam w `CLAUDE.md` projektu.
+**Jeszcze nie:** automatyczny merge (wymaga rulesetu na `main` i aplikacji GitHub fabryki, a w repo prywatnym GitHub Pro).
+
+**Nowy projekt** zaczynasz sesją ze skillem `factory-init`: pięć rund pytań z rekomendacjami ustala konwencje w `CLAUDE.md` i `factory.yml`, a przy pustym repo sesja buduje szkielet z oficjalnych generatorów.
 
 ## Szybki start
 
@@ -59,6 +61,7 @@ W PR: `risk:low` albo `risk:high`, `factory:round-N` (runda poprawek), `factory:
 | `/split` | issue | planer dzieli zadanie na mniejsze issue |
 | `/stop <powód>` | issue albo PR | zatrzymuje taśmę; dziennik i komendy działają dalej |
 | `/start` | issue albo PR | wznawia taśmę i wstrzymane etapy, sprawdza kolejkę |
+| `/release [minor\|major]` | issue albo PR | uruchamia workflow wydania projektu (`.github/workflows/release.yml`) z rodzajem wydania `patch`, `minor` albo `major` |
 
 Komendy działają tylko od właściciela repo i kont z wejścia `trusted`, bez względu na wielkość liter. Na nieznaną komendę taśma odpowiada listą komend.
 
@@ -296,6 +299,18 @@ Wejścia szablonu:
 - Galeria zrzutów, dziennik i kolejka nie pobierają kodu PR ani nie uruchamiają Claude. Prawo zapisu treści mają tylko do gałęzi `factory-*`.
 - Testy w `scripts/workflow/workflows.test.ts` pilnują tych zasad na samych plikach YAML.
 
+### Formaty dla narzędzi
+
+Narzędzia spoza taśmy, np. aplikacja do prowadzenia projektów, czytają stan fabryki z GitHuba. Te formaty są kontraktem: zmiana któregoś to zmiana niezgodna (nowa wersja fabryki).
+
+- **Zadanie:** issue z etykietami z tabeli wyżej; PR fabryki ma gałąź `factory/<numer issue>-<nazwa>`.
+- **Projekt fabryki:** workflow projektu z `uses: gibkigonzo/factory/.github/workflows/pipeline.yml@<wersja>`.
+- **Werdykt trybu cienia:** komentarz w PR z `<!-- factory:shadow -->` i blokiem `<!-- factory:shadow-data {…} -->`. JSON ma `pr`, `round`, `level` (`Low` albo `High`), `action` (`merge`, `escalate`, `split`, `fix-gates`), `reviews` (perspektywa, werdykt, pewność) i opcjonalnie `usage`. Ocena to reakcja `+1` albo `-1` właściciela na ten komentarz.
+- **Koszt etapu:** blok `<!-- factory:usage [{…}] -->` w komentarzu planu, opisie PR, komentarzu rundy albo werdykcie. Rekord ma `stage` (`plan`, `implement`, `review`, `assess`, `architecture`), `count`, `cost` (USD, równowartość cen API), `turns`, `ms`, tokeny (`input`, `output`, `cacheRead`, `cacheWrite`) i opcjonalnie `name` recenzenta.
+- **Problem taśmy:** blok `<!-- factory:line-problem {"stage", "problem", "at"} -->`.
+- **Dziennik:** `journal.json` na gałęzi `factory-journal` z polami `updated`, `stopped` (issue zatrzymania albo `null`), `tasks`, `cost`, `rows` (wiersz na zadanie: numery issue i PR, tytuł, stan, poziom, werdykt, ocena, rundy, koszt na etap i recenzenta) i `lineProblems`.
+- **Zatrzymanie taśmy:** otwarte issue z etykietą `factory:stopped`.
+
 ### Plugin w Claude Code
 
 To repo jest też marketplace'em pluginu ze skillami fabryki do pracy lokalnej: `/plugin marketplace add gibkigonzo/factory`, potem `/plugin install factory@factory`. Taśma pluginu nie potrzebuje.
@@ -304,7 +319,8 @@ To repo jest też marketplace'em pluginu ze skillami fabryki do pracy lokalnej: 
 
 ```
 .claude-plugin/       plugin.json i marketplace.json (plugin = całe repo)
-skills/               skille: spec-writer, planner, implementer, review (protokół i perspektywy), risk-assessor, architect
+skills/               skille: factory-init, spec-writer, planner, implementer, review (protokół i perspektywy),
+                      risk-assessor, architect
 agents/               recenzenci review-<perspektywa>, generowani z skills/review
 scripts/              deterministyczne skrypty: kontrakt, reguły ryzyka, panel, wyjście agentów, kolejka,
                       pętla poprawek, budżet, zrzuty, powtórzenia, merger i dziennik trybu cienia
