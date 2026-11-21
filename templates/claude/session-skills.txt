@@ -1,0 +1,3 @@
+# Skille fabryki, które hook startu sesji (templates/claude/hooks/factory.sh) kopiuje do .claude/skills projektu.
+# Jedna nazwa katalogu z skills/ w linii. Git w projekcie pomija kopie lokalnie (.git/info/exclude).
+spec-writer

@@ -29,11 +29,11 @@ Potrzebujesz repo projektu na GitHubie (w prywatnym taśma zużywa minuty Action
 3. **Kontrakt.** Skopiuj [`templates/factory.yml`](templates/factory.yml) do korzenia repo i ustaw presety (`extends`), komendy CI (`commands`: wymagane `test` i `build`, a `setup` instaluje wszystko, także przeglądarki do e2e), strefy (`zones`), komendy instalacji pakietów (`dependencies`) i pliki chronione. Sprawdź go w klonie fabryki (Node 22.18+): `npm ci && npm run validate -- ścieżka/do/factory.yml`.
 4. **Konwencje.** Zapisz w `CLAUDE.md` projektu styl kodu i nazwy, a w projekcie z interfejsem także wspólne elementy (gdzie leżą i gdzie je widać, np. strona wzorców). Czytają je planer, implementer i recenzenci.
 5. **Workflow.** Skopiuj [`templates/workflows/factory.yml`](templates/workflows/factory.yml) do `.github/workflows/factory.yml` i dopisz `.factory/review/` do `.gitignore`. To cienki plik: dyrygent fabryki (`pipeline.yml`) rozdziela zdarzenia na etapy.
-6. **Spec z telefonu.** Skopiuj [`skills/spec-writer/`](skills/spec-writer/) do `.claude/skills/spec-writer/`, dopisz regułę z [`templates/claude/CLAUDE.md`](templates/claude/CLAUDE.md) do `CLAUDE.md` projektu i daj aplikacji Claude dostęp do repo (claude.ai → GitHub). Szczegóły: [Spec z telefonu](#spec-z-telefonu).
+6. **Sesje Claude Code.** Skopiuj [`templates/claude/hooks/factory.sh`](templates/claude/hooks/factory.sh) do `.claude/hooks/factory.sh` i [`templates/claude/settings.json`](templates/claude/settings.json) do `.claude/settings.json` (albo dopisz hook do istniejącego), a w `CLAUDE.md` projektu napisz, że reguły fabryki dostaje sesja z hooka. Daj aplikacji Claude dostęp do repo (claude.ai → GitHub). Szczegóły: [Spec z telefonu](#spec-z-telefonu).
 
 **Pierwsze zadanie:** w aplikacji Claude otwórz zakładkę Code, sesję na repo projektu i napisz „Mam pomysł: …”. Spec-writer zapyta „notatka czy spec?”, dopyta o decyzje i założy issue. Na Twoją zgodę doda `ready`. Po kilku minutach w issue jest plan, potem PR z raportem ryzyka i werdyktem. Werdykt oceniasz 👍 albo 👎, a o PR decydujesz jak zwykle: merge albo `/reject`. Postęp widać w Actions → factory: nazwa przebiegu mówi, który etap ruszył.
 
-**Aktualizacje.** Projekt przypina wersję fabryki w workflowie (`@main` i `factory_ref: main` w Etapie 0, potem tag `v1`). Etapy, skille, presety i skrypty przychodzą z tej wersji same. Ręcznie synchronizujesz tylko kopię skilla `spec-writer`.
+**Aktualizacje.** Projekt przypina wersję fabryki w workflowie (`@main` i `factory_ref: main` w Etapie 0, potem tag `v1`). Etapy, skille, presety i skrypty przychodzą z tej wersji same, także skille i reguły dla sesji Claude Code: pobiera je hook startu sesji.
 
 ## Na co dzień: etykiety i komendy
 
@@ -243,7 +243,7 @@ Spec ma sekcje: Cel, Scenariusz, Kryteria akceptacji (sprawdzalne maszynowo), Po
 
 **Sesja backlogu.** Napisz „sesja backlogu”: spec-writer pokaże otwarte notatki i zapyta, które pominąć. Pozostałe przechodzicie razem, w numerowanych rundach. Zanim pokaże spece, sprawdza całą paczkę: sprzeczności rozstrzygasz od razu, bo recenzent porównuje PR tylko z jego własnym specem, a zadanie, które potrzebuje wyniku innego, dostaje „Zależy od”. Na koniec jedna zgoda dodaje `ready` całej paczce, a kolejka planuje zadania w miarę scalania poprzednich.
 
-- **Domyślnie: sesja Claude Code w repo projektu** (z telefonu: zakładka Code). Sesje w chmurze nie instalują pluginów, dlatego projekt trzyma kopię skilla i regułę w `CLAUDE.md`. Po zmianie skilla w fabryce kopię trzeba podmienić.
+- **Domyślnie: sesja Claude Code w repo projektu** (z telefonu: zakładka Code). Hook startu sesji (`.claude/hooks/factory.sh`) pobiera z fabryki, w wersji z workflowu projektu, skille z [`templates/claude/session-skills.txt`](templates/claude/session-skills.txt) i reguły z [`templates/claude/CLAUDE.md`](templates/claude/CLAUDE.md). Kopie nie trafiają do repo (git pomija je lokalnie), więc zmiana w fabryce dociera do projektów przy następnej sesji. Bez sieci sesja korzysta z kopii z poprzedniego startu.
 - **Opcjonalnie: zwykły czat.** `npm run skill:zip` tworzy `dist/spec-writer.zip`, który wgrywasz w claude.ai (Settings → Capabilities → Skills, z włączonym Code execution). Konektor GitHub potrzebuje repo projektu w instalacji swojej aplikacji GitHub, inaczej zapis kończy się błędem 403.
 
 ### Perspektywy i modele
