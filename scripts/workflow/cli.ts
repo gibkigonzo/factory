@@ -18,7 +18,7 @@ import type { CiResult, Implementation } from './evidence.ts';
 import { toJsonSchema } from './jsonschema.ts';
 import { branchName, DENIED_FOR_READERS, implementerTools, pathProblems, READ_ONLY_TOOLS } from './patch.ts';
 import { architecturePrompt, assessPrompt, implementPrompt, planPrompt, reviewPrompt } from './prompts.ts';
-import { latestMarked, lineProblemBlock, parseLineProblems, planComment, PLAN_MARKER, prBody, PR_MARKER } from './render.ts';
+import { carryAcceptance, latestMarked, lineProblemBlock, parseLineProblems, planComment, PLAN_MARKER, prBody, previousImplementation, PR_MARKER } from './render.ts';
 import { claudeRuns } from './budget.ts';
 import type { Run } from './budget.ts';
 import { installCommands } from './dependencies.ts';
@@ -234,8 +234,10 @@ function run(command: string | undefined, rest: string[]): string {
       return noChangeComment(json(required(v.implementation, '--implementation')) as Implementation, Number(required(v.round, '--round')));
     case 'pr-body': {
       const before = v.previous && existsSync(v.previous) ? readFileSync(v.previous, 'utf8') : '';
+      const implementation = json(required(v.implementation, '--implementation')) as Implementation;
+      const previous = previousImplementation(before)?.acceptance;
       return prBody(
-        json(required(v.implementation, '--implementation')) as Implementation,
+        { ...implementation, acceptance: carryAcceptance(implementation.acceptance, Array.isArray(previous) ? previous : []) },
         [...parseUsageBlocks(before), ...usageFile(v.usage)],
         parseLineProblems(before),
       );

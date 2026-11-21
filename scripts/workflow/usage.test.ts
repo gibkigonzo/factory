@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { outputChars, parseUsageBlocks, parseUsageList, readUsage, sessionError, sessionStarted, sumUsage, usageBlock } from './usage.ts';
 import type { Usage } from './usage.ts';
-import { planComment, prBody } from './render.ts';
+import { planComment, prBody, previousImplementation } from './render.ts';
 
 const RESULT = {
   type: 'result',
@@ -122,6 +122,22 @@ describe('zużycie etapów', () => {
       writeFileSync(join(dir, 'new.json'), JSON.stringify([usage('implement', 0.6)]));
       const body = cli(['pr-body', '--implementation', join(dir, 'impl.json'), '--usage', join(dir, 'new.json'), '--previous', join(dir, 'prev.md')]);
       assert.deepEqual(parseUsageBlocks(body.stdout).map((u) => u.cost), [0.4, 0.6]);
+
+      // Runda poprawek z pustą listą kryteriów nie kasuje dowodów z poprzedniej rundy, a nadpisuje te, które podała.
+      const previous = prBody({ issue: 4, bugfix: false, assumptions: [], acceptance: [
+        { criterion: 'Przycisk ma `44 px`', evidence: 'test: a' },
+        { criterion: 'Formularz się czyści', evidence: 'test: b' },
+      ] });
+      writeFileSync(join(dir, 'prev2.md'), previous);
+      writeFileSync(join(dir, 'round.json'), JSON.stringify({ issue: 4, bugfix: false, assumptions: [], acceptance: [
+        { criterion: 'formularz się czyści', evidence: 'test: b2' },
+        { criterion: 'Nowe kryterium', evidence: 'test: c' },
+      ] }));
+      writeFileSync(join(dir, 'empty.json'), JSON.stringify({ issue: 4, bugfix: false, assumptions: [], acceptance: [] }));
+      const acceptance = (file: string) =>
+        (previousImplementation(cli(['pr-body', '--implementation', join(dir, file), '--previous', join(dir, 'prev2.md')]).stdout)!.acceptance ?? []).map((a) => a.evidence);
+      assert.deepEqual(acceptance('empty.json'), ['test: a', 'test: b']);
+      assert.deepEqual(acceptance('round.json'), ['test: a', 'test: b2', 'test: c']);
       assert.ok(!readFileSync(join(dir, 'u', 'a.json'), 'utf8').includes('"type"'), 'zapisany jest sam rekord');
     } finally {
       rmSync(dir, { recursive: true, force: true });
