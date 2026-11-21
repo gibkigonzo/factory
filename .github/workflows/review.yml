@@ -84,9 +84,10 @@ jobs:
         run: |
           mv .factory-src "$RUNNER_TEMP/factory"
           npm ci --prefix "$RUNNER_TEMP/factory" --omit=dev --no-audit --no-fund
-          mkdir -p .factory/work && printf '.factory/work/\n' >> .git/info/exclude
+          # Pliki robocze poza katalogiem projektu: komendy projektu (np. prettier --check .) nie mogą ich widzieć.
+          mkdir -p "$RUNNER_TEMP/factory-work"
           echo "F=$RUNNER_TEMP/factory" >> "$GITHUB_ENV"
-          echo "W=.factory/work" >> "$GITHUB_ENV"
+          echo "W=$RUNNER_TEMP/factory-work" >> "$GITHUB_ENV"
           corepack enable || true
 
       - name: factory.yml z bazy
@@ -127,8 +128,7 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: factory-ci
-          path: .factory/work/ci.json
-          include-hidden-files: true
+          path: ${{ runner.temp }}/factory-work/ci.json
 
       - name: Zrzuty ekranu
         id: shots
@@ -159,7 +159,7 @@ jobs:
           # z wykonaniem wskazuje sekcje zmienione przez PR; tylko je ocenia recenzent wyglądu.
           git worktree add --detach "$RUNNER_TEMP/base-tree" "$FORK"
           cd "$RUNNER_TEMP/base-tree"
-          node "$F/scripts/workflow/cli.ts" screenshots --setup --config "$GITHUB_WORKSPACE/$W/config.json" \
+          node "$F/scripts/workflow/cli.ts" screenshots --setup --config "$W/config.json" \
             --out "$RUNNER_TEMP/screenshots-base"
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -182,8 +182,7 @@ jobs:
         if: steps.shots.outputs.configured == 'true'
         with:
           name: factory-visual
-          path: .factory/work/visual.md
-          include-hidden-files: true
+          path: ${{ runner.temp }}/factory-work/visual.md
           if-no-files-found: ignore
 
       - name: Powtórzenia w kodzie
@@ -200,8 +199,7 @@ jobs:
         if: steps.duplicates.outcome == 'success'
         with:
           name: factory-duplicates
-          path: .factory/work/duplicates.md
-          include-hidden-files: true
+          path: ${{ runner.temp }}/factory-work/duplicates.md
           if-no-files-found: ignore
 
   panel:
