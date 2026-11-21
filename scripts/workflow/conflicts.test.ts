@@ -149,7 +149,8 @@ case "$args" in
   "pr view "*"--json headRefName"*) n=$(echo "$args" | awk '{print $3}'); jq -r --argjson n "$n" '.[] | select(.number == $n) | .headRefName' "$D/prs.json" ;;
   "run list"*) cat "$D/runs" ;;
   "api --paginate repos/o/r/issues/"*) n=$(echo "$args" | sed -E 's#.*issues/([0-9]+)/comments.*#\\1#'); cat "$D/comments-$n" 2>/dev/null ;;
-  "pr comment "*) n=$(echo "$args" | awk '{print $3}'); cat > "$D/comment-$n"; echo "https://github.com/o/r/pull/$n#issuecomment-9$n" ;;
+  "api repos/o/r/issues/"*"/comments -F body=@- --jq .html_url")
+    n=$(echo "$args" | sed -E 's#.*issues/([0-9]+)/comments.*#\\1#'); cat > "$D/comment-$n"; echo "https://github.com/o/r/pull/$n#issuecomment-9$n" ;;
 esac
 exit 0
 `,
@@ -185,6 +186,7 @@ describe('wykrywanie konfliktów po zamknięciu PR fabryki', () => {
       assert.ok(log.includes('workflow run factory.yml --ref main -f stage=implement -f issue=52 -f pr=54 -f note=954'));
       assert.match(readFileSync(join(dir, 'comment-54'), 'utf8'), /^<!-- factory:conflict -->\n## Konflikt z gałęzią główną\n[\s\S]*runda 1 z 2/);
       assert.ok(!log.includes('pr=55') && !log.includes('pr=56') && !log.includes('pr=57'));
+      assert.ok(!log.includes('pr comment'), 'komentarz przez REST issue: job kolejki nie ma prawa zapisu PR');
       assert.match(readFileSync(join(dir, 'comment-57'), 'utf8'), /^<!-- factory:conflict-stop -->\nPR dalej ma konflikt[\s\S]*po 2 rundach/);
 
       // Drugi przegląd nie powtarza prośby do właściciela.
