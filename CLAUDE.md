@@ -41,7 +41,7 @@ Jak taśma działa, opisuje README. Tu są decyzje i ich powody.
 - Cel: jak najmniej obsługi. Projekt ma tylko `factory.yml`, regułę w `CLAUDE.md` i cienki workflow z jednym jobem `uses: gibkigonzo/factory/.github/workflows/pipeline.yml@<wersja>`. Etapy, skille, presety i skrypty przychodzą z fabryki w tej wersji, a uprawnienia projektu są sufitem taśmy. Każde ręczne kopiowanie to etap przejściowy.
 - Etap 0 używa `@main`; po nim tag `v1` (zmiany zgodne same, niezgodne w `v2`).
 - Repo jest też marketplace'em pluginu do pracy lokalnej; taśma go nie potrzebuje.
-- Przejściowo ręcznie: kopia skilla `spec-writer` w projekcie, bo sesje w chmurze nie instalują pluginów. Do sprawdzenia: skill z fabryki przez regułę w `CLAUDE.md` albo automatyczny PR z aktualizacją.
+- Skille i reguły dla sesji Claude Code projekt dostaje z hooka startu sesji (21 listopada 2026), bez kopii w repo: przy 30 projektach każda zmiana skilla to byłoby 30 ręcznych kopii. Hook (`templates/claude/hooks/factory.sh`, ten sam w każdym projekcie) pobiera z fabryki w wersji `factory_ref` z workflowu skille z `templates/claude/session-skills.txt` i reguły z `templates/claude/CLAUDE.md`, a git pomija kopie lokalnie. Z fabryki nie uruchamia kodu, kopiuje tylko Markdown. Sprawdzone w sesji w chmurze na piaskownicy. Odrzucone: skill wgrany na konto claude.ai (za mocne powiązanie z kontem i bez wersji projektu) i automatyczny PR z kopią (przy każdej zmianie PR High w każdym projekcie).
 
 ### Godot w CI
 
