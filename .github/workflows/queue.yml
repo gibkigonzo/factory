@@ -1,5 +1,6 @@
-# Kolejka zadań: uruchamia implementera dla issue z etykietą `queued`, które mieszczą się w limicie WIP
-# i nie dzielą plików z zadaniami w toku, a dla otwartych PR fabryki z konfliktem rundę jego rozwiązania.
+# Kolejka zadań: zamawia plan dla issue z etykietą `queued`, które mieszczą się w limicie WIP, mają scalone zadania
+# z sekcji „Zależy od” i nie dzielą plików z zadaniami w toku (implementera od razu tylko dla planu, na którego
+# zależności właściciel dał zgodę), a dla otwartych PR fabryki z konfliktem uruchamia rundę jego rozwiązania.
 # Projekt wywołuje ją po zamknięciu PR fabryki i raz dziennie.
 # Kodu z PR nie pobiera: czyta factory.yml z gałęzi głównej i dane z API.
 name: factory-queue
@@ -57,14 +58,30 @@ jobs:
           LIMIT=$(jq .wip_limit "$RAW/config.json")
           bash "$F/scripts/workflow/queue-raw.sh" "$RAW"
           DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
-          STARTED=$(node "$F/scripts/workflow/cli.ts" queue-release --raw "$RAW" --limit "$LIMIT")
-          for ISSUE in $STARTED; do
-            gh issue edit "$ISSUE" --remove-label queued >/dev/null
-            gh issue comment "$ISSUE" --body "Zadanie się zwolniło: implementer rusza." >/dev/null
-            gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=implement -f issue="$ISSUE"
+          STEPS=$(node "$F/scripts/workflow/cli.ts" queue-release --raw "$RAW" --limit "$LIMIT")
+          jq -c '.[]' <<<"$STEPS" | while read -r STEP; do
+            ISSUE=$(jq -r .issue <<<"$STEP")
+            case "$(jq -r .action <<<"$STEP")" in
+              plan)
+                # Świeży plan na aktualnym kodzie. Etykieta `ready` od bota nie uruchamia workflowu, więc etap woła kolejka.
+                gh issue edit "$ISSUE" --remove-label queued --add-label ready >/dev/null
+                gh issue comment "$ISSUE" --body "Zadanie się zwolniło: planer pisze plan na aktualnym kodzie, a implementer ruszy po nim." >/dev/null
+                gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=plan -f issue="$ISSUE"
+                ;;
+              implement)
+                gh issue edit "$ISSUE" --remove-label queued >/dev/null
+                gh issue comment "$ISSUE" --body "Zadanie się zwolniło: implementer rusza." >/dev/null
+                gh workflow run "$WORKFLOW" --ref "$DEFAULT" -f stage=implement -f issue="$ISSUE"
+                ;;
+              blocked)
+                gh label create blocked --force >/dev/null
+                gh issue edit "$ISSUE" --remove-label queued --add-label blocked >/dev/null
+                gh issue comment "$ISSUE" --body "$(jq -r .reason <<<"$STEP")" >/dev/null
+                ;;
+            esac
           done
           WAITING=$(jq '[.[] | select(any(.labels[]; .name == "queued"))] | length' "$RAW/issues.json")
-          echo "Czekało zadań: $WAITING. Rusza: $(tr '\n' ' ' <<<"${STARTED:-nic}")" >> "$GITHUB_STEP_SUMMARY"
+          echo "Czekało zadań: $WAITING. Ruszają: $(jq -r '[.[] | "#\(.issue) \(.action)"] | join(", ") | if . == "" then "nic" else . end' <<<"$STEPS")" >> "$GITHUB_STEP_SUMMARY"
 
       # Scalony PR fabryki mógł wprowadzić konflikt w innych otwartych PR. Taśma rozwiązuje go rundą implementera.
       - name: Konflikty otwartych PR z gałęzią główną

@@ -1,5 +1,6 @@
-// Odczyt specu z treści issue: kryteria akceptacji i ryzyko produktowe.
-// Format pochodzi z szablonu specu (skill spec-writer): sekcje „## Kryteria akceptacji” i „## Ryzyko produktowe: …”.
+// Odczyt specu z treści issue: kryteria akceptacji, ryzyko produktowe i zależności od innych zadań.
+// Format pochodzi z szablonu specu (skill spec-writer): sekcje „## Kryteria akceptacji”, „## Ryzyko produktowe: …”
+// i opcjonalna „## Zależy od: #N, #M”.
 
 /** Sekcje specu w kolejności z szablonu. Spec-writer je pisze, planer i recenzenci czytają. */
 export const SPEC_SECTIONS = [
@@ -12,6 +13,9 @@ export const SPEC_SECTIONS = [
   'Projekt',
 ] as const;
 
+/** Sekcje, które spec ma tylko wtedy, gdy są potrzebne. Stoją po sekcjach obowiązkowych. */
+export const SPEC_OPTIONAL_SECTIONS = ['Zależy od'] as const;
+
 export interface IssueSpec {
   acceptance: string[];
   productRisk?: 'low' | 'high';
@@ -21,6 +25,14 @@ const HEADING = /^#{1,3}\s+/;
 const ACCEPTANCE = /^#{1,3}\s+Kryteria akceptacji/i;
 const ITEM = /^\s*[-*]\s+(?:\[[ xX]\]\s+)?(.+?)\s*$/;
 const RISK = /^#{0,3}\s*Ryzyko produktowe\s*:\s*(niskie|wysokie)\s*$/im;
+const DEPENDS = /^#{1,3}\s*Zależy od\s*:(.*)$/im;
+
+/** Zadania, które muszą być scalone, zanim to dostanie plan: numery issue z „## Zależy od: #3, #5”, bez powtórzeń i siebie. */
+export function parseDependencies(body: string, self?: number): number[] {
+  const line = DEPENDS.exec(body)?.[1] ?? '';
+  const numbers = [...line.matchAll(/#(\d+)/g)].map((m) => Number(m[1])).filter((n) => n !== self);
+  return [...new Set(numbers)].sort((a, b) => a - b);
+}
 
 export function parseSpec(body: string): IssueSpec {
   const acceptance: string[] = [];

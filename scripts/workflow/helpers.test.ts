@@ -13,7 +13,7 @@ import { branchName, implementerTools, pathProblems } from './patch.ts';
 import { assessPrompt, implementPrompt, planPrompt, reviewPrompt } from './prompts.ts';
 import { latestMarked, lineProblemBlock, parseLineProblems, planComment, PLAN_MARKER, prBody } from './render.ts';
 import { renderReport, REPORT_MARKER } from './report.ts';
-import { parseSpec } from './spec.ts';
+import { parseDependencies, parseSpec } from './spec.ts';
 import { configWith, fullEvidence } from '../risk/fixtures.ts';
 import type { Assessment } from '../risk/types.ts';
 
@@ -41,6 +41,12 @@ describe('spec z issue', () => {
   it('szablon bez wyboru ryzyka i issue bez kryteriów', () => {
     assert.deepEqual(parseSpec('## Ryzyko produktowe: niskie | wysokie\n'), { acceptance: [] });
     assert.deepEqual(parseSpec('Ryzyko produktowe: niskie'), { acceptance: [], productRisk: 'low' });
+  });
+
+  it('zależności z sekcji „Zależy od”: numery issue bez powtórzeń i bez siebie', () => {
+    assert.deepEqual(parseDependencies(`${SPEC}\n## Projekt: a/b\n\n## Zależy od: #12, #3 i #12 (odczyt formatów), #7\n`, 7), [3, 12]);
+    assert.deepEqual(parseDependencies(SPEC), []);
+    assert.deepEqual(parseDependencies('Zależy od: #3 w zwykłym zdaniu'), [], 'tylko nagłówek sekcji');
   });
 });
 

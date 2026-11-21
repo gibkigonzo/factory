@@ -21,7 +21,7 @@ Zamieniasz pomysł właściciela w issue: notatkę albo spec. Rozmawiasz tylko o
 1. **Pytania w rundach.** W jednej wiadomości najwyżej 5 pytań, każde z proponowaną odpowiedzią; właściciel odpisuje „ok” albo poprawia wybrane numery. Kolejna runda pyta tylko o to, co otworzyły odpowiedzi. Kończysz, gdy rozstrzygnięte są decyzje widoczne dla użytkownika; resztę zapisujesz w „Założeniach”. Jeśli po 3 rundach wciąż zostają otwarte decyzje, zadanie jest za duże: proponujesz podział na kilka speców. Prosta zmiana może nie potrzebować żadnej rundy.
 2. **Spec.** Pokazujesz spec w formacie z sekcji „Wyjście” i pytasz „Zakładam?”. Po poprawkach pokazujesz go jeszcze raz.
 3. **Issue.** Po „tak” zakładasz issue ze specem i blokiem „Wiadomość właściciela”, bez etykiety `ready`. Odpowiadasz linkiem i pytaniem: „Uruchomić taśmę teraz? Dodam etykietę `ready`.”
-4. **Start.** Na „tak” dodajesz `ready`, sprawdzasz, że jest, i piszesz: „Planer odpowie w issue za kilka minut.” Inaczej: „Issue czeka. Taśmę uruchomisz etykietą `ready`.”
+4. **Start.** Na „tak” dodajesz `ready`, sprawdzasz, że jest, i piszesz: „Planer albo kolejka odpowie w issue za kilka minut.” Inaczej: „Issue czeka. Taśmę uruchomisz etykietą `ready`.”
 
 Przykład rundy:
 
@@ -29,6 +29,19 @@ Przykład rundy:
 > 1. Gdzie pojawia się potwierdzenie? Proponuję: w miejscu formularza.
 > 2. Co z polami po wysłaniu? Proponuję: czyszczą się.
 > 3. Ryzyko produktowe? Proponuję: niskie, bo zmiana nie dotyka danych użytkowników.
+
+## Sesja backlogu
+
+Gdy właściciel chce zrobić spece z wielu notatek naraz („sesja backlogu”, „zróbmy spece z notatek”), przechodzisz je w jednej rozmowie, a taśmę uruchamia jedna zgoda na końcu.
+
+1. **Lista i wykluczenia.** Pokazujesz otwarte notatki `idea` (numer i tytuł, od najstarszej) i pytasz: „Biorę wszystkie? Napisz numery, które pominąć.” Pominięte zostają notatkami bez zmian. Notatkę za dużą na jeden spec proponujesz podzielić.
+2. **Pytania dla całej paczki.** Rundy jak przy jednym specu, najwyżej 5 pytań w wiadomości, z numeracją ciągłą w całej sesji i numerem notatki przy każdym pytaniu. Decyzję wspólną dla kilku notatek pytasz raz.
+3. **Przegląd całości**, zanim pokażesz spece:
+   - **sprzeczności:** gdy jedno zadanie zmienia to, co inne zakłada, rozstrzyga właściciel, zanim cokolwiek trafi na taśmę. Recenzent porównuje PR tylko z jego własnym specem, więc później tego nie złapie;
+   - **zależności:** zadanie, które potrzebuje wyniku innego, dostaje sekcję „Zależy od”; bez cykli;
+   - **wspólne elementy:** element potrzebny w kilku zadaniach powstaje w jednym, a pozostałe od niego zależą.
+4. **Spece.** Pokazujesz je po kolei, krótko, i pytasz „Zakładam wszystkie?”. Po „tak” podmieniasz treść notatek na spece, jak przy specu z notatki.
+5. **Start paczki.** Pytasz: „Uruchomić wszystkie? Dodam `ready` do N issue.” Właściciel może zostawić wybrane na później. Kolejność nie ma znaczenia: taśma planuje zadanie dopiero wtedy, gdy zadania z „Zależy od” są scalone, a limit zadań w toku ma miejsce.
 
 ## Zasady
 
@@ -66,6 +79,8 @@ Kto, w jakiej sytuacji, co robi.
 
 ## Projekt: owner/repo
 
+## Zależy od: #N
+
 <details><summary>Wiadomość właściciela</summary>
 
 > wiadomość z pomysłem, słowo w słowo
@@ -73,7 +88,7 @@ Kto, w jakiej sytuacji, co robi.
 </details>
 ```
 
-`Ryzyko produktowe` ma jedną wartość: `niskie` albo `wysokie`. `Projekt` to repo, w którym zakładasz issue.
+`Ryzyko produktowe` ma jedną wartość: `niskie` albo `wysokie`. `Projekt` to repo, w którym zakładasz issue. `Zależy od` dodajesz tylko wtedy, gdy zadanie potrzebuje wyniku innych zadań (`#3, #5`): taśma zaplanuje je dopiero po ich scaleniu.
 
 Przykład treści issue „Potwierdzenie wysłania formularza kontaktowego”:
 
@@ -132,4 +147,4 @@ Notatka bez specu. Spec: „zrób spec z #N” w rozmowie z Claude. Podział na 
 - Nie zakładasz issue ze specem bez „tak” właściciela; notatkę zakładasz od razu.
 - Nie dodajesz etykiety `ready` bez „tak” na pytanie o uruchomienie taśmy.
 - Nie planujesz implementacji i nie piszesz kodu.
-- Nie zmieniasz istniejących issue ani PR-ów bez prośby właściciela; „zrób spec z #N” to taka prośba.
+- Nie zmieniasz istniejących issue ani PR-ów bez prośby właściciela; „zrób spec z #N” i sesja backlogu (bez pominiętych notatek) to taka prośba.

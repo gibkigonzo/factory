@@ -41,6 +41,9 @@ jobs:
   # Taśma planuje tylko issue ze specem (sekcja „Kryteria akceptacji” z punktami). Notatka z etykietą `ready`
   # wraca bez sesji Claude: zdejmujemy etykietę i podpowiadamy spec albo /split. /split (note=split) przechodzi,
   # bo wtedy planer sam pisze spece podzadań.
+  # Plan powstaje dopiero wtedy, gdy zadanie może ruszyć: zadania z sekcji „Zależy od” są scalone, a limit WIP ma
+  # miejsce. Inaczej issue czeka z etykietą `queued` bez planu, a kolejka zamówi plan, gdy się zwolni. Dzięki temu
+  # plan z paczki wielu zadań powstaje na kodzie po wcześniejszych merge'ach.
   spec:
     needs: guard
     if: needs.guard.outputs.ok == 'true'
@@ -49,9 +52,13 @@ jobs:
     permissions:
       contents: read
       issues: write
+      pull-requests: read
     outputs:
       ok: ${{ steps.check.outputs.ok }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: gibkigonzo/factory
@@ -72,10 +79,30 @@ jobs:
           npm ci --prefix .factory-src --omit=dev --no-audit --no-fund >/dev/null
           gh issue view "$ISSUE" --json body --jq .body > "$RUNNER_TEMP/issue.md"
           CRITERIA=$(node .factory-src/scripts/workflow/cli.ts spec "$RUNNER_TEMP/issue.md" | jq '.acceptance | length')
-          if [ "$CRITERIA" -gt 0 ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [ "$CRITERIA" -eq 0 ]; then
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            gh issue edit "$ISSUE" --remove-label ready >/dev/null 2>&1 || true
+            gh issue comment "$ISSUE" --body "To issue nie ma specu (sekcji „Kryteria akceptacji” z punktami), więc taśma go nie planuje i zdjęła etykietę \`ready\`. Zrób spec w rozmowie z Claude: „zrób spec z #$ISSUE”. Możesz też podzielić issue komendą \`/split\`: planer napisze spece podzadań."
+            exit 0
+          fi
+
+          LIMIT=$(node .factory-src/scripts/config/cli.ts factory.yml --json | jq .wip_limit)
+          bash .factory-src/scripts/workflow/queue-raw.sh "$RUNNER_TEMP/queue"
+          GATE=$(node .factory-src/scripts/workflow/cli.ts queue-gate --raw "$RUNNER_TEMP/queue" --issue "$ISSUE" --limit "$LIMIT")
+          ACTION=$(jq -r .action <<<"$GATE")
+          if [ "$ACTION" = plan ]; then echo "ok=true" >> "$GITHUB_OUTPUT"; exit 0; fi
           echo "ok=false" >> "$GITHUB_OUTPUT"
-          gh issue edit "$ISSUE" --remove-label ready >/dev/null 2>&1 || true
-          gh issue comment "$ISSUE" --body "To issue nie ma specu (sekcji „Kryteria akceptacji” z punktami), więc taśma go nie planuje i zdjęła etykietę \`ready\`. Zrób spec w rozmowie z Claude: „zrób spec z #$ISSUE”. Możesz też podzielić issue komendą \`/split\`: planer napisze spece podzadań."
+          REASON=$(jq -r .reason <<<"$GATE")
+          for label in ready queued blocked; do gh issue edit "$ISSUE" --remove-label "$label" >/dev/null 2>&1 || true; done
+          if [ "$ACTION" = blocked ]; then
+            gh label create blocked --force >/dev/null
+            gh issue edit "$ISSUE" --add-label blocked >/dev/null
+            gh issue comment "$ISSUE" --body "$REASON"
+          else
+            gh label create queued --force >/dev/null
+            gh issue edit "$ISSUE" --add-label queued >/dev/null
+            gh issue comment "$ISSUE" --body "$REASON Plan powstanie, gdy zadanie ruszy, żeby planer widział aktualny kod. Kolejka uruchomi je sama."
+          fi
 
   plan:
     needs: [guard, spec]
