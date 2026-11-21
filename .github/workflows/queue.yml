@@ -21,7 +21,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: read
+      pull-requests: write   # komentarz o konflikcie w PR uruchamia rundę implementera; bez tego GitHub zwraca 403
       actions: write
     # Jedno uruchomienie naraz, żeby dwa nie wpuściły tego samego issue. Czekające zastępuje nowsze: liczy od nowa.
     concurrency:

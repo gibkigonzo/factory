@@ -250,7 +250,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: read
+      pull-requests: write   # komentarz „Konflikt z gałęzią główną” w PR; token workflowu bez tego dostaje 403
       actions: write
 
   # Przegląd architektury po co quality.architecture_every_prs scalonych PR fabryki albo ręcznie (etap architecture).

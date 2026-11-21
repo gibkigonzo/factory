@@ -137,6 +137,9 @@ describe('workflowy fabryki', () => {
     assert.match(workflows.plan!.text, /queue-admit/);
     assert.match(text, /queue-release/);
     assert.match(workflows.plan!.text, /--add-label queued/);
+    // Komentarz w PR (runda konfliktu) wymaga od tokenu workflowu prawa zapisu PR, także przez REST API issue.
+    assert.equal(data.jobs.release!.permissions?.['pull-requests'], 'write');
+    assert.match(workflows.pipeline!.text, /uses: \$\/\.github\/workflows\/queue\.yml[\s\S]*?pull-requests: write/);
   });
 
   it('plan dopiero, gdy zadanie może ruszyć: bramka bez Claude przed planerem, a kolejka zamawia świeży plan', () => {
