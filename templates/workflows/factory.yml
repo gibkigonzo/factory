@@ -2,6 +2,7 @@
 # w projekcie. Etapy rozdziela dyrygent fabryki (pipeline.yml), więc zmiany taśmy działają bez kopiowania.
 # Plik zmieniasz tylko przy zmianie wersji fabryki (uses i factory_ref) albo ustawień niżej.
 # Wymaga sekretu CLAUDE_CODE_OAUTH_TOKEN (Settings → Secrets and variables → Actions).
+# W .gitignore projektu dopisz .factory/: taśma trzyma tam pliki robocze, których linter projektu nie może sprawdzać.
 #
 # Przebieg: etykieta `ready` na issue → plan → implementacja (PR z gałęzi factory/*) → recenzja → ocena ryzyka
 # → werdykt mergera. Kolejne etapy uruchamiają się przez workflow_dispatch. Czerwone CI albo prośba recenzenta

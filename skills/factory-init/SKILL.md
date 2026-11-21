@@ -68,6 +68,6 @@ Pliki w repo projektu, pokazane właścicielowi przed pierwszym commitem:
 
 - `CLAUDE.md`: opis projektu, zdanie, że reguły fabryki dostaje sesja z hooka startu, i konwencje z rund, w sekcjach: Architektura, Struktura katalogów, Konwencje kodu, Wygląd, Testy i dowody, Wydania;
 - `factory.yml` przyjęty przez walidator fabryki;
-- `.github/workflows/factory.yml` z `templates/workflows/factory.yml`, z runnerami z rundy 4;
+- `.github/workflows/factory.yml` z `templates/workflows/factory.yml`, z runnerami z rundy 4, i `.factory/` w `.gitignore` (pliki robocze taśmy, których linter projektu nie może sprawdzać);
 - hook startu sesji z `templates/claude/hooks/factory.sh` i `templates/claude/settings.json` w `.claude/`: pobiera skille i reguły fabryki w wersji z workflowu, więc projekt nie trzyma ich kopii;
 - szkielet, gdy był w planie, i lista pierwszych zadań dla taśmy.

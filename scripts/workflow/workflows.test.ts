@@ -82,6 +82,13 @@ describe('workflowy fabryki', () => {
     }
   });
 
+  it('CI recenzji trzyma pliki robocze poza katalogiem projektu, więc komendy projektu ich nie widzą', () => {
+    const ci = workflows.review!.data.jobs.ci!;
+    const text = JSON.stringify(ci);
+    assert.doesNotMatch(text, /\.factory\/work/, 'np. prettier --check . zgłaszał .factory/work/config.json');
+    assert.match(text, /W=\$RUNNER_TEMP\/factory-work/);
+  });
+
   it('kontrakt dla implementera i recenzji przy PR pochodzi z gałęzi bazowej, nie z PR', () => {
     for (const name of ['implement', 'review']) {
       assert.match(workflows[name]!.text, /bash "\$F\/scripts\/workflow\/base-config\.sh" "\$BASE" "\$RUNNER_TEMP\/base"/, name);
