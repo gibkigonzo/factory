@@ -93,6 +93,7 @@ describe('kolejka zadań', () => {
         { number: 15, labels: labels('idea') }, // notatka
         { number: 16, labels: labels('rejected'), body: '## Zależy od: #2' },
         { number: 20, labels: labels('split') },
+        { number: 24, labels: labels('ready'), body: '## Zależy od: #2' }, // ready, ale czeka na #2: planu teraz nie dostanie
       ]));
       writeFileSync(join(dir, 'closed.json'), JSON.stringify([
         { number: 21, state: 'closed', state_reason: 'completed' },
@@ -124,7 +125,7 @@ describe('kolejka zadań', () => {
         { issue: 3, files: ['app/app.vue'], planned: true, approved: true, dependsOn: [] },
         { issue: 14, files: [], planned: false, approved: false, dependsOn: [2, 20, 21, 22, 23] },
       ]);
-      assert.deepEqual(state.planning, [7]);
+      assert.deepEqual(state.planning, [7], '#24 z ready czeka na zależność, więc nie zajmuje miejsca w limicie');
       assert.deepEqual(state.dependencies, { 2: 'open', 20: 'dropped', 21: 'done', 22: 'dropped', 23: 'open' });
       assert.deepEqual(closedDependencies(dir), [21, 22, 23], 'stan otwartych zna lista issue; zamknięte pobiera queue-raw.sh');
       assert.deepEqual(queueState(dir, 3).waiting.map((t) => t.issue), [14], 'pomija issue, o którym właśnie decyduje plan');
