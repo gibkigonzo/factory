@@ -7,7 +7,7 @@ import { buildAgents, parseFrontmatter, REVIEWER_TOOLS, ROOT, staleAgents } from
 import { loadCatalog } from '../review/perspectives.ts';
 import { parseOutput } from './output.ts';
 import type { OutputKind } from './output.ts';
-import { parseSpec, SPEC_SECTIONS } from '../workflow/spec.ts';
+import { parseDependencies, parseSpec, SPEC_OPTIONAL_SECTIONS, SPEC_SECTIONS } from '../workflow/spec.ts';
 
 const SKILLS = join(ROOT, 'skills');
 const skillNames = readdirSync(SKILLS).filter((name) => existsSync(join(SKILLS, name, 'SKILL.md'))).sort();
@@ -60,9 +60,22 @@ describe('spec-writer i format specu', () => {
     assert.doesNotMatch(body, /najwyżej 5, w jednej wiadomości/);
   });
 
-  it('szablon i przykład mają wszystkie sekcje specu w kolejności planera', () => {
+  it('szablon i przykład mają wszystkie sekcje specu w kolejności planera, a szablon też sekcje opcjonalne na końcu', () => {
     assert.equal(blocks.length, 2, 'szablon i przykład w blokach ```markdown');
-    for (const block of blocks) assert.deepEqual(headings(block).map(section), [...SPEC_SECTIONS]);
+    const optional = (heading: string) => SPEC_OPTIONAL_SECTIONS.find((name) => heading.startsWith(name));
+    assert.deepEqual(headings(blocks[0]!).map((h) => section(h) ?? optional(h)), [...SPEC_SECTIONS, ...SPEC_OPTIONAL_SECTIONS]);
+    assert.deepEqual(headings(blocks[1]!).map(section), [...SPEC_SECTIONS]);
+    assert.deepEqual(parseDependencies(blocks[0]!.replace('#N', '#3, #5')), [3, 5], 'skrypt kolejki czyta sekcję z szablonu');
+  });
+
+  it('sesja backlogu: wykluczenia, przegląd sprzeczności i zależności, jedna zgoda na start paczki', () => {
+    assert.match(body, /„Biorę wszystkie\? Napisz numery, które pominąć\.”/);
+    assert.match(body, /Pominięte zostają notatkami bez zmian/);
+    assert.match(body, /\*\*sprzeczności:\*\*/);
+    assert.match(body, /\*\*zależności:\*\*[^\n]*„Zależy od”/);
+    assert.match(body, /„Uruchomić wszystkie\? Dodam `ready` do N issue\.”/);
+    const rule = readFileSync(join(ROOT, 'templates/claude/CLAUDE.md'), 'utf8');
+    assert.match(rule, /sesji backlogu: najpierw lista notatek i pytanie, które pominąć/);
   });
 
   it('przykład czyta skrypt taśmy: kryteria akceptacji i ryzyko produktowe', () => {

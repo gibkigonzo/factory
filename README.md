@@ -6,14 +6,14 @@ Fabryka do wytwarzania oprogramowania, oparta na Claude Code i GitHub Actions. Z
 
 ## Co potrafi
 
-- **Spec z rozmowy, także z telefonu.** Skill `spec-writer` zapisuje pomysł jako notatkę albo dopytuje w krótkich rundach i zakłada issue z kryteriami akceptacji, które da się sprawdzić maszynowo. Taśmę uruchamiasz Ty, etykietą `ready`.
+- **Spec z rozmowy, także z telefonu.** Skill `spec-writer` zapisuje pomysł jako notatkę albo dopytuje w krótkich rundach i zakłada issue z kryteriami akceptacji, które da się sprawdzić maszynowo. W sesji backlogu robi spece z wielu notatek naraz: sprawdza sprzeczności i zależności między nimi, a paczkę uruchamiasz jedną zgodą. Taśmę uruchamiasz Ty, etykietą `ready`.
 - **Plan i implementacja.** Planer rozpisuje pliki, testy i dowody, a za duże zadanie dzieli. Implementer pisze kod i testy w PR z gałęzi `factory/<numer>-<nazwa>` albo zgłasza blokadę zamiast połowicznego PR.
 - **Recenzja.** CI uruchamia komendy projektu, a pięć perspektyw (poprawność, testy, bezpieczeństwo, utrzymanie, zgodność ze specem) ocenia PR, każda w świeżym kontekście. Projekt może dodać kolejne, np. recenzenta wyglądu na zrzutach ekranu.
 - **Jakość całego projektu.** Skrypt pokazuje recenzentom powtórzenia kodu i elementów widoku, które wprowadza PR, a co 5 scalonych PR przegląd architektury proponuje refaktor jako notatki do backlogu.
 - **Pętla poprawek.** Czerwone CI albo prośba recenzenta odsyła PR do implementera, do 3 rund. Konflikty z gałęzią główną taśma rozwiązuje sama.
 - **Ocena ryzyka.** Deterministyczne reguły i ocena modelu, która może poziom tylko podnieść. Wynik: **Low** (fabryka scala sama) albo **High** (decydujesz Ty), z raportem czytelnym na telefonie.
 - **Tryb cienia i dziennik.** Werdykt fabryki oceniasz 👍 albo 👎. Przypięte issue „Tryb cienia” pokazuje zgodność, rundy, czas i koszt.
-- **Kolejka i limity.** Zadania na tych samych plikach idą po kolei, reszta równolegle w granicach `wip_limit`. Dzienny limit przebiegów pilnuje kosztu.
+- **Kolejka i limity.** Zadanie dostaje plan dopiero wtedy, gdy może ruszyć: zadania, od których zależy, są scalone, a `wip_limit` ma miejsce. Zadania na tych samych plikach idą po kolei, reszta równolegle. Dzienny limit przebiegów pilnuje kosztu.
 - **Bezpieczeństwo.** Claude działa tylko z prawem odczytu i zwraca JSON albo patch; zapisy robią skrypty. Nowe pakiety instaluje workflow po Twoim `/approve`.
 
 **Jeszcze nie:** automatyczny merge (wymaga rulesetu na `main` i aplikacji GitHub fabryki, a w repo prywatnym GitHub Pro).
@@ -43,7 +43,7 @@ Potrzebujesz repo projektu na GitHubie (w prywatnym taśma zużywa minuty Action
 | `refactor` | propozycja refaktoru z przeglądu architektury (razem z `idea`) |
 | `ready` | spec gotowy; nadajesz ją Ty, uruchamia planera |
 | `planned` | plan jest; implementacja trwa albo PR jest otwarty |
-| `queued` | czeka w kolejce (wspólne pliki, `wip_limit` albo dzienny limit); ruszy samo |
+| `queued` | czeka w kolejce (zadania z „Zależy od”, wspólne pliki, `wip_limit` albo dzienny limit); ruszy samo |
 | `needs-approval` | plan dodaje pakiety; czeka na Twoje `/approve` |
 | `blocked` | potrzebna Twoja decyzja; powód w komentarzu |
 | `split` | planer podzielił zadanie na mniejsze issue |
@@ -78,7 +78,7 @@ flowchart TD
   H1(["Rozmowa o pomyśle w aplikacji Claude, akceptacja specu"]):::human
   A1("spec-writer: issue ze specem, bez ready"):::agent
   H0(["Zgoda na start: etykieta ready"]):::human
-  S1["Strażnik: zaufane konto i spec w issue"]:::script
+  S1["Strażnik: zaufane konto, spec w issue, zależności i wip_limit"]:::script
   A2("Planer: plan w JSON"):::agent
   S2["Komentarz z planem, etykieta, kolejka: wspólne pliki, wip_limit, dzienny limit"]:::script
   H2(["Odpowiadasz na pytania albo dajesz ready mniejszym issue"]):::human
@@ -134,7 +134,9 @@ Po wyjściu z trybu cienia merger scali Low od razu, a High zostawi Tobie. Scala
 
 ### Kolejka i limity
 
-- Zadanie, które dzieli pliki z zadaniem w toku (z planu albo z otwartego PR), albo ponad `wip_limit` czeka z etykietą `queued`.
+- **Plan dopiero przy starcie.** Zadanie z `ready` dostaje plan, gdy zadania z sekcji „Zależy od” specu mają scalony PR fabryki (albo issue zamknięte jako zrobione), a `wip_limit` ma miejsce. Inaczej czeka bez planu z etykietą `queued`. Dzięki temu plan zadania z paczki powstaje na kodzie po wcześniejszych merge'ach. Zależność odrzucona, podzielona albo zamknięta bez realizacji daje `blocked`: decydujesz, czy poprawić spec, czy odrzucić zadanie.
+- **Ready na wielu issue naraz.** W limicie liczą się zadania w toku i wcześniejsze issue, które planer właśnie planuje, więc paczka rusza po kolei numerów.
+- Po planie zadanie, które dzieli pliki z zadaniem w toku (z planu albo z otwartego PR), czeka z `queued`. Gdy się zwolni, dostaje nowy plan, bo zadanie przed nim zmieniło te same pliki. Bez nowego planu rusza tylko zadanie, na którego zależności z planu dałeś `/approve`.
 - `daily_runs` to dzienny limit przebiegów z Claude (plan, implementacja, recenzja). Sprawdza go implementacja nowego zadania; rundy poprawek otwartego PR go nie sprawdzają.
 - Kolejka rusza po zamknięciu PR fabryki, po `/reject`, `/start`, zgodzie na zależności, blokadzie i raz dziennie z harmonogramu, który GitHub uruchamia z opóźnieniem, zwykle o kilka godzin.
 
@@ -237,7 +239,9 @@ Agenci nie ustawiają etykiet ani checków: workflowy działają na ich JSON-ie 
 
 Spec-writer najpierw pyta „notatka czy spec?”. Notatka to issue z Twoją wiadomością i etykietą `idea`; spec zrobisz z niej później („zrób spec z #N”) albo podzielisz ją przez `/split`. Spec powstaje w rundach: najwyżej 5 pytań w wiadomości, każde z proponowaną odpowiedzią, a po 3 rundach z otwartymi decyzjami spec-writer proponuje podział. Issue powstaje bez `ready`; spec-writer dodaje ją dopiero na Twoją zgodę. Każde issue ma blok „Wiadomość właściciela” z oryginałem.
 
-Spec ma sekcje: Cel, Scenariusz, Kryteria akceptacji (sprawdzalne maszynowo), Poza zakresem, Założenia, Ryzyko produktowe i Projekt (szablon w [`skills/spec-writer/SKILL.md`](skills/spec-writer/SKILL.md)). Taśma planuje tylko issue ze specem.
+Spec ma sekcje: Cel, Scenariusz, Kryteria akceptacji (sprawdzalne maszynowo), Poza zakresem, Założenia, Ryzyko produktowe i Projekt, a gdy trzeba także „Zależy od: #N” (szablon w [`skills/spec-writer/SKILL.md`](skills/spec-writer/SKILL.md)). Taśma planuje tylko issue ze specem.
+
+**Sesja backlogu.** Napisz „sesja backlogu”: spec-writer pokaże otwarte notatki i zapyta, które pominąć. Pozostałe przechodzicie razem, w numerowanych rundach. Zanim pokaże spece, sprawdza całą paczkę: sprzeczności rozstrzygasz od razu, bo recenzent porównuje PR tylko z jego własnym specem, a zadanie, które potrzebuje wyniku innego, dostaje „Zależy od”. Na koniec jedna zgoda dodaje `ready` całej paczce, a kolejka planuje zadania w miarę scalania poprzednich.
 
 - **Domyślnie: sesja Claude Code w repo projektu** (z telefonu: zakładka Code). Sesje w chmurze nie instalują pluginów, dlatego projekt trzyma kopię skilla i regułę w `CLAUDE.md`. Po zmianie skilla w fabryce kopię trzeba podmienić.
 - **Opcjonalnie: zwykły czat.** `npm run skill:zip` tworzy `dist/spec-writer.zip`, który wgrywasz w claude.ai (Settings → Capabilities → Skills, z włączonym Code execution). Konektor GitHub potrzebuje repo projektu w instalacji swojej aplikacji GitHub, inaczej zapis kończy się błędem 403.
@@ -303,7 +307,7 @@ Wejścia szablonu:
 
 Narzędzia spoza taśmy, np. aplikacja do prowadzenia projektów, czytają stan fabryki z GitHuba. Te formaty są kontraktem: zmiana któregoś to zmiana niezgodna (nowa wersja fabryki).
 
-- **Zadanie:** issue z etykietami z tabeli wyżej; PR fabryki ma gałąź `factory/<numer issue>-<nazwa>`.
+- **Zadanie:** issue z etykietami z tabeli wyżej; PR fabryki ma gałąź `factory/<numer issue>-<nazwa>`. Zależności zadania to sekcja `## Zależy od: #N, #M` w treści issue; `queued` bez `planned` znaczy, że zadanie czeka na plan.
 - **Projekt fabryki:** workflow projektu z `uses: gibkigonzo/factory/.github/workflows/pipeline.yml@<wersja>`.
 - **Werdykt trybu cienia:** komentarz w PR z `<!-- factory:shadow -->` i blokiem `<!-- factory:shadow-data {…} -->`. JSON ma `pr`, `round`, `level` (`Low` albo `High`), `action` (`merge`, `escalate`, `split`, `fix-gates`), `reviews` (perspektywa, werdykt, pewność) i opcjonalnie `usage`. Ocena to reakcja `+1` albo `-1` właściciela na ten komentarz.
 - **Koszt etapu:** blok `<!-- factory:usage [{…}] -->` w komentarzu planu, opisie PR, komentarzu rundy albo werdykcie. Rekord ma `stage` (`plan`, `implement`, `review`, `assess`, `architecture`), `count`, `cost` (USD, równowartość cen API), `turns`, `ms`, tokeny (`input`, `output`, `cacheRead`, `cacheWrite`) i opcjonalnie `name` recenzenta.

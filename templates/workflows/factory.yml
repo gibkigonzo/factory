@@ -11,8 +11,9 @@
 # W Etapie 0 (tryb cienia) fabryka niczego nie scala: o każdym PR decydujesz Ty, a werdykt fabryki oceniasz 👍 albo 👎.
 # Dziennik z metrykami prowadzi przypięte issue „Tryb cienia”. Co kilka scalonych PR przegląd architektury proponuje
 # refaktor jako notatki do backlogu (etykiety idea i refactor); zapis przeglądów jest w issue „Przegląd architektury”.
-# Kolejka: zadanie ponad wip_limit albo ze wspólnymi plikami z zadaniem w toku czeka z etykietą `queued`
-# i rusza samo po zamknięciu PR fabryki (albo przy dziennym przeglądzie).
+# Kolejka: plan powstaje dopiero, gdy zadania z sekcji „Zależy od” specu są scalone, a wip_limit ma miejsce;
+# do tego czasu, i przy wspólnych plikach z zadaniem w toku, issue czeka z etykietą `queued` i rusza samo
+# po zamknięciu PR fabryki (albo przy dziennym przeglądzie) ze świeżym planem.
 name: factory
 # Nazwa przebiegu mówi, który etap ruszył. Dzienny limit (daily_runs) liczy po niej tylko etapy z Claude:
 # plan, implement i review. Kolejka, dziennik i komendy go nie zużywają.

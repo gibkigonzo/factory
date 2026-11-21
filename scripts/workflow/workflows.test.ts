@@ -129,6 +129,20 @@ describe('workflowy fabryki', () => {
     assert.match(workflows.plan!.text, /--add-label queued/);
   });
 
+  it('plan dopiero, gdy zadanie może ruszyć: bramka bez Claude przed planerem, a kolejka zamawia świeży plan', () => {
+    const plan = workflows.plan!.data.jobs;
+    assert.ok(!usesClaude(plan.spec!));
+    assert.match(String((plan.plan as { if?: string }).if), /needs\.spec\.outputs\.ok == 'true'/);
+    const check = (plan.spec!.steps ?? []).find((step) => step.run?.includes('queue-gate'))!.run!;
+    assert.ok(check.indexOf('acceptance | length') < check.indexOf('queue-gate'), 'najpierw spec, potem kolejka');
+    assert.match(check, /if \[ "\$NOTE" = split \]; then echo "ok=true"/, '/split nie czeka w kolejce');
+    assert.match(check, /--add-label queued/);
+    assert.match(check, /--add-label blocked/);
+    const { text } = workflows.queue!;
+    assert.match(text, /--remove-label queued --add-label ready[^\n]*\n(?:.*\n){1,2}.*-f stage=plan -f issue="\$ISSUE"/);
+    assert.match(text, /implement\)\n(?:.*\n){1,3}.*-f stage=implement -f issue="\$ISSUE"/);
+  });
+
   it('pętla poprawek: decyduje skrypt bez Claude, czerwone CI omija recenzentów, a ocena ryzyka czeka na wynik', () => {
     const { text, data } = workflows.review!;
     const loop = data.jobs.loop!;

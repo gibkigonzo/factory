@@ -31,11 +31,11 @@ import type { ArchitectureOutput } from '../quality/architecture.ts';
 import type { SourceFile } from '../quality/duplicates.ts';
 import type { Dependency } from './dependencies.ts';
 import { nextRound, noChangeComment, roundComment } from './loop.ts';
-import { admit, queueState, release } from './queue.ts';
+import { admit, closedDependencies, gate, queueState, release } from './queue.ts';
 import { renderReport } from './report.ts';
 import type { PanelSummary } from './report.ts';
 import { compareScreenshots, galleryComment, runScreenshots, unchangedVerdict, visualSummary, writeGallery } from './screenshots.ts';
-import { parseSpec } from './spec.ts';
+import { parseDependencies, parseSpec } from './spec.ts';
 import { isStage, parseUsageBlocks, parseUsageList, readUsage, sessionError, sessionStarted, STAGES, sumUsage } from './usage.ts';
 import type { Usage } from './usage.ts';
 
@@ -288,8 +288,18 @@ function run(command: string | undefined, rest: string[]): string {
       const state = queueState(required(v.raw, '--raw'), issue);
       return JSON.stringify(admit({ issue, files: plan.files ?? [] }, state.active, limit(v), state.waiting));
     }
+    case 'queue-gate': {
+      // Przed planem: zależności ze specu i limit WIP. Treść issue z danych kolejki, które pobrał queue-raw.sh.
+      const issue = Number(required(v.issue, '--issue'));
+      const raw = required(v.raw, '--raw');
+      const body = (JSON.parse(readFileSync(join(raw, 'issues.json'), 'utf8')) as { number: number; body?: string }[])
+        .find((i) => i.number === issue)?.body ?? '';
+      return JSON.stringify(gate(issue, parseDependencies(body, issue), queueState(raw, issue), limit(v)));
+    }
+    case 'queue-deps':
+      return closedDependencies(required(v.raw, '--raw')).join('\n');
     case 'queue-release':
-      return release(queueState(required(v.raw, '--raw')), limit(v)).join('\n');
+      return JSON.stringify(release(queueState(required(v.raw, '--raw')), limit(v)));
     case 'find-plan':
       return marked('plan', v);
     case 'find-implementation':

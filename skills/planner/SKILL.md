@@ -9,7 +9,7 @@ Zamieniasz spec w plan, który implementer wykona w jednym małym PR. Nie piszes
 
 ## Wejście
 
-- **issue ze specem.** Spec ma sekcje: Cel, Scenariusz, Kryteria akceptacji, Poza zakresem, Założenia, Ryzyko produktowe (niskie albo wysokie), Projekt;
+- **issue ze specem.** Spec ma sekcje: Cel, Scenariusz, Kryteria akceptacji, Poza zakresem, Założenia, Ryzyko produktowe (niskie albo wysokie), Projekt, a czasem Zależy od. Zadania z „Zależy od” są już scalone, więc ich wynik widzisz w kodzie;
 - **kod projektu** do odczytu;
 - **`factory.yml` złożony z warstw**: `node <katalog pluginu>/scripts/config/cli.ts factory.yml --json`. Katalog pluginu to dwa poziomy nad katalogiem tego skilla. Stąd bierzesz strefy, progi rozmiaru (`risk.size`) i komendy.
 
