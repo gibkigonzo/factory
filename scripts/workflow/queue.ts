@@ -31,7 +31,7 @@ export interface QueueState {
   active: Task[];
   /** Zadania z etykietą `queued` bez otwartego PR, w kolejności numerów. */
   waiting: WaitingTask[];
-  /** Issue z etykietą `ready`, które planer właśnie planuje. */
+  /** Issue z etykietą `ready`, które planer właśnie planuje: bez niescalonych zależności ze specu. */
   planning: number[];
   /** Stan zadań z sekcji „Zależy od” otwartych issue. */
   dependencies: Record<number, DependencyState>;
@@ -211,7 +211,8 @@ export function queueState(dir: string, skip?: number): QueueState {
     const dependsOn = parseDependencies(issue.body ?? '', issue.number);
     if (!labels.includes('planned')) {
       if (labels.includes('queued')) state.waiting.push({ issue: issue.number, files: [], planned: false, approved: false, dependsOn });
-      else if (labels.includes('ready')) state.planning.push(issue.number);
+      // Zadanie z `ready`, które czeka na zależności, planu teraz nie dostanie, więc nie zajmuje miejsca w limicie.
+      else if (labels.includes('ready') && dependsOn.every((n) => state.dependencies[n] === 'done')) state.planning.push(issue.number);
       continue;
     }
     const mine = (pr: RawPr) => issueOfBranch(pr.headRefName) === issue.number;
