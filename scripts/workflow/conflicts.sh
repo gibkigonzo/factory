@@ -9,6 +9,9 @@
 set -euo pipefail
 
 MAX=${MAX:-2} TRIES=${TRIES:-6} WAIT=${WAIT:-10}
+# Komentarz przez REST API issue: job kolejki ma prawo zapisu issue, a nie PR, a komentarz przez GraphQL
+# (addComment) kończył się wtedy odmową i runda konfliktu nie ruszała. Na wyjściu adres komentarza.
+comment() { gh api "repos/$GH_REPO/issues/$1/comments" -F body=@- --jq .html_url; }
 DEFAULT=$(gh api "repos/$GH_REPO" --jq .default_branch)
 STARTED=0
 for PR in $(gh pr list --state open --base "$DEFAULT" --limit 100 --json number,headRefName \
@@ -37,13 +40,13 @@ for PR in $(gh pr list --state open --base "$DEFAULT" --limit 100 --json number,
     if ! grep -qxF '<!-- factory:conflict-stop -->' <<<"$COMMENTS"; then
       printf '%s\n' '<!-- factory:conflict-stop -->' \
         "PR dalej ma konflikt z gałęzią główną po $DONE rundach taśmy. Rozwiąż go albo napisz \`/change\` z poleceniem, jak go rozwiązać." \
-        | gh pr comment "$PR" --body-file - >/dev/null
+        | comment "$PR" >/dev/null
     fi
     continue
   fi
   URL=$(printf '%s\n' '<!-- factory:conflict -->' '## Konflikt z gałęzią główną' '' \
     "Gałąź główna zmieniła się i ten PR ma z nią konflikt. Taśma scala gałąź główną, a implementer rozwiązuje konflikty (runda $((DONE + 1)) z $MAX). Potem CI i recenzja ruszają od nowa." \
-    | gh pr comment "$PR" --body-file -)
+    | comment "$PR")
   NOTE=${URL##*issuecomment-}
   if ! [[ "$NOTE" =~ ^[0-9]+$ ]]; then
     echo "::warning::PR #$PR: nie znam numeru komentarza o konflikcie; runda nie rusza." >&2
