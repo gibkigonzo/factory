@@ -113,9 +113,7 @@ jobs:
           if [ -n "$PR" ]; then
             # Kontrakt z gałęzi bazowej, nie z PR: narzędzia implementera nie mogą pochodzić z pliku, który sam zmienił.
             BASE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)
-            mkdir -p "$RUNNER_TEMP/base"
-            git archive "origin/$BASE" factory.yml .factory/perspectives 2>/dev/null | tar -x -C "$RUNNER_TEMP/base" \
-              || git show "origin/$BASE:factory.yml" > "$RUNNER_TEMP/base/factory.yml"
+            bash "$F/scripts/workflow/base-config.sh" "$BASE" "$RUNNER_TEMP/base"
             node "$F/scripts/config/cli.ts" "$RUNNER_TEMP/base/factory.yml" --json > "$W/config.json"
           else
             node "$F/scripts/config/cli.ts" factory.yml --json > "$W/config.json"
