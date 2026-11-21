@@ -96,9 +96,7 @@ jobs:
           PR: ${{ inputs.pr }}
         run: |
           BASE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)
-          mkdir -p "$RUNNER_TEMP/base"
-          git archive "origin/$BASE" factory.yml .factory/perspectives 2>/dev/null | tar -x -C "$RUNNER_TEMP/base" \
-            || git show "origin/$BASE:factory.yml" > "$RUNNER_TEMP/base/factory.yml"
+          bash "$F/scripts/workflow/base-config.sh" "$BASE" "$RUNNER_TEMP/base"
           node "$F/scripts/config/cli.ts" "$RUNNER_TEMP/base/factory.yml" --json > "$W/config.json"
           echo "fork=$(git merge-base "origin/$BASE" HEAD)" >> "$GITHUB_OUTPUT"
 
@@ -249,9 +247,7 @@ jobs:
           PR: ${{ inputs.pr }}
         run: |
           BASE=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json baseRefName --jq .baseRefName)
-          mkdir -p "$RUNNER_TEMP/base"
-          git archive "origin/$BASE" factory.yml .factory/perspectives 2>/dev/null | tar -x -C "$RUNNER_TEMP/base" \
-            || git show "origin/$BASE:factory.yml" > "$RUNNER_TEMP/base/factory.yml"
+          bash "$F/scripts/workflow/base-config.sh" "$BASE" "$RUNNER_TEMP/base"
           node "$F/scripts/config/cli.ts" "$RUNNER_TEMP/base/factory.yml" --json > "$W/config.json"
           # Punkt rozgałęzienia zapisany raz: ocena ryzyka liczy od niego ten sam diff, także gdy PR scalono w trakcie recenzji
           # (wtedy merge-base z gałęzią główną to sama głowa PR, a diff byłby pusty).

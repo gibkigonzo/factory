@@ -83,7 +83,10 @@ describe('workflowy fabryki', () => {
   });
 
   it('kontrakt dla implementera i recenzji przy PR pochodzi z gałęzi bazowej, nie z PR', () => {
-    for (const name of ['implement', 'review']) assert.match(workflows[name]!.text, /git archive "origin\/\$BASE" factory\.yml/, name);
+    for (const name of ['implement', 'review']) {
+      assert.match(workflows[name]!.text, /bash "\$F\/scripts\/workflow\/base-config\.sh" "\$BASE" "\$RUNNER_TEMP\/base"/, name);
+      assert.doesNotMatch(workflows[name]!.text, /\| tar -x[^\n]*\\\n\s*\|\|/, `${name}: zapas po tar nie działa na macOS`);
+    }
   });
 
   it('/change bierze numer issue z gałęzi factory/<numer>-…, a powiązanie PR z issue to zapas', () => {
