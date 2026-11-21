@@ -3,6 +3,7 @@
 
 import { extractJson } from '../agents/output.ts';
 import type { Implementation } from './evidence.ts';
+import { normalizeCriterion } from './spec.ts';
 import { usageBlock } from './usage.ts';
 import type { Usage } from './usage.ts';
 
@@ -109,6 +110,26 @@ export function prBody(
   lines.push('', 'Zmianę przygotował implementer fabryki. Ocena ryzyka pojawi się po recenzji.', '', jsonBlock(implementation));
   if (usage.length) lines.push('', usageBlock(usage));
   return lines.join('\n');
+}
+
+/**
+ * Dowody kryteriów po rundzie poprawek: runda odpowiada na uwagi i zwykle nie przepisuje wszystkich kryteriów, więc
+ * dowody z poprzedniego opisu PR zostają, a runda nadpisuje tylko te, które podała. Bez tego ocena ryzyka uznawała
+ * kryteria za niedowiedzione po każdej rundzie (lekcja z aplikacji: runda poprawiająca lint oddała pustą listę).
+ */
+export function carryAcceptance(
+  current: Implementation['acceptance'],
+  previous: Implementation['acceptance'] = [],
+): Implementation['acceptance'] {
+  const fresh = new Map(current.map((a) => [normalizeCriterion(a.criterion), a]));
+  const kept = previous.map((a) => fresh.get(normalizeCriterion(a.criterion)) ?? a);
+  const known = new Set(previous.map((a) => normalizeCriterion(a.criterion)));
+  return [...kept, ...current.filter((a) => !known.has(normalizeCriterion(a.criterion)))];
+}
+
+/** Blok JSON implementacji z opisu PR (poprzednia runda), jeśli jest. */
+export function previousImplementation(body: string): Partial<Implementation> | undefined {
+  return latestMarked([{ body, user: { login: 'github-actions[bot]' } }], PR_MARKER) as Partial<Implementation> | undefined;
 }
 
 /** Najnowszy komentarz z markerem od konta workflowów; zwraca jego blok JSON. */
