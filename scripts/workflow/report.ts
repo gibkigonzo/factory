@@ -1,7 +1,8 @@
-// Raport fabryki w PR i w checku factory/risk: poziom, reguły, bramki i skład panelu.
-// Lista zamiast tabeli, bo raport czyta się na telefonie.
+// Raport fabryki w PR i w checku factory/risk: poziom, reguły, bramki, skład panelu i uwagi recenzentów,
+// które zostały po pętli poprawek. Lista zamiast tabeli, bo raport czyta się na telefonie.
 
-import type { Assessment } from '../risk/types.ts';
+import type { Assessment, Review } from '../risk/types.ts';
+import { followUpSection, remainingFindings } from './followup.ts';
 
 export const REPORT_MARKER = '<!-- factory:report -->';
 
@@ -12,7 +13,7 @@ export interface PanelSummary {
 
 const GATES = { pass: 'przechodzą', warn: 'ostrzeżenia', block: 'blokują merge' } as const;
 
-export function renderReport(assessment: Assessment, panel?: PanelSummary): string {
+export function renderReport(assessment: Assessment, panel?: PanelSummary, reviews: readonly Review[] = []): string {
   const lines = [
     REPORT_MARKER,
     '## Ocena fabryki (tryb cienia)',
@@ -33,6 +34,8 @@ export function renderReport(assessment: Assessment, panel?: PanelSummary): stri
     lines.push('', `**Panel:** ${panel.run.map((m) => m.name).join(', ')}`);
     if (panel.skipped.length > 0) lines.push(`**Pominięte:** ${panel.skipped.map((m) => `${m.name} (${m.reason})`).join(', ')}`);
   }
+  const followUps = followUpSection(remainingFindings(reviews));
+  if (followUps.length > 0) lines.push('', ...followUps);
   lines.push('', 'Etap 0: fabryka niczego nie scala. Decyzja należy do właściciela.');
   return lines.join('\n');
 }

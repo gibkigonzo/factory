@@ -28,6 +28,16 @@ describe('pętla poprawek', () => {
     });
   });
 
+  it('uwaga medium odsyła PR także przy approve, a sama low nie', () => {
+    const medium = review('security', 'approve', [{ severity: 'medium', issue: 'uprawnienia z manifestu źródłowego' }]);
+    const low = review('tests', 'approve', [{ severity: 'low', issue: 'drobiazg' }]);
+    assert.deepEqual(nextRound({ ci: green, reviews: [medium, low], round: 0, maxRounds: 3 }), { retry: true, reason: 'zmian chcą: security' });
+    assert.equal(nextRound({ ci: green, reviews: [low], round: 0, maxRounds: 3 }).retry, false);
+    const comment = roundComment({ ci: green, reviews: [medium, low], round: 0, maxRounds: 3 });
+    assert.match(comment, /\*\*security:\*\* security: podsumowanie\n- medium: uprawnienia z manifestu źródłowego/);
+    assert.doesNotMatch(comment, /drobiazg/);
+  });
+
   it('po ostatniej rundzie nie odsyła: decyzja należy do oceny ryzyka', () => {
     const decision = nextRound({ ci: red, reviews: [review('spec', 'request_changes')], round: 3, maxRounds: 3 });
     assert.deepEqual(decision, { retry: false, reason: 'CI nie przechodzi; zmian chcą: spec, ale to już ostatnia runda (3)' });

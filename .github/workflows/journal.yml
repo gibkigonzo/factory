@@ -16,14 +16,19 @@ on:
 permissions: {}
 
 jobs:
+  # Po scaleniu PR fabryki: zamknięcie issue i notatka z uwagami recenzentów, które zostały w PR (z ukrytego bloku
+  # ostatniego raportu oceny od konta taśmy). Bez Claude i bez kodu z PR.
   close-issue:
     if: github.event_name == 'pull_request_target' && github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      contents: read
       issues: write
+      pull-requests: read
     steps:
       - name: Zamknięcie issue scalonego PR fabryki
+        id: close
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -33,9 +38,40 @@ jobs:
           # Numer z gałęzi factory/<numer>-…, którą nadaje fabryka; inne gałęzie pomija.
           ISSUE=$(sed -nE 's#^factory/([0-9]+)-.*#\1#p' <<<"$BRANCH")
           if [ -z "$ISSUE" ]; then echo "Gałąź $BRANCH nie wskazuje issue."; exit 0; fi
+          echo "issue=$ISSUE" >> "$GITHUB_OUTPUT"
           if [ "$(gh issue view "$ISSUE" --json state --jq .state)" = OPEN ]; then
             gh issue close "$ISSUE" --reason completed --comment "Zamknięte po scaleniu PR #$PR."
           fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.close.outputs.issue != ''
+        with:
+          repository: gibkigonzo/factory
+          ref: ${{ inputs.factory_ref }}
+          path: factory
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        if: steps.close.outputs.issue != ''
+        with:
+          node-version: ${{ inputs.node_version }}
+      - name: Notatka z uwagami recenzentów
+        if: steps.close.outputs.issue != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          npm ci --prefix factory --omit=dev --no-audit --no-fund
+          gh label create idea --force --description 'Notatka: pomysł bez specu' >/dev/null
+          gh label create follow-up --force --description "Uwagi recenzentów, które zostały w scalonym PR" >/dev/null
+          gh api --paginate "repos/$GH_REPO/issues/$PR/comments" --jq '.[] | {user: {login: .user.login}, body}' | jq -s . > "$RUNNER_TEMP/comments.json"
+          gh issue list --label follow-up --state all --limit 200 --json body > "$RUNNER_TEMP/existing.json"
+          NOTE=$(node factory/scripts/workflow/cli.ts follow-up --pr "$PR" --title "$TITLE" \
+            --file "$RUNNER_TEMP/comments.json" --raw "$RUNNER_TEMP/existing.json")
+          if [ -z "$NOTE" ]; then echo "Brak uwag recenzentów do notatki."; exit 0; fi
+          jq -r .body <<<"$NOTE" > "$RUNNER_TEMP/note.md"
+          URL=$(gh issue create --title "$(jq -r .title <<<"$NOTE")" --body-file "$RUNNER_TEMP/note.md" --label idea --label follow-up)
+          echo "::notice::Notatka z uwagami recenzentów: $URL"
 
   collect:
     runs-on: ubuntu-latest

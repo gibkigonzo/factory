@@ -31,7 +31,7 @@ Organizujesz recenzję PR. Sam niczego nie oceniasz: przygotowujesz materiał, u
 
 ## Pętla poprawek
 
-`request_changes` wraca do implementera razem z uwagami. Po poprawkach ponownie oceniają tylko perspektywy, które zgłosiły uwagi; pozostałe werdykty zostają. Licz rundy: po 3 rundach z nierozstrzygniętymi uwagami reguły ryzyka dają High i zmiana trafia do właściciela.
+`request_changes` albo uwaga `medium` (także przy `approve`) wraca do implementera razem z uwagami. Uwagi `low` zostają w raporcie oceny, a po merge'u taśma zakłada z nich notatkę `idea` + `follow-up`. Po poprawkach ponownie oceniają tylko perspektywy, które zgłosiły uwagi; pozostałe werdykty zostają. Licz rundy: po 3 rundach z nierozstrzygniętymi uwagami reguły ryzyka dają High i zmiana trafia do właściciela.
 
 ## Wyjście
 

@@ -106,8 +106,20 @@ describe('workflowy fabryki', () => {
     const job = workflows.journal!.data.jobs['close-issue'] as Job & { if?: string };
     assert.match(String(job.if), /pull_request_target/);
     assert.match(String(job.if), /merged == true/);
-    assert.deepEqual(job.permissions, { issues: 'write' });
+    assert.deepEqual(job.permissions, { contents: 'read', issues: 'write', 'pull-requests': 'read' });
     assert.match(String(job.steps?.[0]?.run), /s#\^factory\/\(\[0-9\]\+\)-\.\*#\\1#p/);
+  });
+
+  it('notatka z uwagami po merge: bez Claude, tylko skrypty fabryki i raport oceny', () => {
+    const job = workflows.journal!.data.jobs['close-issue']!;
+    assert.ok(!usesClaude(job));
+    for (const step of job.steps ?? []) {
+      if (step.uses?.startsWith('actions/checkout@')) assert.equal(step.with?.repository, 'gibkigonzo/factory', 'tylko skrypty fabryki');
+    }
+    const note = job.steps?.find((step) => step.name === 'Notatka z uwagami recenzentów');
+    assert.match(String(note?.run), /cli\.ts follow-up/);
+    assert.match(String(note?.run), /--label idea --label follow-up/);
+    assert.match(workflows.risk!.text, /cli\.ts" report [^\n]*\\\n\s*--evidence "\$W\/evidence\.json"/);
   });
 
   it('statystyki dziennika: pliki na gałęzi factory-journal bez Claude, a blokada zapisuje swój koszt', () => {

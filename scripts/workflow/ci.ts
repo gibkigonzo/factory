@@ -20,10 +20,13 @@ function shorten(line: string): string {
   return `${line.slice(0, half)} … ${line.slice(-half)}`;
 }
 
+/** Komendy tylko dla implementera: `format` poprawia formatowanie, a CI sprawdza je komendą `lint`, nie zmienia plików. */
+export const IMPLEMENTER_ONLY = ['format'];
+
 /** Kolejność: setup, potem typowe sprawdzenia, potem pozostałe komendy projektu w kolejności z factory.yml. */
 export function commandOrder(commands: FactoryConfig['commands']): string[] {
   const preferred = ['setup', 'lint', 'typecheck', 'test', 'build'];
-  const names = Object.keys(commands);
+  const names = Object.keys(commands).filter((n) => !IMPLEMENTER_ONLY.includes(n));
   return [...preferred.filter((n) => names.includes(n)), ...names.filter((n) => !preferred.includes(n))];
 }
 
