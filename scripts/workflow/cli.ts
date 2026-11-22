@@ -32,7 +32,8 @@ import type { SourceFile } from '../quality/duplicates.ts';
 import type { Dependency } from './dependencies.ts';
 import { nextRound, noChangeComment, roundComment } from './loop.ts';
 import { admit, closedDependencies, gate, queueState, release } from './queue.ts';
-import { renderReport } from './report.ts';
+import { followUpNote, noteMarker, parseFollowUps } from './followup.ts';
+import { renderReport, REPORT_MARKER } from './report.ts';
 import type { PanelSummary } from './report.ts';
 import { compareScreenshots, galleryComment, runScreenshots, unchangedVerdict, visualSummary, writeGallery } from './screenshots.ts';
 import { parseDependencies, parseSpec } from './spec.ts';
@@ -214,7 +215,22 @@ function run(command: string | undefined, rest: string[]): string {
     case 'usage-sum':
       return JSON.stringify(usageDir(required(v.dir, '--dir')));
     case 'report':
-      return renderReport(json(required(v.assessment, '--assessment')) as Assessment, v.panel ? (json(v.panel) as PanelSummary) : undefined);
+      return renderReport(
+        json(required(v.assessment, '--assessment')) as Assessment,
+        v.panel ? (json(v.panel) as PanelSummary) : undefined,
+        v.evidence ? ((json(v.evidence) as Evidence).reviews ?? []) : [],
+      );
+    case 'follow-up': {
+      // Po merge'u PR fabryki: uwagi z ostatniego raportu oceny od konta taśmy → notatka do założenia (JSON: title, body)
+      // albo nic, gdy uwag nie ma albo notatka dla tego PR już jest.
+      const pr = Number(required(v.pr, '--pr'));
+      const existing = (optionalJson(required(v.raw, '--raw')) as { body?: string }[] | undefined) ?? [];
+      if (existing.some((issue) => issue.body?.includes(noteMarker(pr)))) return '';
+      const comments = json(required(v.file, '--file')) as { user?: { login?: string }; body?: string }[];
+      const report = comments.filter((c) => c.user?.login === 'github-actions[bot]' && c.body?.includes(REPORT_MARKER)).at(-1);
+      const items = parseFollowUps(report?.body ?? '');
+      return items.length > 0 ? JSON.stringify(followUpNote({ pr, title: v.title, items })) : '';
+    }
     case 'plan-comment':
       return planComment(json(required(v.plan, '--plan')) as Parameters<typeof planComment>[0], v.note, usageFile(v.usage), waiting(v.waiting));
     case 'install-commands': {

@@ -307,6 +307,7 @@ describe('teksty publikowane przez workflow', () => {
 describe('CI z komend factory.yml', () => {
   it('kolejność: setup, typowe sprawdzenia, potem reszta', () => {
     assert.deepEqual(commandOrder({ e2e: 'x', build: 'b', test: 't', setup: 's' }), ['setup', 'test', 'build', 'e2e']);
+    assert.deepEqual(commandOrder({ format: 'f', lint: 'l', test: 't' }), ['lint', 'test'], 'format uruchamia tylko implementer');
   });
 
   it('zapisuje wynik każdej komendy i przerywa po nieudanym setup', () => {

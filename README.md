@@ -10,7 +10,7 @@ Fabryka do wytwarzania oprogramowania, oparta na Claude Code i GitHub Actions. Z
 - **Plan i implementacja.** Planer rozpisuje pliki, testy i dowody, a za duże zadanie dzieli. Implementer pisze kod i testy w PR z gałęzi `factory/<numer>-<nazwa>` albo zgłasza blokadę zamiast połowicznego PR.
 - **Recenzja.** CI uruchamia komendy projektu, a pięć perspektyw (poprawność, testy, bezpieczeństwo, utrzymanie, zgodność ze specem) ocenia PR, każda w świeżym kontekście. Projekt może dodać kolejne, np. recenzenta wyglądu na zrzutach ekranu.
 - **Jakość całego projektu.** Skrypt pokazuje recenzentom powtórzenia kodu i elementów widoku, które wprowadza PR, a co 5 scalonych PR przegląd architektury proponuje refaktor jako notatki do backlogu.
-- **Pętla poprawek.** Czerwone CI albo prośba recenzenta odsyła PR do implementera, do 3 rund. Konflikty z gałęzią główną taśma rozwiązuje sama.
+- **Pętla poprawek.** Czerwone CI, prośba recenzenta albo jego uwaga `medium` odsyła PR do implementera, do 3 rund. Drobne uwagi po merge'u trafiają do notatki w backlogu. Konflikty z gałęzią główną taśma rozwiązuje sama.
 - **Ocena ryzyka.** Deterministyczne reguły i ocena modelu, która może poziom tylko podnieść. Wynik: **Low** (fabryka scala sama) albo **High** (decydujesz Ty), z raportem czytelnym na telefonie.
 - **Tryb cienia i dziennik.** Werdykt fabryki oceniasz 👍 albo 👎. Przypięte issue „Tryb cienia” pokazuje zgodność, rundy, czas i koszt.
 - **Kolejka i limity.** Zadanie dostaje plan dopiero wtedy, gdy może ruszyć: zadania, od których zależy, są scalone, a `wip_limit` ma miejsce. Zadania na tych samych plikach idą po kolei, reszta równolegle. Dzienny limit przebiegów pilnuje kosztu.
@@ -26,7 +26,7 @@ Potrzebujesz repo projektu na GitHubie (w prywatnym taśma zużywa minuty Action
 
 1. **Token.** Na komputerze `claude setup-token`, potem w repo projektu: Settings → Secrets and variables → Actions → sekret `CLAUDE_CODE_OAUTH_TOKEN`.
 2. **Ustawienia repo.** Settings → Actions → General → Workflow permissions: zaznacz „Allow GitHub Actions to create and approve pull requests”.
-3. **Kontrakt.** Skopiuj [`templates/factory.yml`](templates/factory.yml) do korzenia repo i ustaw presety (`extends`), komendy CI (`commands`: wymagane `test` i `build`, a `setup` instaluje wszystko, także przeglądarki do e2e), strefy (`zones`), komendy instalacji pakietów (`dependencies`) i pliki chronione. Sprawdź go w klonie fabryki (Node 22.18+): `npm ci && npm run validate -- ścieżka/do/factory.yml`.
+3. **Kontrakt.** Skopiuj [`templates/factory.yml`](templates/factory.yml) do korzenia repo i ustaw presety (`extends`), komendy CI (`commands`: wymagane `test` i `build`, a `setup` instaluje wszystko, także przeglądarki do e2e; opcjonalny `format` uruchamia tylko implementer, gdy `lint` sprawdza formatowanie), strefy (`zones`), komendy instalacji pakietów (`dependencies`) i pliki chronione. Sprawdź go w klonie fabryki (Node 22.18+): `npm ci && npm run validate -- ścieżka/do/factory.yml`.
 4. **Konwencje.** Zapisz w `CLAUDE.md` projektu styl kodu i nazwy, a w projekcie z interfejsem także wspólne elementy (gdzie leżą i gdzie je widać, np. strona wzorców). Czytają je planer, implementer i recenzenci.
 5. **Workflow.** Skopiuj [`templates/workflows/factory.yml`](templates/workflows/factory.yml) do `.github/workflows/factory.yml` i dopisz `.factory/` do `.gitignore`: taśma trzyma tam pliki robocze implementera i recenzentów, a linter projektu (np. Prettier) nie może ich sprawdzać. To cienki plik: dyrygent fabryki (`pipeline.yml`) rozdziela zdarzenia na etapy.
 6. **Sesje Claude Code.** Skopiuj [`templates/claude/hooks/factory.sh`](templates/claude/hooks/factory.sh) do `.claude/hooks/factory.sh` i [`templates/claude/settings.json`](templates/claude/settings.json) do `.claude/settings.json` (albo dopisz hook do istniejącego), a w `CLAUDE.md` projektu napisz, że reguły fabryki dostaje sesja z hooka. Daj aplikacji Claude dostęp do repo (claude.ai → GitHub). Szczegóły: [Spec z telefonu](#spec-z-telefonu).
@@ -41,6 +41,7 @@ Potrzebujesz repo projektu na GitHubie (w prywatnym taśma zużywa minuty Action
 | --- | --- |
 | `idea` | notatka bez specu; spec zrobisz z niej później |
 | `refactor` | propozycja refaktoru z przeglądu architektury (razem z `idea`) |
+| `follow-up` | uwagi recenzentów, które zostały w scalonym PR (razem z `idea`) |
 | `ready` | spec gotowy; nadajesz ją Ty, uruchamia planera |
 | `planned` | plan jest; implementacja trwa albo PR jest otwarty |
 | `queued` | czeka w kolejce (zadania z „Zależy od”, wspólne pliki, `wip_limit` albo dzienny limit); ruszy samo |
@@ -97,7 +98,7 @@ flowchart TD
   H4(["Decydujesz Ty"]):::human
   H5(["Komendy w komentarzu: /change, /reject, /split, /approve"]):::human
   H6(["/approve w issue: zgoda na nowe zależności z planu"]):::human
-  L{"Pętla poprawek: czerwone CI albo prośba o zmiany, runda poniżej limitu?"}:::script
+  L{"Pętla poprawek: czerwone CI, prośba o zmiany albo uwaga medium, runda poniżej limitu?"}:::script
 
   H1 --> A1 --> H0 --> S1 --> A2 --> S2
   S2 -->|"blocked albo split"| H2
@@ -125,7 +126,8 @@ Po wyjściu z trybu cienia merger scali Low od razu, a High zostawi Tobie. Scala
 
 ### Pętla poprawek i blokady
 
-- **Runda poprawek.** Czerwone CI albo `request_changes` odsyła PR do implementera z komentarzem „Runda poprawek N z M”: uwagi od najpoważniejszej, a przy czerwonym CI końcówka wyjścia padających komend. Przy czerwonym CI recenzenci nie ruszają, chyba że to ostatnia runda; po poprawce cały panel ocenia PR od nowa. Uwagi nierozstrzygnięte po `risk.max_review_rounds` rundach dają High.
+- **Runda poprawek.** Czerwone CI, `request_changes` albo uwaga `medium` (także przy `approve`) odsyła PR do implementera z komentarzem „Runda poprawek N z M”: uwagi od najpoważniejszej, a przy czerwonym CI końcówka wyjścia padających komend. Przy czerwonym CI recenzenci nie ruszają, chyba że to ostatnia runda; po poprawce cały panel ocenia PR od nowa. Uwagi nierozstrzygnięte po `risk.max_review_rounds` rundach dają High.
+- **Uwagi, które zostały.** Raport oceny wymienia uwagi recenzentów, które zostały po pętli, zwykle `low`. Po merge'u taśma zakłada z nich jedną notatkę z etykietami `idea` i `follow-up`, z cytatami i numerem PR. Notatka trafia do sesji backlogu jak inne notatki, więc nie musisz pisać `/change` ani zakładać issue.
 - **Zadanie rundy** to uwagi z komentarza, nie issue od nowa. Twoje `/change` implementer wykonuje albo kończy blokadą z powodem; takie rundy nie zmniejszają limitu. Gdy żadna uwaga nie wymaga zmiany kodu, implementer oddaje rundę bez zmian z wyjaśnieniem, a recenzja rusza jeszcze raz.
 - **Co widzą recenzenci.** Każdy dostaje Twoje polecenia `/change` jako decyzje ważniejsze od specu, wynik CI z końcówką wyjścia każdej komendy (`ci.json`) i porównanie zrzutów z gałęzią główną. Recenzent wyglądu dostaje też uwagi, na które odpowiadała runda, żeby nie żądał ich odwrotności.
 - **Konflikty z gałęzią główną.** Każda runda zaczyna od scalenia gałęzi głównej: bez konfliktu robi to skrypt, a konflikty rozwiązuje implementer. Po zamknięciu PR fabryki kolejka sprawdza pozostałe otwarte PR i uruchamia rundę rozwiązania konfliktu (najwyżej 2 na PR, poza limitem rund).
@@ -189,7 +191,7 @@ Poziom zmiany to najwyższy wynik z pięciu reguł; reguły i oceniacz mogą go 
 | 4. Rozmiar | najwyżej 100 linii i 5 plików kodu produkcyjnego (bez testów, lockfile'ów, plików generowanych i tłumaczeń); ponad 400 linii albo 15 plików zmiana wraca do planera do podziału |
 | 5. Dowody | zielone CI, dowód dla każdego kryterium akceptacji, test regresji przy poprawce błędu, `approve` każdej perspektywy z panelu z pewnością ≥ 0,8, każdy cytat recenzenta obecny w diffie, brak nowych znaczników wyłączeń, brak usuniętych testów i ubytku asercji, pokrycie zmienionych linii ≥ 80% (gdy CI je liczy) |
 
-`factory.yml` jest czytany z punktu rozgałęzienia, więc PR nie poluzuje własnej oceny. `approve` z uwagą o wadze `high` albo `critical` liczy się jak `request_changes`.
+`factory.yml` jest czytany z punktu rozgałęzienia, więc PR nie poluzuje własnej oceny. `approve` z uwagą o wadze `high` albo `critical` liczy się jak `request_changes`, a nierozstrzygnięta uwaga `medium` też odbiera Low.
 
 Bramki jakości nie są ryzykiem: blokują merge, ale fabryka poprawia je sama. Liczą się tylko zmienione pliki.
 
@@ -207,7 +209,7 @@ Warstwy składają się w kolejności `base` → presety z `extends` → `factor
 | Pole | Kto ustawia | Co znaczy |
 | --- | --- | --- |
 | `project`, `extends` | projekt | nazwa projektu; presety, `base` zawsze pierwszy |
-| `commands` | projekt | komendy CI; wymagane `test` i `build`; implementer uruchamia tylko te |
+| `commands` | projekt | komendy CI; wymagane `test` i `build`; implementer uruchamia tylko te; `format` uruchamia tylko implementer, CI go pomija |
 | `dependencies` | projekt | `add` i `add_dev`: instalacja zatwierdzonych pakietów, workflow dokleja `nazwa@wersja`; `ecosystems`: kolejne menedżery, np. `cargo` z flagą `features` |
 | `zones`, `zone_tests` | wszystkie warstwy | ścieżki stref (`data`, `security`, `release`, `dependencies`, `factory`, `shared`, `code`) i testy spoza ścieżek strefy, które ją sprawdzają |
 | `files`, `disable_markers`, `assertion_markers` | wszystkie warstwy | klasy plików (kod, testy, lockfile'y, generowane, tłumaczenia), znaczniki wyłączeń i asercji |
@@ -312,6 +314,7 @@ Narzędzia spoza taśmy, np. aplikacja do prowadzenia projektów, czytają stan 
 - **Werdykt trybu cienia:** komentarz w PR z `<!-- factory:shadow -->` i blokiem `<!-- factory:shadow-data {…} -->`. JSON ma `pr`, `round`, `level` (`Low` albo `High`), `action` (`merge`, `escalate`, `split`, `fix-gates`), `reviews` (perspektywa, werdykt, pewność) i opcjonalnie `usage`. Ocena to reakcja `+1` albo `-1` właściciela na ten komentarz.
 - **Koszt etapu:** blok `<!-- factory:usage [{…}] -->` w komentarzu planu, opisie PR, komentarzu rundy albo werdykcie. Rekord ma `stage` (`plan`, `implement`, `review`, `assess`, `architecture`), `count`, `cost` (USD, równowartość cen API), `turns`, `ms`, tokeny (`input`, `output`, `cacheRead`, `cacheWrite`) i opcjonalnie `name` recenzenta.
 - **Problem taśmy:** blok `<!-- factory:line-problem {"stage", "problem", "at"} -->`.
+- **Uwagi po pętli:** raport oceny (`<!-- factory:report -->`) ma blok `<!-- factory:follow-up [{…}] -->`. Wpis ma `perspective`, `severity`, `issue` i opcjonalnie `file`, `line`, `evidence`; `<` i `>` są w JSON zakodowane jako `\u003c` i `\u003e`. Notatka po merge'u ma znacznik `<!-- factory:follow-up-note <numer PR> -->` i etykiety `idea` i `follow-up`.
 - **Dziennik:** `journal.json` na gałęzi `factory-journal` z polami `updated`, `stopped` (issue zatrzymania albo `null`), `tasks`, `cost`, `rows` (wiersz na zadanie: numery issue i PR, tytuł, stan, poziom, werdykt, ocena, rundy, koszt na etap i recenzenta) i `lineProblems`.
 - **Zatrzymanie taśmy:** otwarte issue z etykietą `factory:stopped`.
 

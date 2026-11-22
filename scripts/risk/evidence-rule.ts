@@ -1,5 +1,5 @@
 // Reguła 5: dowody. Low wymaga kompletu dowodów; każdy brak daje High. Powody osłabienia testów i uwag
-// nierozstrzygniętych po limicie rund są na początku listy, bo są najpoważniejsze.
+// nierozstrzygniętych (medium i poważniejszych) są na początku listy, bo są najpoważniejsze.
 
 import type { FactoryConfig, Level } from '../config/spec.ts';
 import { matchesAny } from './glob.ts';
@@ -48,10 +48,17 @@ function regressionProblems(evidence: Evidence): string[] {
 }
 
 const SERIOUS: readonly Finding['severity'][] = ['high', 'critical'];
+/** Uwagi do poprawy przed merge'em: medium, high i critical. Low trafia po merge'u do notatki dla właściciela. */
+const TO_FIX: readonly Finding['severity'][] = ['medium', ...SERIOUS];
 
 /** `approve` z uwagą o wadze high lub critical jest sprzeczny, więc liczy się jak `request_changes`. */
 export function effectiveVerdict(review: Review): Review['verdict'] {
   return review.findings.some((f) => SERIOUS.includes(f.severity)) ? 'request_changes' : review.verdict;
+}
+
+/** Recenzent chce poprawek: `request_changes` albo uwaga medium lub poważniejsza, także przy `approve`. */
+export function wantsChanges(review: Review): boolean {
+  return review.verdict === 'request_changes' || review.findings.some((f) => TO_FIX.includes(f.severity));
 }
 
 /** Recenzenci, którzy się różnią, albo pewność poniżej progu nie pozwalają na Low. */
@@ -97,18 +104,18 @@ function where(finding: Finding): string {
   return finding.line ? `${finding.file}:${finding.line}` : finding.file;
 }
 
-/** Nierozstrzygnięta uwaga o wadze high lub critical daje High. */
+/** Nierozstrzygnięta uwaga o wadze medium, high lub critical daje High. */
 function seriousFindings(evidence: Evidence): string[] {
   return (evidence.reviews ?? []).flatMap((review) =>
     review.findings
-      .filter((finding) => SERIOUS.includes(finding.severity))
+      .filter((finding) => TO_FIX.includes(finding.severity))
       .map((finding) => `nierozstrzygnięta uwaga ${finding.severity} recenzenta ${review.perspective}: ${finding.issue} (${where(finding)})`),
   );
 }
 
 function unresolved(evidence: Evidence, config: FactoryConfig): string[] {
   const rounds = evidence.review_rounds ?? 0;
-  const open = (evidence.reviews ?? []).filter((r) => effectiveVerdict(r) !== 'approve').map((r) => r.perspective);
+  const open = (evidence.reviews ?? []).filter(wantsChanges).map((r) => r.perspective);
   if (rounds < config.risk.max_review_rounds || open.length === 0) return [];
   return [`uwagi nierozstrzygnięte po ${rounds} rundach poprawek (${[...open].sort().join(', ')})`];
 }

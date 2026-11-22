@@ -294,7 +294,8 @@ jobs:
           # Ten sam punkt rozgałęzienia co w recenzji (base.sha z panelu), bo PR mógł zostać scalony w trakcie.
           FORK=$(cat "$W/base.sha" 2>/dev/null || echo "origin/$BASE")
           node "$F/scripts/risk-rules.ts" --base "$FORK" --head HEAD --evidence "$W/evidence.json" --json > "$W/assessment.json"
-          node "$F/scripts/workflow/cli.ts" report --assessment "$W/assessment.json" --panel "$W/panel.json" > "$W/report.md"
+          node "$F/scripts/workflow/cli.ts" report --assessment "$W/assessment.json" --panel "$W/panel.json" \
+            --evidence "$W/evidence.json" > "$W/report.md"
           node "$F/scripts/workflow/cli.ts" usage-sum --dir "$W/usage" > "$W/usage.json"
           node "$F/scripts/workflow/cli.ts" shadow-comment --pr "$PR" --assessment "$W/assessment.json" \
             --evidence "$W/evidence.json" --config "$W/config.json" --usage "$W/usage.json" > "$W/shadow.md"

@@ -23,7 +23,7 @@ Kod repo możesz czytać i przeszukiwać (Read, Grep, Glob), żeby zrozumieć ko
 
 Każda uwaga dotyczy zmiany z tego PR i ma:
 
-- `severity`: `critical` (wyciek danych lub sekretów, utrata danych, przejęcie uprawnień), `high` (zmiana łamie kryterium akceptacji albo zachowanie widoczne dla użytkownika), `medium` (trzeba poprawić przed merge'em, ale nic nie psuje), `low` (drobiazg);
+- `severity`: `critical` (wyciek danych lub sekretów, utrata danych, przejęcie uprawnień), `high` (zmiana łamie kryterium akceptacji albo zachowanie widoczne dla użytkownika), `medium` (trzeba poprawić przed merge'em, ale nic nie psuje), `low` (drobiazg). Uwagę `medium` i poważniejszą taśma odsyła do implementera także przy `approve`, a `low` po merge'u trafia do notatki dla właściciela, więc nie zawyżaj wagi drobiazgów;
 - `file` i `line`: miejsce w diffie;
 - `issue`: na czym polega problem, w jednym zdaniu;
 - `evidence`: **dokładny cytat** z diffu albo jego kontekstu, skopiowany znak w znak. Skrypt sprawdza, czy cytat występuje w diffie. Zmyślony albo przeredagowany cytat odbiera zmianie Low.

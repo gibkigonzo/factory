@@ -1,7 +1,9 @@
-// Pętla poprawek po recenzji: czerwone CI albo `request_changes` recenzenta odsyła PR do implementera
-// z listą uwag, aż do `risk.max_review_rounds` rund. Ocena ryzyka i werdykt powstają dopiero po pętli,
-// a uwagi nierozstrzygnięte po ostatniej rundzie dają High (reguła 5).
+// Pętla poprawek po recenzji: czerwone CI, `request_changes` albo uwaga medium recenzenta (także przy `approve`)
+// odsyła PR do implementera z listą uwag, aż do `risk.max_review_rounds` rund. Ocena ryzyka i werdykt powstają
+// dopiero po pętli, a uwagi nierozstrzygnięte po ostatniej rundzie dają High (reguła 5). Uwagi low zostają
+// w raporcie i po merge'u trafiają do notatki (followup.ts).
 
+import { wantsChanges } from '../risk/evidence-rule.ts';
 import type { Review } from '../risk/types.ts';
 import type { CiResult, Implementation } from './evidence.ts';
 import { usageBlock } from './usage.ts';
@@ -21,14 +23,14 @@ export type LoopDecision = { retry: false; reason: string } | { retry: true; rea
 
 export function nextRound(input: LoopInput): LoopDecision {
   const failed = input.ci?.status === 'failure';
-  const asking = input.reviews.filter((r) => r.verdict === 'request_changes').map((r) => r.perspective);
+  const asking = input.reviews.filter(wantsChanges).map((r) => r.perspective);
   if (!failed && asking.length === 0) return { retry: false, reason: 'CI przechodzi i nikt nie prosi o zmiany' };
   const why = [failed ? 'CI nie przechodzi' : '', asking.length ? `zmian chcą: ${asking.join(', ')}` : ''].filter(Boolean).join('; ');
   if (input.round >= input.maxRounds) return { retry: false, reason: `${why}, ale to już ostatnia runda (${input.maxRounds})` };
   return { retry: true, reason: why };
 }
 
-const SEVERITY = ['critical', 'high', 'medium', 'low'];
+export const SEVERITY = ['critical', 'high', 'medium', 'low'] as const;
 
 /**
  * Wyjście komendy w bloku kodu. Płotek jest dłuższy niż najdłuższy ciąg backticków w treści, a `<!--` traci
@@ -56,7 +58,7 @@ export function roundComment(input: LoopInput, usage: readonly Usage[] = []): st
     lines.push(`**CI nie przechodzi:** ${names}. Końcówka wyjścia z CI taśmy jest niżej; pełne błędy zobaczysz, uruchamiając te komendy.`, '');
     for (const c of failed.filter((c) => c.tail)) lines.push(`\`${c.name}\`:`, ...codeBlock(c.tail!), '');
   }
-  for (const review of input.reviews.filter((r) => r.verdict === 'request_changes')) {
+  for (const review of input.reviews.filter(wantsChanges)) {
     lines.push(`**${review.perspective}:** ${inert(review.summary)}`);
     const findings = [...review.findings].sort((a, b) => SEVERITY.indexOf(a.severity) - SEVERITY.indexOf(b.severity));
     for (const f of findings) {

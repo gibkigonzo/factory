@@ -63,7 +63,7 @@ describe('reguła 5: każdy brak odbiera zmianie Low', () => {
 });
 
 describe('reguła 5: werdykty recenzentów', () => {
-  const finding: Finding = { severity: 'medium', file: 'src/components/A.vue', line: 1, issue: 'brak alt', evidence: '<img src="a.png">' };
+  const finding: Finding = { severity: 'low', file: 'src/components/A.vue', line: 1, issue: 'brak alt', evidence: '<img src="a.png">' };
   const withFinding = (f: Finding) => [{ ...reviews[0]!, findings: [f] }, ...reviews.slice(1)];
   const component = changed('src/components/A.vue', { addedLines: ['<img src="a.png">'], contextLines: ['<template>'] });
 
@@ -80,9 +80,10 @@ describe('reguła 5: werdykty recenzentów', () => {
     }
   });
 
-  it('uwagi low i medium nie odbierają Low', () => {
-    assert.equal(result({ reviews: withFinding({ ...finding, severity: 'low' }) }, [component]).level, 'Low');
+  it('uwaga low nie odbiera Low, a nierozstrzygnięta medium tak, także przy approve', () => {
     assert.equal(result({ reviews: withFinding(finding) }, [component]).level, 'Low');
+    const outcome = result({ reviews: withFinding({ ...finding, severity: 'medium' }) }, [component]);
+    assert.deepEqual([outcome.level, outcome.reasons], ['High', ['nierozstrzygnięta uwaga medium recenzenta correctness: brak alt (src/components/A.vue:1)']]);
   });
 
   it('cytat z uwagi musi występować w diffie', () => {
@@ -154,5 +155,10 @@ describe('reguła 5: usunięte testy, spadek pokrycia i nierozstrzygnięte uwagi
       'recenzent correctness: request_changes',
     ]);
     assert.equal(result({ review_rounds: 5 }).level, 'Low');
+    const medium = [{ ...reviews[0]!, findings: [{ severity: 'medium' as const, file: 'src/a.ts', issue: 'brak testu' }] }, ...reviews.slice(1)];
+    assert.deepEqual(result({ reviews: medium, review_rounds: 3 }).reasons, [
+      'nierozstrzygnięta uwaga medium recenzenta correctness: brak testu (src/a.ts)',
+      'uwagi nierozstrzygnięte po 3 rundach poprawek (correctness)',
+    ]);
   });
 });
