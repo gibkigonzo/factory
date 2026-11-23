@@ -216,6 +216,20 @@ describe('polecenia właściciela dla recenzentów', () => {
       rmSync(work, { recursive: true, force: true });
     }
   });
+
+  it('oceniacz ryzyka też widzi /change właściciela; bez poleceń prompt się nie zmienia', () => {
+    const work = mkdtempSync(join(tmpdir(), 'factory-owner-assess-'));
+    try {
+      const line = /Polecenia właściciela w tym PR .*`.*owner\.md`.*ważniejsze od specu/;
+      assert.doesNotMatch(assessPrompt({ work }), line);
+      writeFileSync(join(work, 'owner.md'), '\n');
+      assert.doesNotMatch(assessPrompt({ work }), line);
+      writeFileSync(join(work, 'owner.md'), '### 2026-11-22 16:25 UTC\n\n/change Dopuść uprawnienie biblioteki.\n');
+      assert.match(assessPrompt({ work }), line);
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('powtórzenia w kodzie dla recenzenta', () => {
