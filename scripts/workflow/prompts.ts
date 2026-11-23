@@ -89,8 +89,8 @@ export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: st
     ...screenshotsTask(`${ctx.work}/screenshots`, `${ctx.work}/screenshots-base`),
   ];
   // Polecenia właściciela z PR dostaje każdy recenzent: zmiana, o którą prosił, nie jest „spoza specu”.
-  const owner = `${ctx.work}/owner.md`;
-  if (existsSync(owner) && readFileSync(owner, 'utf8').trim()) {
+  const owner = ownerFile(ctx.work);
+  if (owner) {
     lines.push(
       `Polecenia właściciela w tym PR (\`/change\`, od najstarszego): \`${owner}\`. To decyzje właściciela: zmiana, o którą prosi, nie wychodzi poza zakres, a gdy polecenie różni się od specu, ważniejsze jest polecenie. Sprawdź, czy implementer je wykonał.`,
     );
@@ -118,13 +118,23 @@ export function reviewPrompt(ctx: PromptContext & { agent: string; criteria?: st
   return [body(`agents/${ctx.agent}.md`), task(lines)].join('\n\n');
 }
 
+/** Polecenia `/change` właściciela z PR (plik pisze panel recenzji); pusty albo brakujący plik to brak poleceń. */
+function ownerFile(work: string): string | undefined {
+  const owner = `${work}/owner.md`;
+  return existsSync(owner) && readFileSync(owner, 'utf8').trim() ? owner : undefined;
+}
+
 export function assessPrompt(ctx: PromptContext): string {
+  // Oceniacz też widzi decyzje właściciela: zgoda wydana w /change nie jest „brakiem zatwierdzenia”
+  // (lekcja z aplikacji: oceniacz nie widział /change dopuszczającego uprawnienie i opisał je jako niezatwierdzone).
+  const owner = ownerFile(ctx.work);
   return [
     body('skills/risk-assessor/SKILL.md'),
     task([
       `Diff zmiany: \`${ctx.work}/diff.patch\`. Lockfile'y i pliki generowane są zamiast w nim streszczone w \`${ctx.work}/skipped.md\` (plik jest pusty, gdy niczego nie pominięto).`,
       `Spec z issue: \`${ctx.work}/spec.md\`.`,
       `Werdykty recenzentów: \`${ctx.work}/verdicts/\`.`,
+      ...(owner ? [`Polecenia właściciela w tym PR (\`/change\`, od najstarszego): \`${owner}\`. To jego decyzje, ważniejsze od specu.`] : []),
     ]),
   ].join('\n\n');
 }
